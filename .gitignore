@@ -1,0 +1,25 @@
+# environnements
+.venv/
+venv/
+env/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# données / sorties (jamais versionnées)
+data/
+results/
+*.pt
+*.npy
+*.npz
+*.fif
+
+# os / éditeurs
+.DS_Store
+.idea/
+.vscode/

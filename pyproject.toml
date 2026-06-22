@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eegrow"
+version = "0.1.0"
+description = "A bridge between gromo (architecture growth) and braindecode (EEG decoding)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Adam Mounir" }]
+keywords = ["eeg", "braindecode", "gromo", "growing-networks", "deep-learning"]
+dependencies = [
+    "torch>=2.0",
+    "numpy",
+    "einops",
+    "braindecode>=1.0",
+    "gromo @ git+https://github.com/growingnet/gromo.git",
+]
+
+[project.optional-dependencies]
+examples = ["matplotlib"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
