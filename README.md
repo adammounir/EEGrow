@@ -36,8 +36,24 @@ braindecode is still used as:
 3. **Data** — datasets, windowing and preprocessing (braindecode's main role) live
    on the data side, outside this repo.
 
-A future, more elegant direction would be an automatic converter that takes a
-braindecode model and swaps its `nn.Conv2d` layers for gromo growable bricks.
+## Automatic converter
+
+Rather than re-implementing each model by hand, `make_growable` takes an existing
+`nn.Sequential` and turns it into a growable gromo model: it detects the growable
+junctions (consecutive convs separated only by an activation, no pooling), swaps
+them for gromo bricks, and copies the weights (so conversion preserves the function).
+
+```python
+from eegrow import make_growable
+from eegrow.training import loop
+
+growable = make_growable(my_sequential_net, example_input, growth_factor=2.0)
+loop.grow_step(growable, train_loader, device="cpu")
+```
+
+See `examples/demo_convert.py`. The converter is pure `torch` + `gromo` (no
+braindecode dependency). Scope: `nn.Sequential` models with stride-1 convs; arbitrary
+`forward` graphs (residuals, branches) would need FX tracing and are out of scope.
 
 ## Installation
 
