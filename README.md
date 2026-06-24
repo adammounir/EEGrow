@@ -1,4 +1,4 @@
-# eegrow
+# EEGrow
 
 A bridge between **[gromo](https://github.com/growingnet/gromo)** (architecture
 growth during training) and **[braindecode](https://braindecode.org)** (end-to-end
