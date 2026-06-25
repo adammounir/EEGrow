@@ -6,18 +6,26 @@ EEG decoding).
 
 `eegrow` provides EEG decoding models whose convolution-junction width can **grow**
 during training: instead of fixing the width up front, it is auto-sized via gromo.
-Three models:
+Four models:
 
 | Model | Growable junction | Notes |
 |---|---|---|
 | `GrowingShallowFBCSPNet` | temporal conv → spatial conv | mirrors `ShallowFBCSPNet`, can reload its braindecode weights (bit-exact) |
 | `GrowingSCCNet` | spatial conv → spatio-temporal conv (grows `n_spatial_filters`) | mirrors `SCCNet`, can reload its braindecode weights (bit-exact) |
+| `GrowingEEGNeX` | first temporal conv → second temporal conv (grows `filter_1`) | faithful analog of `EEGNeX`; symmetric padding on the two growable convs (see below) |
 | `GrowingDeepEEGNet` | a **deep** stage junction (after pooling) | 2-stage VGG-style net; grows a deep junction |
 
-> **Where does the BatchNorm go?** `SCCNet` puts a BatchNorm *between* the two
-> convs of the growable junction. gromo handles this the way its own VGG container
-> does: the BatchNorm is the first conv's `post_layer_function`
+> **Where does the BatchNorm go?** `SCCNet` and `EEGNeX` both put a BatchNorm
+> *between* the two convs of the growable junction. gromo handles this the way its
+> own VGG container does: the BatchNorm is the first conv's `post_layer_function`
 > (a `GrowingBatchNorm2d`), so it grows together with the conv.
+
+> **Why is `GrowingEEGNeX` only an analog?** EEGNeX's two temporal convs use
+> `padding="same"` with an even kernel, which torch realises with *asymmetric*
+> padding. gromo's growth statistics need an *integer* (symmetric) padding, so the
+> two growable convs use symmetric padding instead (a one-sample edge effect). The
+> blocks, dilations and classifier are otherwise identical; the downstream fixed
+> convs keep braindecode's `padding="same"`.
 
 > **Why a staged network?** gromo cannot grow a junction *across a pooling layer*
 > (pooling changes the spatial dimension). A growable deep network therefore chains
