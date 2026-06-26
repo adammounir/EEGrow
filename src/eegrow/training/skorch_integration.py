@@ -9,9 +9,12 @@ tensors that grew with brand-new ``Parameter`` objects. A skorch ``Callback`` is
 right hook: ``on_epoch_end`` it (optionally) grows ``net.module_`` and refreshes
 ``net.optimizer_``, preserving the momentum of the untouched parameters.
 
-Growth runs on **CPU** (gromo's optimal update uses ``torch.linalg.eigh``, not
-available on MPS), so the callback moves the module to CPU for the growth step and
-back to the training device afterwards.
+Growth runs on **CPU** by default: gromo's optimal update uses
+``torch.linalg.eigh``, which has no native MPS (Apple Silicon) kernel, so the callback
+moves the module to ``growth_device`` for the growth step and back to the training
+device afterwards. (Recent torch can run ``eigh`` on an MPS tensor through the CPU
+fallback, ``PYTORCH_ENABLE_MPS_FALLBACK=1``; we keep the device hop explicit so it is
+visible and does not depend on an env var.)
 """
 
 from __future__ import annotations
@@ -30,8 +33,9 @@ class GromoGrowth(Callback):
     grow_every : int
         Run a growth step every ``grow_every`` epochs (never on the final epoch).
     growth_device : str
-        Device for the growth computation. Must be ``"cpu"``: gromo's optimal-update
-        relies on ``torch.linalg.eigh``, not implemented on MPS.
+        Device for the growth computation (default ``"cpu"``). gromo's optimal-update
+        relies on ``torch.linalg.eigh``, which has no native MPS kernel, so on Apple
+        Silicon this stays ``"cpu"`` (or relies on ``PYTORCH_ENABLE_MPS_FALLBACK``).
     verbose : bool
         Print a one-line summary at each growth.
     """
@@ -54,9 +58,10 @@ class GromoGrowth(Callback):
             return  # frozen model (no target width): nothing to grow
 
         # gromo grows by a (data-dependent) amount per step and does NOT stop at the
-        # target on its own, so we enforce a *soft* cap: once the width has reached
-        # target_width we stop growing. A single growth step may slightly overshoot
-        # the cap (we cannot shrink the last step), which is fine.
+        # target on its own, so we enforce a *hard* cap two ways: we stop once the
+        # width reaches target_width, AND we pass max_added below so grow_step trims
+        # the step (sub_select_optimal_added_parameters) to land exactly on the
+        # target -- the width never overshoots.
         cap = getattr(model, "target_width", None)
         if cap is not None and model.growable_width >= cap:
             self._done = True
