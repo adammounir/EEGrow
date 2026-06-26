@@ -99,6 +99,7 @@ class GrowingEEGNeX(SequentialGrowingModel):
 
         target = filter_1 if target_filter_1 is None else target_filter_1
         self._can_grow = target > filter_1
+        self.target_width = target  # cap for the growth callback (gromo does not enforce it)
 
         # symmetric integer padding for the growable temporal convs (gromo cannot
         # use torch's asymmetric "same"; see module docstring).

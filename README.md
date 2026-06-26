@@ -102,6 +102,37 @@ model = GrowingDeepEEGNet(n_chans=22, n_outputs=4, n_times=500,
 loop.grow_step(model, train_loader, device="cpu")
 ```
 
+## Training with braindecode's `EEGClassifier`
+
+The growable models train through the **standard braindecode/skorch API**, not only
+the bespoke loop in `eegrow.training.loop`. A skorch callback (`GromoGrowth`) runs a
+gromo growth step every `grow_every` epochs during `fit`, then rebuilds the optimizer
+(preserving the momentum of the unchanged parameters):
+
+```python
+from eegrow import GrowingSCCNet, make_eeg_classifier
+
+# starts at width 4, auto-grows towards 16 during fit -- no width tuning
+model = GrowingSCCNet(n_chans=22, n_outputs=4, n_times=500, sfreq=250.,
+                      n_spatial_filters=4, target_n_spatial_filters=16, device="cpu")
+clf = make_eeg_classifier(model, max_epochs=80, grow_every=6, device="cpu")
+clf.fit(X, y)          # X: (n, n_chans, n_times) float32, y: (n,) int64
+clf.predict(X)
+```
+
+> **Why a callback?** `EEGClassifier` owns the fit loop; growth is an event between
+> epochs that also invalidates the optimizer (gromo swaps the grown weight tensors
+> for new `Parameter`s). The callback grows the module on **CPU** (gromo's `eigh`)
+> and refreshes `net.optimizer_`. `target_width` is a *soft* cap: growth stops once
+> it is reached (a final step may slightly overshoot).
+
+`examples/benchmark_eegclassifier.py` benchmarks a growable model against two fixed
+baselines (narrow `start` and `target` width) on a small learnable synthetic set.
+First honest result: the growable model trains end-to-end and auto-sizes, but a
+from-scratch `fixed-target` still generalises best — gromo's line search greedily
+minimises the **train** loss. Closing that gap (held-out line search / growth
+regularisation) and a **real-data MOABB benchmark** are the immediate next steps.
+
 ## Technical notes
 
 - **Growth requires CPU.** gromo's optimal-update computation relies on

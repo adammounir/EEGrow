@@ -133,3 +133,57 @@ def test_frozen_models_have_no_growable_layers():
     assert model._growable_layers == []
     x = torch.randn(4, C, T)
     assert model(x).shape == (4, N_CLASSES)
+
+
+# --------------------------------------------------- skorch / EEGClassifier
+def test_eegclassifier_grows_during_fit():
+    """A growable model trained through braindecode's EEGClassifier grows during
+    fit (callback fires), respects the target cap, and stays predictable."""
+    import numpy as np
+
+    from eegrow import make_eeg_classifier
+
+    g = torch.Generator().manual_seed(0)
+    X = torch.randn(N, C, T, generator=g).numpy().astype("float32")
+    y = torch.randint(0, N_CLASSES, (N,), generator=g).numpy().astype("int64")
+
+    torch.manual_seed(0)
+    model = GrowingSCCNet(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T, sfreq=SFREQ,
+        n_spatial_filters=4, n_spatial_filters_smooth=8,
+        target_n_spatial_filters=12, device=DEVICE,
+    )
+    w0 = model.growable_width
+    # one growth step within the 6 epochs (epoch 4): a single step stays under the cap.
+    clf = make_eeg_classifier(
+        model, max_epochs=6, grow_every=4, batch_size=16, device=DEVICE,
+        verbose=False,
+    )
+    clf.fit(X, y)
+
+    assert model.growable_width > w0, "EEGClassifier training did not grow the model"
+    assert model.growable_width <= model.target_width, "single growth exceeded the cap"
+    preds = clf.predict(X)
+    assert preds.shape == (N,)
+    assert set(np.unique(preds)).issubset(set(range(N_CLASSES)))
+
+
+def test_eegclassifier_frozen_model_is_noop():
+    """With no target width the growth callback is a no-op (plain baseline)."""
+    from eegrow import make_eeg_classifier
+
+    g = torch.Generator().manual_seed(0)
+    X = torch.randn(N, C, T, generator=g).numpy().astype("float32")
+    y = torch.randint(0, N_CLASSES, (N,), generator=g).numpy().astype("int64")
+
+    torch.manual_seed(0)
+    model = GrowingSCCNet(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T, sfreq=SFREQ,
+        n_spatial_filters=8, n_spatial_filters_smooth=8, device=DEVICE,
+    )
+    clf = make_eeg_classifier(
+        model, max_epochs=4, grow_every=2, batch_size=16, device=DEVICE,
+        verbose=False,
+    )
+    clf.fit(X, y)
+    assert model.growable_width == 8, "frozen model should not grow"
