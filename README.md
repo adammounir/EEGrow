@@ -132,18 +132,22 @@ clf.predict(X)
 `examples/benchmark_eegclassifier.py` benchmarks a growable model (`--model sccnet`
 or `--model eegnex`) against two fixed baselines (narrow `start` and `target` width),
 on a learnable synthetic set or real data (`--moabb`, BNCI2014_001). The growable
-model auto-sizes from width 4 to 16 (no width tuning) and, thanks to the held-out
-line search, matches or beats a from-scratch `fixed-target` while clearly beating the
-cheap `fixed-small`:
+model auto-sizes from width 4 to 16 (no width tuning). Across the **9 BNCI2014_001
+subjects** (within-subject, SCCNet; full table in
+[`examples/results_bnci2014_001.md`](examples/results_bnci2014_001.md)):
 
-| arm | width | synthetic test | BNCI2014_001 S1 test |
-|---|---|---|---|
-| fixed-small | 4 | 0.927 | 0.792 |
-| **growable** | 16 (grown) | **0.973** | **0.840** |
-| fixed-target | 16 | 0.980 | 0.833 |
+| arm | width | mean test acc (9 subjects) |
+|---|---|---|
+| fixed-small | 4 | 0.657 ± 0.129 |
+| **growable** | 16 (grown) | **0.698 ± 0.161** |
+| fixed-target | 16 | 0.738 ± 0.147 |
 
-(SCCNet; BNCI numbers are one subject / one split / one seed — indicative, not a
-full evaluation. Reproduce with `python examples/benchmark_eegclassifier.py --moabb`.)
+Honest read: growth clearly **beats the cheap `fixed-small`** baseline (+4 pts) and
+recovers most of the way to a from-scratch `fixed-target`, which **still leads by
+~4 pts on average** — so growth auto-sizes and helps over not tuning the width, but
+does not yet match the oracle. Closing that residual gap (growth schedule, stronger
+held-out selection, regularising new neurons) is the open research step. Reproduce:
+`python examples/benchmark_moabb_multi.py --subjects 1-9`.
 
 ## Technical notes
 
