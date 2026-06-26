@@ -123,15 +123,26 @@ clf.predict(X)
 > **Why a callback?** `EEGClassifier` owns the fit loop; growth is an event between
 > epochs that also invalidates the optimizer (gromo swaps the grown weight tensors
 > for new `Parameter`s). The callback grows the module on **CPU** (gromo's `eigh`)
-> and refreshes `net.optimizer_`. `target_width` is a *soft* cap: growth stops once
-> it is reached (a final step may slightly overshoot).
+> and refreshes `net.optimizer_`. Two safeguards make growth behave: a **held-out
+> line search** (the scaling factor is chosen on a held-out slice of the epoch's
+> batches, not the train loss the new neurons already fit) and a **hard width cap**
+> (`sub_select_optimal_added_parameters` keeps only `target − current` new neurons,
+> so the width never overshoots `target_width`).
 
-`examples/benchmark_eegclassifier.py` benchmarks a growable model against two fixed
-baselines (narrow `start` and `target` width) on a small learnable synthetic set.
-First honest result: the growable model trains end-to-end and auto-sizes, but a
-from-scratch `fixed-target` still generalises best — gromo's line search greedily
-minimises the **train** loss. Closing that gap (held-out line search / growth
-regularisation) and a **real-data MOABB benchmark** are the immediate next steps.
+`examples/benchmark_eegclassifier.py` benchmarks a growable model (`--model sccnet`
+or `--model eegnex`) against two fixed baselines (narrow `start` and `target` width),
+on a learnable synthetic set or real data (`--moabb`, BNCI2014_001). On the synthetic
+task, the held-out line search closes most of the gap — the growable model auto-sizes
+from width 4 to 16 and lands close to a from-scratch `fixed-target`, well above the
+cheap `fixed-small` baseline:
+
+| arm | width | test acc |
+|---|---|---|
+| fixed-small | 4 | 0.927 |
+| **growable** | 16 (grown) | **0.973** |
+| fixed-target | 16 | 0.980 |
+
+Next: the **real-data MOABB** benchmark (the `--moabb` path) for an external check.
 
 ## Technical notes
 
