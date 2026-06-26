@@ -94,23 +94,45 @@ def train_epoch(model, loader, opt, crit, device) -> float:
     return tot / len(loader)
 
 
-def grow_step(model, train_loader, device) -> None:
+def grow_step(model, train_loader, device, *, val_loader=None,
+              max_added: int | None = None) -> None:
     """One gromo growth: stats -> optimal update -> line search -> apply_change.
 
     NB: ``compute_optimal_updates`` relies on ``eigh``, which is NOT implemented on
     MPS -- growth therefore requires a CPU device.
+
+    Parameters
+    ----------
+    train_loader :
+        Used to accumulate the growth statistics (the optimal new neurons).
+    val_loader : optional
+        If given, the line search (which scaling factor to apply) is evaluated on
+        this *held-out* loader instead of ``train_loader``. gromo's candidate neurons
+        already fit the train signal, so selecting the scaling on held-out data
+        curbs the tendency to amplify neurons that only fit the training noise.
+    max_added : int, optional
+        Hard cap on the number of neurons added this step. After computing the
+        optimal update we sub-select the ``max_added`` best candidates, so the width
+        never overshoots the target (gromo otherwise adds a data-dependent count).
     """
     crit_sum = torch.nn.CrossEntropyLoss(reduction="sum")
     crit_mean = torch.nn.CrossEntropyLoss(reduction="mean")
     model.set_growing_layers(index=0)
     compute_statistics(model, train_loader, loss_function=crit_sum, device=device)
     model.compute_optimal_updates()
+    if max_added is not None and max_added >= 1:
+        # keep only the `max_added` best new neurons (also trims the previous
+        # layer's matching outputs via sub_select_previous=True) -> hard width cap.
+        model._growable_layers[0].sub_select_optimal_added_parameters(
+            keep_neurons=max_added
+        )
     model.reset_computation()
     model.dummy_select_update()
+    select_loader = train_loader if val_loader is None else val_loader
     best_loss, best_s = float("inf"), 0.0
     for s in (0.0, 0.1, 0.5, 1.0):
         model.set_scaling_factor(s)
-        loss, _ = evaluate_model(model, train_loader, crit_mean,
+        loss, _ = evaluate_model(model, select_loader, crit_mean,
                                  use_extended_model=True, device=device)
         if loss < best_loss:
             best_loss, best_s = loss, s

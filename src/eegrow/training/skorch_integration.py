@@ -22,17 +22,6 @@ from skorch.callbacks import Callback
 from eegrow.training.loop import grow_step
 
 
-def _xy_iter(iterator, device):
-    """Yield ``(X, y)`` on ``device`` from a skorch iterator.
-
-    braindecode window datasets yield ``(X, y, crop_inds)`` 3-tuples; gromo's
-    statistics only need the input and target, so we keep the first two elements.
-    """
-    for batch in iterator:
-        x, y = batch[0], batch[1]
-        yield x.to(device), y.to(device)
-
-
 class GromoGrowth(Callback):
     """skorch callback that periodically grows the module via gromo.
 
@@ -75,11 +64,22 @@ class GromoGrowth(Callback):
 
         train_device = next(model.parameters()).device
         width_before = model.growable_width
+        max_added = None if cap is None else max(1, cap - width_before)
 
         # gromo growth must run on CPU; move there and back.
         model.to(self.growth_device)
-        iterator = net.get_iterator(dataset_train, training=True)
-        grow_step(model, _xy_iter(iterator, self.growth_device), self.growth_device)
+        # Materialise the epoch's batches once on the growth device and split them:
+        # statistics on the bulk, the line search on a disjoint held-out slice (so
+        # the scaling factor is chosen on data the new neurons did NOT fit).
+        batches = [(b[0].to(self.growth_device), b[1].to(self.growth_device))
+                   for b in net.get_iterator(dataset_train, training=True)]
+        if len(batches) >= 4:
+            cut = int(0.8 * len(batches))
+            stats_loader, val_loader = batches[:cut], batches[cut:]
+        else:  # too few batches to hold any out: fall back to train-loss selection
+            stats_loader, val_loader = batches, None
+        grow_step(model, stats_loader, self.growth_device,
+                  val_loader=val_loader, max_added=max_added)
         model.to(train_device)
 
         width_after = model.growable_width
@@ -119,6 +119,10 @@ def make_eeg_classifier(
     batch_size: int = 64,
     device: str = "cpu",
     growth_device: str = "cpu",
+    criterion=torch.nn.CrossEntropyLoss,
+    optimizer=torch.optim.AdamW,
+    train_split=None,
+    verbose: bool = True,
     extra_callbacks=None,
     **kwargs,
 ):
@@ -129,28 +133,34 @@ def make_eeg_classifier(
     that grows the module every ``grow_every`` epochs. If the model is frozen (no
     target width), the callback is a no-op and you get a plain baseline.
 
-    Notes
-    -----
-    The default criterion is ``CrossEntropyLoss`` (our models output raw logits, not
-    log-probabilities), and ``AdamW`` is the optimizer -- matching
-    :mod:`eegrow.training.loop`.
+    Parameters
+    ----------
+    criterion, optimizer :
+        Defaults match :mod:`eegrow.training.loop`: ``CrossEntropyLoss`` (our models
+        output raw logits, not log-probabilities) and ``AdamW``. Override to plug a
+        different loss/optimizer.
+    train_split :
+        Passed through to ``EEGClassifier``. Leave ``None`` for pure training; pass a
+        ``skorch.dataset.ValidSplit`` to hold out a validation set and log
+        ``valid_acc`` each epoch.
     """
     from braindecode import EEGClassifier
 
     callbacks = [("gromo", GromoGrowth(grow_every=grow_every,
-                                       growth_device=growth_device))]
+                                       growth_device=growth_device,
+                                       verbose=verbose))]
     if extra_callbacks:
         callbacks += list(extra_callbacks)
 
     return EEGClassifier(
         module=model,
-        criterion=torch.nn.CrossEntropyLoss,
-        optimizer=torch.optim.AdamW,
+        criterion=criterion,
+        optimizer=optimizer,
         optimizer__lr=lr,
         optimizer__weight_decay=weight_decay,
         max_epochs=max_epochs,
         batch_size=batch_size,
-        train_split=None,
+        train_split=train_split,
         callbacks=callbacks,
         device=device,
         **kwargs,
