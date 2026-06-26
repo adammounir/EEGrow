@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install CPU-only torch stack
+        # Install torch + torchaudio + torchvision from the CPU index up front, so
+        # the later editable install does not pull the default CUDA torchaudio
+        # (which fails to load libcudart on a CPU runner). Growth needs only CPU.
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install eegrow (with test deps)
+        run: pip install -e ".[test]"
+
+      - name: Run tests
+        run: pytest -q
