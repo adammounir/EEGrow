@@ -107,16 +107,18 @@ def split(X, y, frac=0.75, seed=0):
 
 
 # ------------------------------------------------------------------- models
-def build(family, kind, *, n_chans, n_classes, n_times, sfreq, start, target, device):
+def build(family, kind, *, n_chans, n_classes, n_times, sfreq, start, target, device,
+          seed=0):
     """Build one benchmark arm of the chosen model family.
 
     kind is 'growable' (start->target), 'fixed-small' (frozen at start) or
     'fixed-target' (frozen at target). 'growable_width' maps to n_spatial_filters
-    (SCCNet) or filter_1 (EEGNeX).
+    (SCCNet) or filter_1 (EEGNeX). 'seed' controls the weight initialisation, so the
+    same arm can be re-run across seeds for a multi-seed benchmark.
     """
     width = {"growable": start, "fixed-small": start, "fixed-target": target}[kind]
     tgt = target if kind == "growable" else None  # None => frozen
-    torch.manual_seed(0)
+    torch.manual_seed(seed)
     if family == "sccnet":
         return GrowingSCCNet(
             n_chans=n_chans, n_outputs=n_classes, n_times=n_times, sfreq=sfreq,

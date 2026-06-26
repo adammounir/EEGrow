@@ -133,21 +133,26 @@ clf.predict(X)
 or `--model eegnex`) against two fixed baselines (narrow `start` and `target` width),
 on a learnable synthetic set or real data (`--moabb`, BNCI2014_001). The growable
 model auto-sizes from width 4 to 16 (no width tuning). Across the **9 BNCI2014_001
-subjects** (within-subject, SCCNet; full table in
+subjects × 3 seeds** (within-subject, SCCNet, 27 runs/arm; full per-subject table in
 [`examples/results_bnci2014_001.md`](examples/results_bnci2014_001.md)):
 
-| arm | width | mean test acc (9 subjects) |
+| arm | width | mean test acc (9 subjects × 3 seeds) |
 |---|---|---|
-| fixed-small | 4 | 0.657 ± 0.129 |
-| **growable** | 16 (grown) | **0.698 ± 0.161** |
-| fixed-target | 16 | 0.738 ± 0.147 |
+| fixed-small | 4 | 0.636 ± 0.131 |
+| **growable** | 16 (grown) | **0.693 ± 0.153** |
+| fixed-target | 16 | 0.728 ± 0.139 |
 
-Honest read: growth clearly **beats the cheap `fixed-small`** baseline (+4 pts) and
+The `±` is the spread **across subjects**; the average run-to-run (over-seeds) std is
+much smaller — `0.036 / 0.039 / 0.034` for the three arms — i.e. **smaller than the
+gaps between arms**, so the ranking is robust, not seed noise. The same ordering holds
+on **all 9 subjects** individually (growth `>` fixed-small and `<` fixed-target in 9/9).
+
+Honest read: growth clearly **beats the cheap `fixed-small`** baseline (+5.7 pts) and
 recovers most of the way to a from-scratch `fixed-target`, which **still leads by
-~4 pts on average** — so growth auto-sizes and helps over not tuning the width, but
+~3.5 pts on average** — so growth auto-sizes and helps over not tuning the width, but
 does not yet match the oracle. Closing that residual gap (growth schedule, stronger
-held-out selection, regularising new neurons) is the open research step. Reproduce:
-`python examples/benchmark_moabb_multi.py --subjects 1-9`.
+held-out selection, regularising new neurons) is the open research step. Reproduce
+(run from the repo root): `python examples/benchmark_moabb_multi.py --subjects 1-9 --seeds 0-2`.
 
 ## Technical notes
 
