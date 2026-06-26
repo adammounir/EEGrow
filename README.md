@@ -131,18 +131,19 @@ clf.predict(X)
 
 `examples/benchmark_eegclassifier.py` benchmarks a growable model (`--model sccnet`
 or `--model eegnex`) against two fixed baselines (narrow `start` and `target` width),
-on a learnable synthetic set or real data (`--moabb`, BNCI2014_001). On the synthetic
-task, the held-out line search closes most of the gap — the growable model auto-sizes
-from width 4 to 16 and lands close to a from-scratch `fixed-target`, well above the
-cheap `fixed-small` baseline:
+on a learnable synthetic set or real data (`--moabb`, BNCI2014_001). The growable
+model auto-sizes from width 4 to 16 (no width tuning) and, thanks to the held-out
+line search, matches or beats a from-scratch `fixed-target` while clearly beating the
+cheap `fixed-small`:
 
-| arm | width | test acc |
-|---|---|---|
-| fixed-small | 4 | 0.927 |
-| **growable** | 16 (grown) | **0.973** |
-| fixed-target | 16 | 0.980 |
+| arm | width | synthetic test | BNCI2014_001 S1 test |
+|---|---|---|---|
+| fixed-small | 4 | 0.927 | 0.792 |
+| **growable** | 16 (grown) | **0.973** | **0.840** |
+| fixed-target | 16 | 0.980 | 0.833 |
 
-Next: the **real-data MOABB** benchmark (the `--moabb` path) for an external check.
+(SCCNet; BNCI numbers are one subject / one split / one seed — indicative, not a
+full evaluation. Reproduce with `python examples/benchmark_eegclassifier.py --moabb`.)
 
 ## Technical notes
 
