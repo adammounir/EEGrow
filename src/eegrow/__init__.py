@@ -13,7 +13,7 @@ from eegrow.models.growing_deepeeg import GrowingDeepEEGNet
 from eegrow.models.growing_eegnex import GrowingEEGNeX
 from eegrow.models.growing_sccnet import GrowingSCCNet
 from eegrow.models.growing_shallow import GrowingShallowFBCSPNet
-from eegrow.training.skorch_integration import GromoGrowth, make_eeg_classifier
+from eegrow.training.skorch_integration import GromoGrowth
 
 __all__ = [
     "GrowingShallowFBCSPNet",
@@ -22,7 +22,6 @@ __all__ = [
     "GrowingEEGNeX",
     "make_growable",
     "GrowableSequential",
-    "make_eeg_classifier",
     "GromoGrowth",
 ]
 __version__ = "0.1.0"

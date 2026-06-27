@@ -1,24 +1,21 @@
-# BNCI2014_001 within-subject benchmark (sccnet)
+# BNCI2014_001 within-session benchmark (SCCNet)
 
-Growable vs fixed baselines via braindecode `EEGClassifier`. Subjects 1-9, seeds 0-2 (9x3 = 27 runs/arm), 30 epochs, grow_every=5, width 4->16.
+MOABB `WithinSessionEvaluation` (5-fold, both sessions), 4-class motor imagery, subjects 1-9. Growable vs fixed baselines, all via braindecode `EEGClassifier`. Width 4->16, 30 epochs, grow_every=5. Score = accuracy.
 
-Per-subject test accuracy (mean ± std **over seeds**):
+Per-subject accuracy (mean over sessions x CV folds):
 
 | subject | fixed-small | growable | fixed-target |
 |---|---|---|---|
-| S1 | 0.734 ± 0.077 | 0.792 ± 0.046 | 0.803 ± 0.053 |
-| S2 | 0.477 ± 0.003 | 0.528 ± 0.025 | 0.553 ± 0.046 |
-| S3 | 0.780 ± 0.012 | 0.847 ± 0.021 | 0.877 ± 0.027 |
-| S4 | 0.639 ± 0.050 | 0.653 ± 0.040 | 0.718 ± 0.060 |
-| S5 | 0.488 ± 0.089 | 0.505 ± 0.081 | 0.583 ± 0.045 |
-| S6 | 0.412 ± 0.012 | 0.447 ± 0.079 | 0.502 ± 0.031 |
-| S7 | 0.729 ± 0.025 | 0.863 ± 0.013 | 0.898 ± 0.018 |
-| S8 | 0.750 ± 0.011 | 0.806 ± 0.031 | 0.817 ± 0.007 |
-| S9 | 0.713 ± 0.041 | 0.799 ± 0.015 | 0.803 ± 0.021 |
-| **mean (over subjects)** | **0.636 ± 0.131** | **0.693 ± 0.153** | **0.728 ± 0.139** |
+| S1 | 0.708 | 0.743 | 0.741 |
+| S2 | 0.470 | 0.444 | 0.559 |
+| S3 | 0.710 | 0.833 | 0.823 |
+| S4 | 0.510 | 0.557 | 0.592 |
+| S5 | 0.316 | 0.372 | 0.411 |
+| S6 | 0.418 | 0.458 | 0.507 |
+| S7 | 0.609 | 0.757 | 0.755 |
+| S8 | 0.688 | 0.755 | 0.775 |
+| S9 | 0.758 | 0.830 | 0.835 |
+| **mean (over subjects)** | **0.577 ± 0.145** | **0.639 ± 0.170** | **0.666 ± 0.144** |
 
-Mean run-to-run std (over seeds, averaged over subjects) — lower is more stable:
+_Spread is across subjects. 9 subjects x 2 sessions x 5-fold CV. Generated in 399s._
 
-| fixed-small | growable | fixed-target |
-|---|---|---|
-| 0.036 | 0.039 | 0.034 |
