@@ -133,3 +133,136 @@ def test_frozen_models_have_no_growable_layers():
     assert model._growable_layers == []
     x = torch.randn(4, C, T)
     assert model(x).shape == (4, N_CLASSES)
+
+
+# --------------------------------------------------- skorch / EEGClassifier
+def _eeg_clf(model, **kwargs):
+    """A plain braindecode ``EEGClassifier`` with the gromo growth callback.
+
+    There is no eegrow wrapper: this is exactly how a user wires growth -- a stock
+    ``EEGClassifier`` plus ``GromoGrowth`` in ``callbacks``. ``CrossEntropyLoss`` is
+    explicit because our models output raw logits (not log-probabilities).
+    """
+    from braindecode import EEGClassifier
+
+    from eegrow import GromoGrowth
+
+    grow_every = kwargs.pop("grow_every", 4)
+    verbose = kwargs.pop("verbose", False)
+    return EEGClassifier(
+        model,
+        criterion=torch.nn.CrossEntropyLoss,
+        callbacks=[("gromo", GromoGrowth(grow_every=grow_every, verbose=verbose))],
+        train_split=None,
+        device=DEVICE,
+        **kwargs,
+    )
+
+
+def test_eegclassifier_grows_during_fit():
+    """A growable model trained through braindecode's EEGClassifier grows during
+    fit (callback fires), respects the target cap, and stays predictable."""
+    import numpy as np
+
+    g = torch.Generator().manual_seed(0)
+    X = torch.randn(N, C, T, generator=g).numpy().astype("float32")
+    y = torch.randint(0, N_CLASSES, (N,), generator=g).numpy().astype("int64")
+
+    torch.manual_seed(0)
+    model = GrowingSCCNet(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T, sfreq=SFREQ,
+        n_spatial_filters=4, n_spatial_filters_smooth=8,
+        target_n_spatial_filters=12, device=DEVICE,
+    )
+    w0 = model.growable_width
+    # one growth step within the 6 epochs (epoch 4): a single step stays under the cap.
+    clf = _eeg_clf(model, max_epochs=6, grow_every=4, batch_size=16)
+    clf.fit(X, y)
+
+    assert model.growable_width > w0, "EEGClassifier training did not grow the model"
+    assert model.growable_width <= model.target_width, "single growth exceeded the cap"
+    preds = clf.predict(X)
+    assert preds.shape == (N,)
+    assert set(np.unique(preds)).issubset(set(range(N_CLASSES)))
+
+
+def test_eegclassifier_frozen_model_is_noop():
+    """With no target width the growth callback is a no-op (plain baseline)."""
+    g = torch.Generator().manual_seed(0)
+    X = torch.randn(N, C, T, generator=g).numpy().astype("float32")
+    y = torch.randint(0, N_CLASSES, (N,), generator=g).numpy().astype("int64")
+
+    torch.manual_seed(0)
+    model = GrowingSCCNet(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T, sfreq=SFREQ,
+        n_spatial_filters=8, n_spatial_filters_smooth=8, device=DEVICE,
+    )
+    clf = _eeg_clf(model, max_epochs=4, grow_every=2, batch_size=16)
+    clf.fit(X, y)
+    assert model.growable_width == 8, "frozen model should not grow"
+
+
+class _StubNet:
+    """Minimal skorch-``NeuralNet`` surface the ``GromoGrowth`` callback touches.
+
+    Lets us drive ``on_epoch_end`` over a fixed batch list, without a real fit loop,
+    so the callback's growth can be compared to a direct ``loop.grow_step``.
+    """
+
+    def __init__(self, module, batches, *, epoch, max_epochs):
+        self.module_ = module
+        self._batches = batches
+        self.history = list(range(epoch))  # len(history) == current epoch
+        self.max_epochs = max_epochs
+        self.optimizer_ = torch.optim.AdamW(module.parameters(), lr=1e-3)
+
+    def get_iterator(self, dataset_train, training=True):
+        return list(self._batches)
+
+    def initialize_optimizer(self):
+        self.optimizer_ = torch.optim.AdamW(self.module_.parameters(), lr=1e-3)
+
+
+def _fresh_sccnet():
+    torch.manual_seed(0)
+    return GrowingSCCNet(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T, sfreq=SFREQ,
+        n_spatial_filters=4, n_spatial_filters_smooth=8,
+        target_n_spatial_filters=12, device=DEVICE,
+    )
+
+
+def test_callback_growth_matches_pure_gromo():
+    """Integration: the EEGClassifier callback delivers the *same* growth as a direct
+    gromo ``loop.grow_step``.
+
+    Two identically-seeded models grow on the same batches: one through the
+    ``GromoGrowth`` callback (skorch path), one through ``loop.grow_step`` (pure gromo,
+    reproducing the callback's held-out split). The grown widths and every parameter
+    must match -- the skorch wiring adds no divergence on top of gromo."""
+    from eegrow import GromoGrowth
+
+    g = torch.Generator().manual_seed(1)
+    batches = [(torch.randn(8, C, T, generator=g), torch.randint(0, N_CLASSES, (8,),
+                generator=g)) for _ in range(5)]
+
+    cb = GromoGrowth(grow_every=1, verbose=False)
+
+    # --- pure gromo path: replicate the callback's cap + held-out split exactly ---
+    pure = _fresh_sccnet()
+    max_added = max(1, pure.target_width - pure.growable_width)
+    stats_loader, val_loader = cb._split_holdout(batches)
+    loop.grow_step(pure, stats_loader, DEVICE, val_loader=val_loader,
+                   max_added=max_added)
+
+    # --- skorch callback path: same batches, driven on a stub net ---
+    via_cb = _fresh_sccnet()
+    net = _StubNet(via_cb, batches, epoch=1, max_epochs=2)
+    cb.on_epoch_end(net, dataset_train=object())
+
+    assert pure.growable_width == via_cb.growable_width > 4, "callback did not grow"
+    pure_params = dict(pure.named_parameters())
+    for name, p in via_cb.named_parameters():
+        assert name in pure_params, f"param {name} missing from pure-gromo model"
+        assert torch.allclose(p, pure_params[name], atol=1e-6), (
+            f"param {name} differs between callback and pure-gromo growth")

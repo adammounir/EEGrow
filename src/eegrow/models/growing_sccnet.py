@@ -100,6 +100,7 @@ class GrowingSCCNet(SequentialGrowingModel):
             else target_n_spatial_filters
         )
         self._can_grow = target > n_spatial_filters
+        self.target_width = target  # cap for the growth callback (gromo does not enforce it)
 
         # --- kernel sizing, identical to braindecode SCCNet ------------------
         self.samples_100ms, self.kernel_size_pool = self._calc_kernel_sizes()
