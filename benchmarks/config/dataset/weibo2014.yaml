@@ -1,0 +1,8 @@
+# Weibo2014: 10 subj, 7 MI classes (compound), 60 ch, 200 Hz. Restricted to the
+# clean left/right hand pair via LeftRightImagery.
+name: weibo2014
+moabb_class: Weibo2014
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+resample: null
+kwargs: {}

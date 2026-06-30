@@ -1,0 +1,11 @@
+# Growable deep (VGG-style staged) net: a deep junction grows w2 8 -> 32.
+# Loosely the growable counterpart of the Deep4Net reference (deep conv stack).
+kind: growing
+arch: GrowingDeepEEGNet
+label: grow_deep
+needs_sfreq: false
+grow_every: 5
+module_kwargs:
+  w1: 8
+  w2: 8
+  target_w2: 32

@@ -1,0 +1,8 @@
+# BNCI2014_001 (BCI IV-2a): 9 subj, 2 sess, 4-class MI, 22 ch, 250 Hz.
+# The clean reference dataset (Bruno's expected weak spot for growth -- start here).
+name: bnci2014_001
+moabb_class: BNCI2014_001
+paradigm: MotorImagery
+subjects: null   # null => all subjects
+resample: null
+kwargs: {}

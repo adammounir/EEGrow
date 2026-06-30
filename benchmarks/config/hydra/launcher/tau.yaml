@@ -1,0 +1,29 @@
+# @package hydra.launcher
+# Submitit/SLURM launcher for Margaret (Inria Saclay), TAU partition.
+# Select with `hydra/launcher=tau` on a --multirun (-m) sweep; one SLURM job per
+# (model x dataset x eval x seed) point, scheduled concurrently.
+#
+# Needs the plugin:  pip install hydra-submitit-launcher
+# Tune partition / gpus / time to what `sinfo` shows you have on `tau` (or `gpu`).
+_target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
+partition: tau
+gpus_per_node: 1
+tasks_per_node: 1
+nodes: 1
+cpus_per_task: 8
+mem_gb: 32
+timeout_min: 1200          # 20 h wall clock per job
+name: eegrow-bench
+submitit_folder: ${hydra.sweep.dir}/.submitit/%j
+array_parallelism: 16      # max jobs running at once (be a good cluster citizen)
+# Commands run inside each SLURM job before python starts. Margaret has no conda; it
+# ships a `pytorch` Lmod module (Python + CUDA). Discover the exact names on the login
+# node first:   module avail 2>&1 | grep -iE 'python|pytorch'
+# Then one-off, create the env on top of it:
+#   module load pytorch
+#   python -m venv $HOME/eegrow/.venv
+#   source $HOME/eegrow/.venv/bin/activate && pip install -e $HOME/eegrow[benchmark]
+# and point `setup` at it (edit the module/venv path to what you actually have):
+setup:
+  - "module load pytorch || true"
+  - "source $HOME/eegrow/.venv/bin/activate || true"

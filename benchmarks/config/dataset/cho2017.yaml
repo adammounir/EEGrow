@@ -1,0 +1,7 @@
+# Cho2017: 52 subj, 1 sess, 2-class MI (left/right hand), 64 ch, 512 Hz.
+name: cho2017
+moabb_class: Cho2017
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+resample: null
+kwargs: {}

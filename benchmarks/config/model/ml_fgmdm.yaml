@@ -1,0 +1,4 @@
+# Geodesic-filtered MDM (FgMDM).
+kind: ml
+name: fgmdm
+label: fgmdm

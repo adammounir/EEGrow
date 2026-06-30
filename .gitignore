@@ -14,6 +14,11 @@ dist/
 # données / sorties (jamais versionnées)
 data/
 results/
+# sorties Hydra du benchmark
+benchmarks/outputs/
+benchmarks/multirun/
+outputs/
+multirun/
 *.pt
 *.npy
 *.npz

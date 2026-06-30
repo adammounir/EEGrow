@@ -1,0 +1,8 @@
+# Zhou2016: 4 subj, 3 sess, 3-class MI (left/right hand, feet), 14 ch, 250 Hz.
+# Small/noisy -- a candidate where growth may help.
+name: zhou2016
+moabb_class: Zhou2016
+paradigm: MotorImagery
+subjects: null   # null => all subjects
+resample: null
+kwargs: {}

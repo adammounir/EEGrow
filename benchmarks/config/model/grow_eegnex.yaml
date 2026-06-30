@@ -1,0 +1,10 @@
+# Growable EEGNeX: first temporal conv grows 2 -> 8 (the bd reference filter_1).
+kind: growing
+arch: GrowingEEGNeX
+label: grow_eegnex
+needs_sfreq: false
+grow_every: 5
+module_kwargs:
+  filter_1: 2
+  filter_2: 32
+  target_filter_1: 8

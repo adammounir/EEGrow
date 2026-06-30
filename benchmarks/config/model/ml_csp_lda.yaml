@@ -1,0 +1,4 @@
+# Common Spatial Patterns + shrinkage LDA -- the canonical MI baseline floor.
+kind: ml
+name: csp_lda
+label: csp_lda

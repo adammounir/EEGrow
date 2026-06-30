@@ -1,0 +1,10 @@
+# Growable SCCNet: spatial filters grow 4 -> 22 (the bd reference width). Needs sfreq.
+kind: growing
+arch: GrowingSCCNet
+label: grow_sccnet
+needs_sfreq: true
+grow_every: 5
+module_kwargs:
+  n_spatial_filters: 4
+  n_spatial_filters_smooth: 20
+  target_n_spatial_filters: 22

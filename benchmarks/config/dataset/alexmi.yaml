@@ -1,0 +1,7 @@
+# AlexMI: 8 subj, 3-class MI (right hand, feet, rest), 16 ch, 512 Hz.
+name: alexmi
+moabb_class: AlexMI
+paradigm: MotorImagery
+subjects: null   # null => all subjects
+resample: null
+kwargs: {}

@@ -1,0 +1,8 @@
+# PhysionetMI: 109 subj, 2-class MI (left/right hand) via LeftRightImagery, 64 ch,
+# 160 Hz. Large; consider `resample` to speed up the deep arms if needed.
+name: physionetmi
+moabb_class: PhysionetMI
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+resample: null
+kwargs: {}

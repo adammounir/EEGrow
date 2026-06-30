@@ -1,0 +1,6 @@
+# braindecode reference: Deep4Net at its standard width (n_filters_time=25).
+kind: bd
+arch: Deep4Net
+label: bd_deep4
+needs_sfreq: false
+module_kwargs: {}

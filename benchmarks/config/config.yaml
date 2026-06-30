@@ -1,0 +1,40 @@
+# Root config. A run picks one of each group (dataset/model/eval) via defaults or CLI.
+# Override anything on the CLI, e.g.  train.max_epochs=2  model=grow_sccnet  eval=cross_subject
+defaults:
+  - dataset: bnci2014_001
+  - model: grow_sccnet
+  - eval: cross_subject
+  - _self_
+
+seed: 42
+
+# Band-pass of the MOABB paradigm (motor-imagery default 8-32 Hz).
+paradigm:
+  fmin: 8
+  fmax: 32
+
+# Shared deep-learning training knobs (ignored by the ML arms). Global so a smoke
+# test is just `train.max_epochs=2`.
+train:
+  lr: 6.25e-4
+  max_epochs: 200
+  batch_size: 64
+
+# MOABB does its own per-fold parallelism off; the sweep parallelises across jobs.
+n_jobs: 1
+overwrite: true
+suffix: eegrow
+
+# Where per-job CSV/joblib land. null data_dir => MNE default ~/mne_data (local);
+# on the cluster set data_dir to the shared cache (see config/dataset notes).
+results_dir: ${hydra:runtime.cwd}/benchmarks/results
+data_dir: null
+
+hydra:
+  run:
+    dir: ${hydra:runtime.cwd}/benchmarks/outputs/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: ${hydra:runtime.cwd}/benchmarks/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${hydra.job.override_dirname}
+  job:
+    chdir: false

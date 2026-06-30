@@ -1,0 +1,7 @@
+# BNCI2014_004 (BCI IV-2b): 9 subj, 5 sess, 2-class MI (left/right), 3 ch, 250 Hz.
+name: bnci2014_004
+moabb_class: BNCI2014_004
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+resample: null
+kwargs: {}

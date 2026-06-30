@@ -1,0 +1,4 @@
+# Riemannian: covariances -> tangent space -> RBF SVM.
+kind: ml
+name: ts_svm
+label: ts_svm

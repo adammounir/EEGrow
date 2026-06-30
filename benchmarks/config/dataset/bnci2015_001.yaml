@@ -1,0 +1,7 @@
+# BNCI2015_001: 12 subj, 2-class MI (right hand, feet), 13 ch, 512 Hz.
+name: bnci2015_001
+moabb_class: BNCI2015_001
+paradigm: MotorImagery
+subjects: null   # null => all subjects
+resample: null
+kwargs: {}

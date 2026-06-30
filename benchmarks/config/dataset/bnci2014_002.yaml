@@ -1,0 +1,8 @@
+# BNCI2014_002: 14 subj, 2-class MI (right hand, feet), 15 ch, 512 Hz.
+# Not left/right -> MotorImagery (uses the right_hand/feet pair).
+name: bnci2014_002
+moabb_class: BNCI2014_002
+paradigm: MotorImagery
+subjects: null   # null => all subjects
+resample: null
+kwargs: {}

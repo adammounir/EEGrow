@@ -1,0 +1,6 @@
+# braindecode reference: ShallowFBCSPNet at its standard width (n_filters_time=40).
+kind: bd
+arch: ShallowFBCSPNet
+label: bd_shallow
+needs_sfreq: false
+module_kwargs: {}

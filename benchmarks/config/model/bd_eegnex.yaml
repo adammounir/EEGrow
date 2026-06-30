@@ -1,0 +1,6 @@
+# braindecode reference: EEGNeX at its standard width (filter_1=8, filter_2=32).
+kind: bd
+arch: EEGNeX
+label: bd_eegnex
+needs_sfreq: false
+module_kwargs: {}

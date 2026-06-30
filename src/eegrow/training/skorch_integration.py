@@ -124,6 +124,14 @@ class GromoGrowth(Callback):
         # statistics on the bulk, the line search on a disjoint held-out slice.
         batches = [(b[0].to(growth_device), b[1].to(growth_device))
                    for b in net.get_iterator(dataset_train, training=True)]
+        if not batches:
+            # The training iterator yielded nothing this epoch -- e.g. ``drop_last``
+            # (set by EEGClassifier) drops the only sub-``batch_size`` fold. With no
+            # data to estimate the growth statistics on, skip this growth opportunity
+            # rather than crash the fit; the next ``grow_every`` epoch may have data.
+            if moved:
+                model.to(train_device)
+            return
         stats_loader, val_loader = self._split_holdout(batches)
         grow_step(model, stats_loader, growth_device,
                   val_loader=val_loader, max_added=max_added)

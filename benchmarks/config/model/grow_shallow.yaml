@@ -1,0 +1,10 @@
+# Growable ShallowFBCSPNet: temporal conv grows 8 -> 40 (the bd reference width).
+kind: growing
+arch: GrowingShallowFBCSPNet
+label: grow_shallow
+needs_sfreq: false
+grow_every: 5
+module_kwargs:
+  n_filters_time: 8
+  n_filters_spat: 40
+  target_n_filters_time: 40

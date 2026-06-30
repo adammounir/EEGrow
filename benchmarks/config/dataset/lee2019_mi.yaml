@@ -1,0 +1,8 @@
+# Lee2019_MI (OpenBMI): 54 subj, 2 sess, 2-class MI (left/right hand), 62 ch, 1000 Hz.
+# Very high rate -> long epochs; set `resample` (e.g. 250) if the deep arms are too slow.
+name: lee2019_mi
+moabb_class: Lee2019_MI
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+resample: null
+kwargs: {}
