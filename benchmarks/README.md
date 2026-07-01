@@ -36,7 +36,7 @@ python benchmarks/run_moabb_hydra.py -m hydra/launcher=joblib \
 ```
 
 Cluster sweep (Margaret, SLURM `tau` partition — edit `config/hydra/launcher/tau.yaml`
-for your venv/module and ressources first):
+for your venv/module and resources first):
 
 ```bash
 python benchmarks/run_moabb_hydra.py -m hydra/launcher=tau \
@@ -54,6 +54,7 @@ python benchmarks/aggregate.py            # -> results/summary.{md,csv}
 
 ## Add a dataset / model
 
-Drop a YAML in `config/dataset/` (set `moabb_class`, `paradigm`, `sfreq`) or
-`config/model/` (`kind: ml|bd|growing`, a `label`, the arch + widths). `glob(*)`
-picks it up automatically.
+Drop a YAML in `config/dataset/` (set `moabb_class`, `paradigm`; `sfreq` is inferred
+from the epoch length, only set `dataset.sfreq` to force an override, and `resample`
+to actually downsample) or `config/model/` (`kind: ml|bd|growing`, a `label`, the
+arch + widths). `glob(*)` picks it up automatically.

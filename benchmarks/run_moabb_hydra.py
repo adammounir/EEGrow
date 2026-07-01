@@ -152,9 +152,14 @@ def run(cfg: DictConfig) -> None:
     try:
         main(cfg)
         logger.info("job finished")
-    except Exception as e:  # one failed job must not kill a sweep
+    except Exception as e:
+        # Log then re-raise: each sweep point is an isolated process (submitit array
+        # task on SLURM, joblib worker locally), so failing loudly marks *this* job
+        # failed without taking the others down -- and a swallowed error would leave a
+        # silent hole in the results grid that is hard to spot afterwards.
         logger.error("job FAILED: %s", e)
         traceback.print_exc()
+        raise
 
 
 if __name__ == "__main__":

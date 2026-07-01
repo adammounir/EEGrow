@@ -266,3 +266,27 @@ def test_callback_growth_matches_pure_gromo():
         assert name in pure_params, f"param {name} missing from pure-gromo model"
         assert torch.allclose(p, pure_params[name], atol=1e-6), (
             f"param {name} differs between callback and pure-gromo growth")
+
+
+def test_callback_skips_growth_on_empty_iterator():
+    """Regression: an empty training iterator must skip growth, not crash.
+
+    ``EEGClassifier`` sets ``iterator_train__drop_last=True``; on a CV fold smaller
+    than ``batch_size`` the iterator yields *no* batch. Growth statistics can't be
+    estimated on zero data, so the callback must return cleanly (leaving the model
+    untouched and on its original device) rather than let gromo raise inside ``fit``.
+    """
+    from eegrow import GromoGrowth
+
+    model = _fresh_sccnet()
+    width_before = model.growable_width
+    device_before = next(model.parameters()).device
+
+    cb = GromoGrowth(grow_every=1, verbose=False)
+    net = _StubNet(model, batches=[], epoch=1, max_epochs=2)  # empty iterator
+
+    cb.on_epoch_end(net, dataset_train=object())  # must not raise
+
+    assert model.growable_width == width_before, "width changed despite no data"
+    assert next(model.parameters()).device == device_before, "device not restored"
+    assert not getattr(cb, "done_", False), "growth wrongly marked done on empty epoch"
