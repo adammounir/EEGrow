@@ -148,25 +148,14 @@ framework** — `WithinSessionEvaluation` on BNCI2014_001 (4-class motor imagery
 stratified k-fold within each session, aggregated over both sessions and all 9
 subjects, so the numbers are the field-standard cross-validated estimate, not a single
 split. Each arm is an ordinary scikit-learn pipeline ending in an `EEGClassifier`; the
-growable arm auto-sizes from width 4 to 16 (no width tuning). Full per-subject table in
-[`examples/results_bnci2014_001.md`](examples/results_bnci2014_001.md):
+growable arm auto-sizes from width 4 to 16 (no width tuning).
 
 <!-- BENCHMARK-TABLE -->
-| arm | width | accuracy (9 subjects × 2 sessions × 5-fold CV) |
-|---|---|---|
-| fixed-small | 4 | 0.577 ± 0.145 |
-| **growable** | 16 (grown) | **0.639 ± 0.170** |
-| fixed-target | 16 | 0.666 ± 0.144 |
+_Benchmark results pending — the numbers will be filled in here once the full
+evaluation completes._
 <!-- /BENCHMARK-TABLE -->
 
-The `±` is the spread **across subjects** (the within-arm variance is the 5-fold CV
-spread). Honest read: growth **beats the cheap `fixed-small`** baseline by **+6.2 pts**
-(growth `>` fixed-small on **8/9 subjects**) and recovers to within **~2.7 pts** of a
-from-scratch `fixed-target` — the oracle width — which it even matches or edges on 3
-subjects (S1, S3, S7). So growth auto-sizes (no width tuning) and helps clearly over not
-tuning the width, while the oracle still leads on average. Closing that residual gap
-(growth schedule, stronger held-out selection, regularising new neurons) is the open
-research step. Reproduce (from the repo root):
+Reproduce (from the repo root):
 `python examples/benchmark_moabb.py --subjects 1-9 --folds 5`.
 
 ## Technical notes
