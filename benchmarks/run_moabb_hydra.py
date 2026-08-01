@@ -111,6 +111,14 @@ def main(cfg: DictConfig) -> pd.DataFrame:
     pkw = {}
     if dcfg.get("resample"):
         pkw["resample"] = float(dcfg.resample)
+    # Fixed epoch window (tmin/tmax) when a dataset needs it. Without an explicit
+    # tmax the MI paradigms fall back to each event's annotation duration, which is
+    # not constant on some datasets (e.g. physionetmi) and breaks the array concat
+    # in get_data. Passing the dataset native interval makes every epoch equal-length.
+    if dcfg.get("tmin") is not None:
+        pkw["tmin"] = float(dcfg.tmin)
+    if dcfg.get("tmax") is not None:
+        pkw["tmax"] = float(dcfg.tmax)
     paradigm = getattr(mpar, dcfg.paradigm)(
         fmin=float(cfg.paradigm.fmin), fmax=float(cfg.paradigm.fmax), **pkw)
 

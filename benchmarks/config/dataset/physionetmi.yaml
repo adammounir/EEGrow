@@ -5,4 +5,9 @@ moabb_class: PhysionetMI
 paradigm: LeftRightImagery
 subjects: null   # null => all subjects
 resample: null
+# Native MOABB interval for PhysionetMI is [0, 3] s. Pin it explicitly: with tmax
+# left to the annotation duration the epochs come out at unequal lengths (481 vs 385
+# samples at 160 Hz) and get_data's np.concatenate fails.
+tmin: 0.0
+tmax: 3.0
 kwargs: {}
