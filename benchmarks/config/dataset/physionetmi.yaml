@@ -1,13 +1,15 @@
-# PhysionetMI: 109 subj, 2-class MI (left/right hand) via LeftRightImagery, 64 ch,
-# 160 Hz. Large; consider `resample` to speed up the deep arms if needed.
+# PhysionetMI: 109 subj, 2-class MI (left/right hand) via LeftRightImagery, 64 ch.
+# Large; consider `resample` to speed up the deep arms if needed.
 name: physionetmi
 moabb_class: PhysionetMI
 paradigm: LeftRightImagery
 subjects: null   # null => all subjects
-resample: null
-# Native MOABB interval for PhysionetMI is [0, 3] s. Pin it explicitly: with tmax
-# left to the annotation duration the epochs come out at unequal lengths (481 vs 385
-# samples at 160 Hz) and get_data's np.concatenate fails.
+# PhysionetMI is NOT single-rate: most subjects are at 160 Hz but a handful were
+# recorded at 128 Hz. With a fixed [0, 3] s window that yields epochs of 481 vs 385
+# samples (160*3+1 vs 128*3+1), and get_data's np.concatenate fails in cross_subject
+# pooling. Pinning tmin/tmax alone does NOT fix it (wrong axis) -- we must unify the
+# sampling grid. Resample every subject to 160 Hz so all epochs are 481 samples.
+resample: 160.0
 tmin: 0.0
 tmax: 3.0
 kwargs: {}
