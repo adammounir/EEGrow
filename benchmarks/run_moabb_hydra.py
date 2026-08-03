@@ -108,6 +108,22 @@ def main(cfg: DictConfig) -> pd.DataFrame:
         dcfg.get("kwargs")) or {}))
     if dcfg.get("subjects"):
         dataset.subject_list = list(dcfg.subjects)
+
+    # MOABB 1.5.0 silently drops sessions on the Lee2019 family. BaseDataset.get_data
+    # filters sessions with {str(s) for s in self._selected_sessions} -- {'1','2'} for
+    # Lee2019 -- while Lee2019._get_single_subject_data names its sessions in base 0
+    # (session_name = str(session - 1)), i.e. {'0','1'}. The intersection is {'1'}, so
+    # session '0' disappears without a warning even though n_sessions still says 2.
+    # Consequences: CrossSessionEvaluation skips every subject ("Only one session
+    # available") and within/cross_subject silently train on half the trials.
+    # Audited over the 12 datasets of this grid: Lee2019_MI is the ONLY one with a
+    # non-None _selected_sessions, so neutralising the filter is a no-op elsewhere.
+    # A benchmark always wants every session, which is also MOABB's own default.
+    if getattr(dataset, "_selected_sessions", None) is not None:
+        logger.warning("dropping dataset._selected_sessions=%s (MOABB off-by-one on "
+                       "session naming) so that all sessions are loaded",
+                       dataset._selected_sessions)
+        dataset._selected_sessions = None
     pkw = {}
     if dcfg.get("resample"):
         pkw["resample"] = float(dcfg.resample)
