@@ -7,18 +7,56 @@ the dataset's native rate (500 Hz on schirrmeister2017, 1000 Hz on lee2019_mi, .
 At a different rate a fixed 25-sample temporal kernel spans a different duration, so
 such a pair measures preprocessing, not growth.
 
-The result CSVs record no sampling rate, so we rebuild it from hydra's run
-directories: ``overrides.yaml`` gives the cell identity (eval/dataset/model/seed),
-``config.yaml`` the resolved ``dataset.resample``. When a cell was launched several
-times the most recent run *that actually wrote the CSV* wins, because the CSV stem is
-``<label>__seed<N>.csv`` and gets overwritten (``suffix`` only namespaces MOABB's hdf5
-cache, not the CSV).
+The rate is established from the strongest evidence available for each cell, in this
+order. The ordering is the point: the earlier sources say what the run *did*, the
+later ones only what some run was *asked* to do.
+
+1. ``sfreq`` column of the result CSV. Self-certifying: written by the run, into the
+   file whose rows are being analysed. Runs after this module's sibling change.
+2. The slurm log, matched to the file by timestamp. A run prints the exact path it
+   writes and the second it writes it; when that second equals the file's mtime, the
+   log describes the bytes on disk -- not an earlier run of the same cell, not a run
+   that crashed. This is proof, not inference.
+3. ``multirun/<date>/<overrides>/`` hydra directories. The directory name is the
+   override string, so it is unique per cell and concurrent runs cannot collide.
+4. ``outputs/<date_time>/`` hydra directories. Lossy, and known to have lost records:
+   the name was a timestamp to the second, so two array tasks starting in the same
+   second resolved to one directory and one of them was overwritten. When the winning
+   run's record is the one that vanished, "latest launch that predates the CSV" falls
+   back to an older, superseded launch and reports its rate with full confidence.
+   That produced errors in *both* directions on the real grid -- one cell invented as
+   contaminated (lee2019_mi/within_session/grow_eegnex/seed1, in fact 250 Hz) and
+   seven genuinely contaminated cells missed. Kept as a last resort, reported apart.
 """
 
+import collections
+import csv as _csv
+import datetime as dt
 import glob
 import os
 import re
-import collections
+
+_TS = re.compile(r"^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+\]")
+_SFREQ = re.compile(r"sfreq=([0-9.]+)")
+_SAVED = re.compile(r"saved \d+ rows -> (\S+\.csv)")
+# a run logs the path just before closing the handle; allow for the rounding of both
+# the log's whole-second timestamp and the filesystem's mtime
+_MATCH_TOL = 2.0
+
+# evidence tiers, strongest first
+LOG = "csv-sfreq", "log-certifie", "hydra-multirun", "hydra-outputs"
+CSV_SFREQ, LOG_CERT, HYDRA_MULTIRUN, HYDRA_OUTPUTS = LOG
+
+
+def _canon(v):
+    """One spelling per rate: the yaml pins ``250.0``, the CLI passes ``250``."""
+    v = str(v).strip()
+    if v in ("null", "None", ""):
+        return "NATIVE"
+    try:
+        return f"{float(v):g}"
+    except ValueError:
+        return v
 
 
 def _overrides(path):
@@ -39,19 +77,7 @@ def _resolved_resample(path):
     if not block:
         return "UNKNOWN"
     m = re.search(r"^\s+resample:\s*(.*)$", block.group(1), re.M)
-    if not m:
-        return "UNKNOWN"
-    v = m.group(1).strip()
-    if v in ("null", "None", ""):
-        return "NATIVE"
-    # canonicalise: the dataset yaml pins ``250.0`` while the sbatch passes
-    # ``dataset.resample=250`` on the CLI. Compared as strings those are two different
-    # regimes and the guard would abort the analysis on a pair that is in fact
-    # perfectly matched.
-    try:
-        return f"{float(v):g}"
-    except ValueError:
-        return v
+    return _canon(m.group(1)) if m else "UNKNOWN"
 
 
 def _resolved_label(path, fallback):
@@ -67,8 +93,8 @@ def _resolved_label(path, fallback):
     return m.group(1).strip() if m else fallback
 
 
-def _csv_mtime(bench_root, ev, ds, label, seed, align):
-    """When the cell's result file was last written, or None if there is none.
+def _csv_path(bench_root, ev, ds, label, seed, align):
+    """The cell's result file, or None if there is none.
 
     The stem is ``<label>__seed<N>.csv`` on the raw arm and
     ``<label>__<tag><level>__seed<N>.csv`` on an aligned one. The tag is built from the
@@ -80,38 +106,55 @@ def _csv_mtime(bench_root, ev, ds, label, seed, align):
     else:
         hits = glob.glob(os.path.join(d, f"{label}__*__seed{seed}.csv"))
     hits = [h for h in hits if os.path.exists(h)]
-    return max((os.path.getmtime(h) for h in hits), default=None)
+    return max(hits, key=os.path.getmtime) if hits else None
 
 
-def cell_regimes(bench_root="."):
-    """(eval, dataset, model, seed, align) -> rate of the run that wrote the CSV.
+def _csv_sfreq(path):
+    """The rate the run recorded in its own result rows, if it recorded one."""
+    try:
+        with open(path, newline="") as fh:
+            r = _csv.reader(fh)
+            header = next(r, None)
+            if not header or "sfreq" not in header:
+                return None
+            row = next(r, None)
+            return _canon(row[header.index("sfreq")]) if row else None
+    except (OSError, StopIteration, IndexError, ValueError):
+        return None
 
-    ``align`` belongs in the key: the alignment ablation relaunches the *same*
-    (eval, dataset, model, seed) point with ``align=euclidean``, writing a separate
-    CSV. Without it the two launches collide and "most recent wins" would attribute
-    the aligned run's rate to the raw cell too.
 
-    "Most recent" is decided on the mtime of the run's own ``config.yaml``, not on a
-    timestamp parsed out of the directory path. The two hydra trees nest differently
-    (``multirun/<date>/<overrides>/`` vs ``outputs/<date>/``), so a fixed negative
-    index picked the *tree name* -- a constant. ``max()`` then never compared dates at
-    all and fell through to the second tuple element, the rate string, where
-    ``"NATIVE" > "250"``: every cell that had ever run at the native rate was reported
-    as native forever, including the ones the 250 Hz relaunch had already fixed.
+def _log_certificates(log_dirs):
+    """{csv path -> [(save time, rate)]}, one entry per ``saved ... -> path`` line."""
+    out = collections.defaultdict(list)
+    for d in log_dirs:
+        for f in glob.glob(os.path.join(d, "*.out")):
+            rate = None
+            for line in open(f, errors="replace"):
+                m = _SFREQ.search(line)
+                if m:
+                    rate = _canon(m.group(1))
+                m, t = _SAVED.search(line), _TS.match(line)
+                if m and t and rate is not None:
+                    when = dt.datetime.strptime(t.group(1),
+                                                "%Y-%m-%d %H:%M:%S").timestamp()
+                    out[os.path.realpath(m.group(1))].append((when, rate))
+    return out
 
-    A launch only counts if it actually *wrote* the CSV. hydra writes ``config.yaml``
-    when the run starts and we write the CSV when it ends, so a successful run always
-    has ``mtime(config) <= mtime(csv)``; a run that crashed leaves its config behind
-    but never touches the CSV, which still holds the older result. Taking the plain
-    latest launch would therefore credit a failed 250 Hz relaunch with fixing a cell
-    whose CSV is still at the native rate -- silently the wrong way round.
-    """
+
+def _default_log_dirs(bench_root):
+    """Slurm logs live beside the repo, not under ``benchmarks/``."""
+    parent = os.path.dirname(os.path.abspath(bench_root))
+    return sorted({d for pat in (os.path.join(bench_root, "*logs*"),
+                                 os.path.join(parent, "*logs*"))
+                   for d in glob.glob(pat) if os.path.isdir(d)})
+
+
+def _hydra_launches(bench_root):
+    """{cell key -> [(config mtime, rate, tier)]} over both hydra trees."""
     launches = collections.defaultdict(list)
-    trees = [
-        os.path.join(bench_root, "multirun", "*", "*") + os.sep,
-        os.path.join(bench_root, "outputs", "*") + os.sep,
-    ]
-    for pattern in trees:
+    trees = [(os.path.join(bench_root, "multirun", "*", "*") + os.sep, HYDRA_MULTIRUN),
+             (os.path.join(bench_root, "outputs", "*") + os.sep, HYDRA_OUTPUTS)]
+    for pattern, tier in trees:
         for d in glob.glob(pattern):
             ov_p, cf_p = d + ".hydra/overrides.yaml", d + ".hydra/config.yaml"
             if not (os.path.exists(ov_p) and os.path.exists(cf_p)):
@@ -126,22 +169,71 @@ def cell_regimes(bench_root="."):
             # in, so the guard and the thing it guards speak the same vocabulary.
             key = (ov["eval"], ov["dataset"], _resolved_label(cf_p, ov["model"]),
                    ov["seed"], ov.get("align", "none"))
-            launches[key].append((os.path.getmtime(cf_p), _resolved_resample(cf_p)))
+            launches[key].append((os.path.getmtime(cf_p), _resolved_resample(cf_p),
+                                  tier))
+    return launches
+
+
+def cell_evidence(bench_root=".", log_dirs=None):
+    """(eval, dataset, model, seed, align) -> (rate, evidence tier).
+
+    ``align`` belongs in the key: the alignment ablation relaunches the *same*
+    (eval, dataset, model, seed) point with ``align=euclidean``, writing a separate
+    CSV. Without it the two launches collide and "most recent wins" would attribute
+    the aligned run's rate to the raw cell too.
+
+    Only cells that have a result file are reported: the guard exists to qualify rows
+    that enter an analysis, and a cell with no CSV contributes none.
+    """
+    if log_dirs is None:
+        log_dirs = _default_log_dirs(bench_root)
+    certs = _log_certificates(log_dirs)
+    launches = _hydra_launches(bench_root)
+
+    keys = set(launches)
+    # a CSV whose hydra record was clobbered has no launch at all, but may still carry
+    # its own sfreq or have a surviving log; recover those cells from the result tree
+    for p in glob.glob(os.path.join(bench_root, "results", "*", "*", "*.csv")):
+        ev, ds, stem = os.path.abspath(p).split(os.sep)[-3:]
+        parts = stem[:-4].split("__")
+        if len(parts) < 2 or not parts[-1].startswith("seed"):
+            continue
+        keys.add((ev, ds, parts[0], parts[-1][4:],
+                  "none" if len(parts) == 2 else "euclidean"))
 
     out = {}
-    for key, runs in launches.items():
-        csv_t = _csv_mtime(bench_root, *key)
-        if csv_t is None:
-            continue  # the cell has no result file, nothing to guard
-        wrote = [r for r in runs if r[0] <= csv_t]
+    for key in keys:
+        path = _csv_path(bench_root, *key)
+        if path is None:
+            continue
+        rp, mtime = os.path.realpath(path), os.path.getmtime(path)
+
+        rate = _csv_sfreq(path)
+        if rate is not None:
+            out[key] = (rate, CSV_SFREQ)
+            continue
+
+        hits = {r for when, r in certs.get(rp, []) if abs(when - mtime) <= _MATCH_TOL}
+        if len(hits) == 1:
+            out[key] = (hits.pop(), LOG_CERT)
+            continue
+
+        # hydra: a launch only counts if it actually *wrote* the CSV. hydra writes
+        # config.yaml when the run starts and we write the CSV when it ends, so a
+        # successful run has mtime(config) <= mtime(csv); a run that crashed leaves its
+        # config behind but never touches the CSV, which still holds the older result.
+        wrote = [r for r in launches.get(key, []) if r[0] <= mtime]
         if wrote:
-            out[key] = max(wrote)[1]
+            _, rate, tier = max(wrote)
+            out[key] = (rate, tier)
         else:
-            # every recorded launch postdates the CSV: the result was produced by a run
-            # whose hydra directory is gone, so its rate is not recoverable. Say so
-            # rather than crediting a later (failed) launch.
-            out[key] = "UNKNOWN"
+            out[key] = ("UNKNOWN", "aucune")
     return out
+
+
+def cell_regimes(bench_root=".", log_dirs=None):
+    """(eval, dataset, model, seed, align) -> rate of the run that wrote the CSV."""
+    return {k: v[0] for k, v in cell_evidence(bench_root, log_dirs).items()}
 
 
 def mixed_pairs(regimes, pairs):
@@ -164,14 +256,22 @@ def mixed_pairs(regimes, pairs):
 
 def assert_paired(pairs, bench_root=".", allow_env="EEGROW_ALLOW_MIXED"):
     """Abort the analysis if any pair straddles two sampling rates."""
-    regimes = cell_regimes(bench_root)
-    if not regimes:
-        print("[regime] aucun repertoire hydra trouve -- garde-fou inactif")
-        return regimes, []
+    evidence = cell_evidence(bench_root)
+    if not evidence:
+        print("[regime] aucune cellule datee -- garde-fou inactif")
+        return {}, []
+    regimes = {k: v[0] for k, v in evidence.items()}
     bad = mixed_pairs(regimes, pairs)
     rates = collections.Counter(regimes.values())
-    print(f"[regime] {len(regimes)} cellules datees, taux: "
+    tiers = collections.Counter(t for _, t in evidence.values())
+    print(f"[regime] {len(regimes)} cellules, taux: "
           + ", ".join(f"{k}={v}" for k, v in rates.most_common()))
+    print("[regime] preuve: "
+          + ", ".join(f"{k}={tiers[k]}" for k in LOG + ("aucune",) if tiers[k]))
+    weak = tiers[HYDRA_OUTPUTS] + tiers["aucune"]
+    if weak:
+        print(f"[regime] ATTENTION : {weak} cellules reposent sur une trace hydra "
+              f"non fiable (repertoire outputs/ ecrasable) ou sur rien du tout")
     if not bad:
         print("[regime] OK -- les deux bras de chaque paire ont le meme prétraitement")
         return regimes, bad
