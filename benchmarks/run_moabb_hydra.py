@@ -196,6 +196,14 @@ def main(cfg: DictConfig) -> pd.DataFrame:
     # column survives a merge where a filename convention does not
     results["align"] = str(cfg.align.name)
     results["align_level"] = str(cfg.align.get("level") or "")
+    # The preprocessing regime, recorded in the result itself. A grow_X/bd_X pair only
+    # measures growth if both arms saw the same sampling rate, and so far that had to
+    # be reconstructed after the fact from hydra's run directories -- a lossy record
+    # that got the answer wrong in both directions (see regime_guard). sfreq and
+    # n_times together pin the input tensor: same window, same rate, hence a fixed
+    # temporal kernel spanning the same duration.
+    results["sfreq"] = float(sfreq)
+    results["n_times"] = int(n_times)
     tag = _align_tag(cfg)
     stem = f"{label}__{tag}__seed{cfg.seed}" if tag else f"{label}__seed{cfg.seed}"
     results.to_csv(out_dir / f"{stem}.csv", index=False)
