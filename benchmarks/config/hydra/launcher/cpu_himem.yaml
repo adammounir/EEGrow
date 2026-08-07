@@ -1,0 +1,21 @@
+# @package hydra.launcher
+# CPU launcher for the classic ML baselines (CSP/Riemannian) — they never touch
+# the GPU (pure sklearn/pyriemann), so route them to the CPU 'normal' partition
+# instead of queueing behind GPU contention on tau. Select with hydra/launcher=cpu.
+_target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
+partition: normal
+tasks_per_node: 1
+nodes: 1
+cpus_per_task: 8
+mem_gb: 256
+timeout_min: 1200
+max_num_timeout: 3
+name: eegrow-ml-himem
+submitit_folder: /scratch/amounir/eegrow/benchmarks/multirun/.submitit_cpu_himem/%j
+array_parallelism: 8
+setup:
+  - "source /scratch/amounir/miniforge3/etc/profile.d/conda.sh"
+  - "conda activate bench"
+  - "export PYTHONPATH=/scratch/amounir/eegrow/benchmarks"
+  - "export MNE_DATA=/scratch/amounir/mne_data"
+  - "export MOABB_RESULTS=/scratch/amounir/eegrow/moabb_results"

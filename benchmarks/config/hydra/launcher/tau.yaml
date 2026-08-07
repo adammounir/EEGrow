@@ -4,26 +4,26 @@
 # (model x dataset x eval x seed) point, scheduled concurrently.
 #
 # Needs the plugin:  pip install hydra-submitit-launcher
-# Tune partition / gpus / time to what `sinfo` shows you have on `tau` (or `gpu`).
 _target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
-partition: tau
+partition: tau,gpu
 gpus_per_node: 1
 tasks_per_node: 1
 nodes: 1
 cpus_per_task: 8
 mem_gb: 32
 timeout_min: 1200          # 20 h wall clock per job
+max_num_timeout: 5         # auto-requeue on timeout; MOABB (overwrite=false) resumes from its per-subject cache
 name: eegrow-bench
-submitit_folder: ${hydra.sweep.dir}/.submitit/%j
+submitit_folder: /scratch/amounir/eegrow/benchmarks/multirun/.submitit/%j
 array_parallelism: 16      # max jobs running at once (be a good cluster citizen)
-# Commands run inside each SLURM job before python starts. Margaret has no conda; it
-# ships a `pytorch` Lmod module (Python + CUDA). Discover the exact names on the login
-# node first:   module avail 2>&1 | grep -iE 'python|pytorch'
-# Then one-off, create the env on top of it:
-#   module load pytorch
-#   python -m venv $HOME/eegrow/.venv
-#   source $HOME/eegrow/.venv/bin/activate && pip install -e $HOME/eegrow[benchmark]
-# and point `setup` at it (edit the module/venv path to what you actually have):
+# Pascal GPUs (margpu024-029) lack kernels for our torch CUDA wheels; exclude them.
+exclude: margpu024,margpu025,margpu026,margpu027,margpu029
+# Commands run inside each SLURM job before python starts. We use the /scratch conda
+# env `bench` (created by eegrow_env_setup.sh), and load CUDA for the DL/growing arms.
 setup:
-  - "module load pytorch || true"
-  - "source $HOME/eegrow/.venv/bin/activate || true"
+  - "source /scratch/amounir/miniforge3/etc/profile.d/conda.sh"
+  - "conda activate bench"
+  - "export PYTHONPATH=/scratch/amounir/eegrow/benchmarks"
+  - "module load cuda/13.1 || true"
+  - "export MNE_DATA=/scratch/amounir/mne_data"
+  - "export MOABB_RESULTS=/scratch/amounir/eegrow/moabb_results"
