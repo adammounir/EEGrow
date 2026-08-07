@@ -45,7 +45,13 @@ def _resolved_resample(path):
 
 
 def cell_regimes(bench_root="."):
-    """(eval, dataset, model, seed) -> sampling rate of the run that wrote the CSV."""
+    """(eval, dataset, model, seed, align) -> rate of the run that wrote the CSV.
+
+    ``align`` belongs in the key: the alignment ablation relaunches the *same*
+    (eval, dataset, model, seed) point with ``align=euclidean``, writing a separate
+    CSV. Without it the two launches collide and "most recent wins" would attribute
+    the aligned run's rate to the raw cell too.
+    """
     launches = collections.defaultdict(list)
     trees = [
         (os.path.join(bench_root, "multirun", "*", "*") + os.sep, -3),
@@ -62,22 +68,27 @@ def cell_regimes(bench_root="."):
             if "train.max_epochs" in ov or "dataset.subjects" in ov:
                 continue  # smoke test, never wrote a production CSV
             ts = d.rstrip(os.sep).split(os.sep)[ts_idx]
-            key = (ov["eval"], ov["dataset"], ov["model"], ov["seed"])
+            key = (ov["eval"], ov["dataset"], ov["model"], ov["seed"],
+                   ov.get("align", "none"))
             launches[key].append((ts, _resolved_resample(cf_p)))
     return {k: max(v)[1] for k, v in launches.items()}
 
 
 def mixed_pairs(regimes, pairs):
-    """Pairs whose two arms ran at different rates -- not comparable."""
+    """Pairs whose two arms ran at different rates -- not comparable.
+
+    A pair is compared within one alignment arm, so the arm is part of the match:
+    grow_X aligned pairs with bd_X aligned, never with bd_X raw.
+    """
     bad = []
     for grow, fixed in pairs:
-        for (ev, ds, m, sd) in regimes:
+        for (ev, ds, m, sd, al) in regimes:
             if m != grow:
                 continue
-            rg = regimes[(ev, ds, grow, sd)]
-            rf = regimes.get((ev, ds, fixed, sd))
+            rg = regimes[(ev, ds, grow, sd, al)]
+            rf = regimes.get((ev, ds, fixed, sd, al))
             if rf is not None and rg != rf:
-                bad.append((grow, fixed, ev, ds, sd, rg, rf))
+                bad.append((grow, fixed, ev, ds, sd, al, rg, rf))
     return sorted(bad)
 
 
@@ -95,8 +106,9 @@ def assert_paired(pairs, bench_root=".", allow_env="EEGROW_ALLOW_MIXED"):
         print("[regime] OK -- les deux bras de chaque paire ont le meme prétraitement")
         return regimes, bad
     print(f"[regime] {len(bad)} PAIRES A CHEVAL SUR DEUX TAUX -- non comparables :")
-    for grow, fixed, ev, ds, sd, rg, rf in bad:
-        print(f"  {ds:20s} {ev:15s} seed={sd}  {grow}={rg}  {fixed}={rf}")
+    for grow, fixed, ev, ds, sd, al, rg, rf in bad:
+        print(f"  {ds:20s} {ev:15s} seed={sd} align={al:9s} "
+              f"{grow}={rg}  {fixed}={rf}")
     if os.environ.get(allow_env) != "1":
         raise SystemExit(
             f"\nAnalyse interrompue : {len(bad)} paires comparent deux pretraitements.\n"
