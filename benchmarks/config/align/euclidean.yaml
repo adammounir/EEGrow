@@ -1,0 +1,20 @@
+# Euclidean Alignment (Junqueira, Aristimunha, Chevallier, de Camargo -- 2401.10746):
+# whiten every trial of a subject by that subject's mean covariance, so the sensor
+# space of all subjects lands in a common frame. Unsupervised: the held-out subject is
+# aligned with its own *unlabelled* trials.
+#
+# `tag` lands in the output filename, so the aligned arm never overwrites the raw one.
+name: euclidean
+tag: ea
+
+# subject: one reference per subject (the paper's estimator).
+# session: one per (subject, session) -- also removes session drift.
+level: subject
+
+# Rescale the output by ONE global factor so its RMS matches the raw arm's. Without
+# it the aligned arm would differ from the raw arm by whitening *and* by ~5 orders of
+# magnitude of amplitude, confounding the ablation. See eegrow.alignment.
+preserve_scale: true
+
+# Relative eigenvalue floor when inverting a rank-deficient mean covariance.
+rcond: 1e-10

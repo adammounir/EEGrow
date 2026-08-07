@@ -4,6 +4,7 @@ defaults:
   - dataset: bnci2014_001
   - model: grow_sccnet
   - eval: cross_subject
+  - align: none
   - _self_
 
 seed: 42

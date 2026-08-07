@@ -37,6 +37,7 @@ import pandas as pd
 from omegaconf import DictConfig, OmegaConf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from aligned_paradigm import make_aligned_paradigm  # noqa: E402
 from pipelines import build_pipeline  # noqa: E402
 from utils import (  # noqa: E402
     logger,
@@ -50,10 +51,25 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(message)s")
 
 
+def _align_tag(cfg) -> str:
+    """Filename/suffix marker for the alignment arm ("" when raw).
+
+    The aligned and raw arms of the ablation are the *same* (eval, dataset, model,
+    seed) point, so without a marker the second one silently overwrites the first --
+    the exact accident that cost us the native-rate runs. Empty for ``align=none`` so
+    every pre-existing result file keeps its name.
+    """
+    tag = cfg.align.get("tag")
+    if not tag:
+        return ""
+    return f"{tag}{cfg.align.level}" if cfg.align.get("level") else str(tag)
+
+
 def _make_evaluation(cfg, paradigm, dataset, hdf5_path):
     """Build the MOABB evaluation object named by ``cfg.eval.name``."""
     from moabb import evaluations as mev
 
+    tag = _align_tag(cfg)
     common = dict(
         paradigm=paradigm,
         datasets=[dataset],
@@ -61,7 +77,9 @@ def _make_evaluation(cfg, paradigm, dataset, hdf5_path):
         random_state=int(cfg.seed),
         n_jobs=int(cfg.n_jobs),
         hdf5_path=str(hdf5_path),
-        suffix=str(cfg.suffix),
+        # the tag also goes in MOABB's own cache suffix, so a cached raw result can
+        # never be served for an aligned run
+        suffix=f"{cfg.suffix}_{tag}" if tag else str(cfg.suffix),
     )
     name = cfg.eval.name
     if name == "within_session":
@@ -135,7 +153,19 @@ def main(cfg: DictConfig) -> pd.DataFrame:
         pkw["tmin"] = float(dcfg.tmin)
     if dcfg.get("tmax") is not None:
         pkw["tmax"] = float(dcfg.tmax)
-    paradigm = getattr(mpar, dcfg.paradigm)(
+    # Trial alignment (align=euclidean) is a property of the *data*, not of the
+    # estimator: it needs the subject ids, which only exist in the metadata frame
+    # returned by get_data. So it is wired in as a paradigm subclass, not as a step
+    # of the sklearn pipeline (see aligned_paradigm for the full argument).
+    paradigm_cls = getattr(mpar, dcfg.paradigm)
+    if cfg.align.name == "euclidean":
+        paradigm_cls = make_aligned_paradigm(
+            paradigm_cls, level=str(cfg.align.level),
+            preserve_scale=bool(cfg.align.preserve_scale),
+            rcond=float(cfg.align.rcond))
+    elif cfg.align.name != "none":
+        raise ValueError(f"unknown align.name: {cfg.align.name!r}")
+    paradigm = paradigm_cls(
         fmin=float(cfg.paradigm.fmin), fmax=float(cfg.paradigm.fmax), **pkw)
 
     # ---- infer input dims once (on the first subject; cached afterwards) ----
@@ -162,7 +192,12 @@ def main(cfg: DictConfig) -> pd.DataFrame:
     results["eval"] = cfg.eval.name
     results["model"] = label
     results["seed"] = int(cfg.seed)
-    stem = f"{label}__seed{cfg.seed}"
+    # carried in the rows too: the ablation is read by pairing raw vs aligned, and a
+    # column survives a merge where a filename convention does not
+    results["align"] = str(cfg.align.name)
+    results["align_level"] = str(cfg.align.get("level") or "")
+    tag = _align_tag(cfg)
+    stem = f"{label}__{tag}__seed{cfg.seed}" if tag else f"{label}__seed{cfg.seed}"
     results.to_csv(out_dir / f"{stem}.csv", index=False)
     joblib.dump(results, out_dir / f"{stem}.joblib")
     logger.info("saved %d rows -> %s", len(results), out_dir / f"{stem}.csv")
