@@ -4,5 +4,9 @@ name: weibo2014
 moabb_class: Weibo2014
 paradigm: LeftRightImagery
 subjects: null   # null => all subjects
-resample: null
+# Sampling grid unified at 250 Hz across the whole benchmark. This is the regime
+# the production grid actually ran in (it was passed as dataset.resample=250 on the
+# CLI); pinning it here so retries and reruns cannot silently fall back to the native
+# rate -- a grow/bd pair split across two rates measures preprocessing, not growth.
+resample: 250.0
 kwargs: {}
