@@ -8,6 +8,7 @@ growth.
 
 from __future__ import annotations
 
+from eegrow.alignment import euclidean_align
 from eegrow.convert import GrowableSequential, make_growable
 from eegrow.models.growing_deepeeg import GrowingDeepEEGNet
 from eegrow.models.growing_eegnex import GrowingEEGNeX
@@ -23,5 +24,6 @@ __all__ = [
     "make_growable",
     "GrowableSequential",
     "GromoGrowth",
+    "euclidean_align",
 ]
 __version__ = "0.1.0"
