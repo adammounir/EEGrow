@@ -73,7 +73,9 @@ if df.empty:
 # meme frequence d'echantillonnage compare du pretraitement, pas de la croissance.
 from regime_guard import assert_paired  # noqa: E402
 
-assert_paired(PAIRS, bench_root=os.path.dirname(os.path.abspath(ROOT)) or ".")
+assert_paired(PAIRS, bench_root=os.path.dirname(os.path.abspath(ROOT)) or ".",
+              scope=set(map(tuple, df[["eval", "dataset"]].drop_duplicates()
+                            .itertuples(index=False))))
 
 # metric per dataset (MOABB: roc_auc for LeftRightImagery, accuracy otherwise)
 AUC_DS = {"bnci2014_004", "cho2017", "lee2019_mi", "physionetmi", "shin2017a",

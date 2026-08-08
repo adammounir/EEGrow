@@ -200,3 +200,27 @@ def test_a_csv_without_any_record_is_unknown_not_guessed(tmp_path):
     rate, tier = rg.cell_evidence(str(tmp_path))[
         ("within_session", "alexmi", "bd_shallow", "0", "none")]
     assert (rate, tier) == ("UNKNOWN", "aucune")
+def test_the_scope_narrows_the_question_without_weakening_it(tmp_path, monkeypatch):
+    """A cell contaminated elsewhere must not force an analysis that never reads it to
+    disable the check for the cells it does read."""
+    for ds, rate in (("alexmi", None), ("cho2017", 250)):
+        _hydra_dir(tmp_path, "multirun", f"g_{ds}", "cross_subject", ds, "grow_shallow",
+                   "0", 250, mtime=T0)
+        _hydra_dir(tmp_path, "multirun", f"b_{ds}", "cross_subject", ds, "bd_shallow",
+                   "0", rate, mtime=T0)
+        _csv(tmp_path, "cross_subject", ds, "grow_shallow__seed0", mtime=T0 + 10)
+        _csv(tmp_path, "cross_subject", ds, "bd_shallow__seed0", mtime=T0 + 10)
+    monkeypatch.delenv("EEGROW_ALLOW_MIXED", raising=False)
+
+    # unscoped: alexmi is mixed, everything stops
+    with pytest.raises(SystemExit):
+        rg.assert_paired(PAIRS, bench_root=str(tmp_path))
+    # scoped to cho2017 alone: passes, and still on a real check, not a bypass
+    _, bad = rg.assert_paired(PAIRS, bench_root=str(tmp_path),
+                              scope={("cross_subject", "cho2017")})
+    assert bad == []
+    # scoped to alexmi: still stops
+    with pytest.raises(SystemExit):
+        rg.assert_paired(PAIRS, bench_root=str(tmp_path),
+                         scope={("cross_subject", "alexmi")})
+

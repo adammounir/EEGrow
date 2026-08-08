@@ -236,16 +236,24 @@ def cell_regimes(bench_root=".", log_dirs=None):
     return {k: v[0] for k, v in cell_evidence(bench_root, log_dirs).items()}
 
 
-def mixed_pairs(regimes, pairs):
+def mixed_pairs(regimes, pairs, scope=None):
     """Pairs whose two arms ran at different rates -- not comparable.
 
     A pair is compared within one alignment arm, so the arm is part of the match:
     grow_X aligned pairs with bd_X aligned, never with bd_X raw.
+
+    ``scope`` restricts the check to the (eval, dataset) cells an analysis actually
+    reads. Without it the guard is global, and a caller that touches none of the
+    offending cells has to be waved through with EEGROW_ALLOW_MIXED -- which disables
+    the check for the cells it *does* read as well. Narrowing the question is the
+    rigorous move; forcing past it is not.
     """
     bad = []
     for grow, fixed in pairs:
         for (ev, ds, m, sd, al) in regimes:
             if m != grow:
+                continue
+            if scope is not None and (ev, ds) not in scope:
                 continue
             rg = regimes[(ev, ds, grow, sd, al)]
             rf = regimes.get((ev, ds, fixed, sd, al))
@@ -254,17 +262,28 @@ def mixed_pairs(regimes, pairs):
     return sorted(bad)
 
 
-def assert_paired(pairs, bench_root=".", allow_env="EEGROW_ALLOW_MIXED"):
-    """Abort the analysis if any pair straddles two sampling rates."""
+def assert_paired(pairs, bench_root=".", allow_env="EEGROW_ALLOW_MIXED", scope=None):
+    """Abort the analysis if any pair it reads straddles two sampling rates.
+
+    Pass ``scope`` -- the set of (eval, dataset) the caller actually loaded -- so that
+    a contaminated cell elsewhere in the grid blocks the analyses that use it and only
+    those.
+    """
     evidence = cell_evidence(bench_root)
     if not evidence:
         print("[regime] aucune cellule datee -- garde-fou inactif")
         return {}, []
     regimes = {k: v[0] for k, v in evidence.items()}
-    bad = mixed_pairs(regimes, pairs)
-    rates = collections.Counter(regimes.values())
+    if scope is not None:
+        scope = {tuple(s) for s in scope}
+        evidence = {k: v for k, v in evidence.items() if (k[0], k[1]) in scope}
+        print(f"[regime] portee : {len(scope)} couples (eval, dataset) lus par cette "
+              f"analyse, {len(evidence)} cellules concernees")
+    bad = mixed_pairs(regimes, pairs, scope=scope)
+    # counts describe the cells this call is responsible for, i.e. after the scope
+    rates = collections.Counter(v[0] for v in evidence.values())
     tiers = collections.Counter(t for _, t in evidence.values())
-    print(f"[regime] {len(regimes)} cellules, taux: "
+    print(f"[regime] {len(evidence)} cellules, taux: "
           + ", ".join(f"{k}={v}" for k, v in rates.most_common()))
     print("[regime] preuve: "
           + ", ".join(f"{k}={tiers[k]}" for k in LOG + ("aucune",) if tiers[k]))

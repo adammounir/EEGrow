@@ -111,7 +111,11 @@ def main() -> int:
     print(have.to_string(), "\n")
 
     from regime_guard import assert_paired
-    assert_paired(PAIRS, bench_root=os.path.dirname(os.path.abspath(ROOT)) or ".")
+    # scoped to what was actually loaded: a contaminated cell in a protocol/dataset this
+    # readout never touches must not be waved through globally, and must not block it
+    assert_paired(PAIRS, bench_root=os.path.dirname(os.path.abspath(ROOT)) or ".",
+                  scope=set(map(tuple, df[["eval", "dataset"]].drop_duplicates()
+                                .itertuples(index=False))))
 
     rng = np.random.default_rng(0)
     recs = []

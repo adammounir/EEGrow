@@ -61,7 +61,9 @@ if df.empty:
 # meme frequence d'echantillonnage compare du pretraitement, pas de la croissance.
 from regime_guard import assert_paired  # noqa: E402
 
-assert_paired(PAIRS, bench_root=os.path.dirname(os.path.abspath(ROOT)) or ".")
+assert_paired(PAIRS, bench_root=os.path.dirname(os.path.abspath(ROOT)) or ".",
+              scope=set(map(tuple, df[["eval", "dataset"]].drop_duplicates()
+                            .itertuples(index=False))))
 
 
 recs = []
