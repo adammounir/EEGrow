@@ -28,7 +28,12 @@ suffix: eegrow
 
 # Where per-job CSV/joblib land. null data_dir => MNE default ~/mne_data (local);
 # on the cluster set data_dir to the shared cache (see config/dataset notes).
-results_dir: ${hydra:runtime.cwd}/benchmarks/results
+# null => benchmarks/results, located from the runner's own file (see
+# utils.default_results_root). It used to be ${hydra:runtime.cwd}/benchmarks/results,
+# which makes the destination depend on where the process was launched from -- and
+# under slurm the sbatch script does not reliably control that. Set it explicitly to
+# write elsewhere.
+results_dir: null
 data_dir: null
 
 hydra:

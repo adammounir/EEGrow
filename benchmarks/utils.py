@@ -58,8 +58,26 @@ def set_data_dir(data_dir: str | None) -> None:
     logger.info("dataset cache -> %s", path)
 
 
-def results_path(results_dir: str, eval_name: str, dataset: str) -> Path:
+def default_results_root() -> Path:
+    """``benchmarks/results``, located from this file rather than from the cwd.
+
+    The config used to say ``${hydra:runtime.cwd}/benchmarks/results``, which makes the
+    destination depend on the directory the process happens to be launched from. Under
+    slurm that is not something the sbatch script controls: the same
+    ``cd .../benchmarks`` before ``srun`` sent some jobs' results to
+    ``benchmarks/results`` and others to ``benchmarks/benchmarks/results``. A whole arm
+    of the grid landed in the second one, invisible to every analysis.
+
+    This file sits in ``benchmarks/``, so its own location is the anchor. An explicit
+    ``results_dir=`` on the command line still wins.
+    """
+    return Path(__file__).resolve().parent / "results"
+
+
+def results_path(results_dir, eval_name: str, dataset: str) -> Path:
     """``<results_dir>/<eval>/<dataset>/`` (created); one folder per (eval, dataset)."""
-    p = Path(results_dir).expanduser() / eval_name / dataset
+    root = default_results_root() if results_dir in (None, "", "None", "null") \
+        else Path(str(results_dir)).expanduser()
+    p = root / eval_name / dataset
     p.mkdir(parents=True, exist_ok=True)
     return p

@@ -185,7 +185,8 @@ def main(cfg: DictConfig) -> pd.DataFrame:
     logger.info("pipeline ready (device=%s)", device)
 
     # ---- evaluate ----------------------------------------------------------
-    out_dir = results_path(str(cfg.results_dir), cfg.eval.name, dcfg.name)
+    out_dir = results_path(cfg.get("results_dir"), cfg.eval.name, dcfg.name)
+    logger.info("results -> %s", out_dir)
     evaluation = _make_evaluation(cfg, paradigm, dataset, out_dir)
     results = evaluation.process({label: pipeline})
 
