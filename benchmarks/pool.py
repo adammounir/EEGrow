@@ -58,6 +58,28 @@ SFREQ = 250.0
 N_TIMES = int(round(WINDOW * SFREQ))
 FMIN, FMAX = 8.0, 32.0
 
+#: Global RMS every arm is rescaled to, just before it is handed to a model.
+#:
+#: MOABB serves epochs in **volts**, so a motor-imagery trial has std ~5e-6 and, on the
+#: low-gain datasets, ~5e-7. Measured on one BNCI2014_001 fold with ShallowFBCSPNet,
+#: 40 epochs, everything else held fixed:
+#:
+#:     volts        acc 0.504  auc 0.539  -- predicts one class for 99.7% of trials
+#:     x1e6         acc 0.590  auc 0.692
+#:     unit RMS     acc 0.649  auc 0.733
+#:
+#: The initial training loss is 9.71 in volts against 1.04 at unit RMS: the net starts in
+#: a regime where the gradient is numerically dead, and early stopping on valid accuracy
+#: then locks in the constant prediction. BatchNorm does not save it -- it makes the
+#: *forward* pass scale-free, but AdamW's weight decay still pulls against the ~1e6 first
+#: layer weights that volt-scale inputs require.
+#:
+#: The exact constant is irrelevant (1e6 and unit RMS both work); what matters is that it
+#: is O(1) and that it is the *same* for all three alignment arms, since a different
+#: amplitude per arm would hand the optimiser a different effective learning rate and stop
+#: the arms from being controls for each other.
+TARGET_RMS = 1.0
+
 #: (moabb class, kwargs, tier). Tiers are the interpolation ablation, not bookkeeping:
 #:
 #: ``core``   -- all 22 target electrodes recorded natively (Lee2019_MI misses one).
@@ -172,6 +194,19 @@ def build_subject(name: str, subject, *, max_gap_cm: float | None = MAX_GAP_CM,
     return {"path": str(out), "n_trials": int(len(yi)), "cached": False, "diag": diag}
 
 
+def _global_rms(X, chunk: int = 512) -> float:
+    """Root-mean-square of the whole array, accumulated in float64 chunk by chunk.
+
+    The pooled arm runs to a few GB in float32; ``X.astype(np.float64)`` would ask for a
+    second copy at twice the size. Chunking keeps the accumulator exact without ever
+    materialising it.
+    """
+    sq = 0.0
+    for i in range(0, len(X), chunk):
+        sq += float((X[i:i + chunk].astype(np.float64) ** 2).sum())
+    return float(np.sqrt(sq / X.size)) if X.size else 0.0
+
+
 def load(names, *, align: str = "none", exclude=(), subjects=None):
     """Concatenate cached subjects into one training set.
 
@@ -210,9 +245,6 @@ def load(names, *, align: str = "none", exclude=(), subjects=None):
 
     excl = {(str(d), str(s)) for d, s in exclude}
     Xs, ys, gs = [], [], []
-    # accumulated per subject, while the arrays are still small: the pool runs to a few
-    # GB, and a float64 pass over the concatenated array would need a second copy of it
-    sq = cnt = 0.0
     for name in names:
         d = pool_root() / name
         if not d.is_dir():
@@ -226,8 +258,6 @@ def load(names, *, align: str = "none", exclude=(), subjects=None):
                 continue
             with np.load(f, allow_pickle=True) as z:
                 x = z["X"]
-                sq += float((x.astype(np.float64) ** 2).sum())
-                cnt += x.size
                 Xs.append(x)
                 ys.append(z["y"])
                 gs.append(np.asarray([f"{name}|{subj}"] * len(z["y"])))
@@ -237,27 +267,25 @@ def load(names, *, align: str = "none", exclude=(), subjects=None):
     y = np.concatenate(ys)
     g = np.concatenate(gs)
     Xs.clear()  # the concatenation copied; holding these doubles peak memory
-    rms0 = float(np.sqrt(sq / cnt)) if cnt else 1.0
+
     if align == "euclidean":
         X = euclidean_align(X, g, preserve_scale=True).astype(np.float32)
     elif align == "scale":
-        sq2 = 0.0
         for grp in np.unique(g):
             m = g == grp
-            block = X[m]
-            s = float(block.std())
+            s = float(X[m].std())
             if s > 0:
-                block = block / np.float32(s)
-                X[m] = block
-            sq2 += float((block.astype(np.float64) ** 2).sum())
-        # one global factor afterwards so this arm sits at the same overall amplitude as
-        # the raw and EA arms (euclidean_align preserves the raw RMS by construction);
-        # otherwise each arm would give the optimiser a different effective learning rate
-        rms = float(np.sqrt(sq2 / cnt)) if cnt else 0.0
-        if rms > 0:
-            X *= np.float32(rms0 / rms)
+                X[m] = X[m] / np.float32(s)
     elif align != "none":
         raise ValueError(f"unknown align={align!r}")
+
+    # Every arm ends on the same O(1) global amplitude -- see TARGET_RMS. Done last and
+    # with a single global factor, so it cannot disturb what distinguishes the arms:
+    # under ``none`` the amplitude *ratios* between datasets survive untouched, which is
+    # precisely the confound the ``scale`` arm exists to expose.
+    rms = _global_rms(X)
+    if rms > 0:
+        X *= np.float32(TARGET_RMS / rms)
     return X, y, g
 
 

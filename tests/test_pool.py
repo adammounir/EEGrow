@@ -105,6 +105,34 @@ def test_euclidean_alignment_also_lands_on_the_raw_amplitude(fake_pool):
     assert rms(Xs) == pytest.approx(rms(Xe), rel=1e-2)
 
 
+def test_every_arm_arrives_at_an_O1_amplitude(fake_pool):
+    """The bug this pins cost a whole 90-point grid.
+
+    MOABB serves volts, so the fixture's arrays sit at 1e-5 and 1e-2. Handed to a convnet
+    at that scale, ShallowFBCSPNet predicted one class for 99.7% of trials -- accuracy
+    exactly 0.5000 in every cell of the grid. Rescaling the same fold to unit RMS took it
+    to 0.649. The earlier code rescaled all three arms to the *raw* RMS in the name of
+    comparability, which preserved the pathology instead of the comparison.
+    """
+    for align in ("none", "scale", "euclidean"):
+        X, _, _ = poolmod.load(["ds_a", "ds_b"], align=align)
+        rms = float(np.sqrt(np.mean(X.astype(np.float64) ** 2)))
+        assert rms == pytest.approx(poolmod.TARGET_RMS, rel=1e-4), align
+        assert 1e-3 < np.abs(X).max() < 1e3, f"{align}: still in a dead numeric regime"
+
+
+def test_the_raw_arm_keeps_the_amplitude_gap_the_scale_arm_exists_to_remove(fake_pool):
+    """The global rescale must not quietly turn ``none`` into ``scale``.
+
+    ``none`` is the arm that still carries the cross-amplifier confound; if one global
+    factor had been applied per subject rather than once overall, ``none`` and ``scale``
+    would coincide and the alignment axis would lose its control.
+    """
+    X, _, g = poolmod.load(["ds_a", "ds_b"], align="none")
+    stds = {grp: float(X[g == grp].std()) for grp in np.unique(g)}
+    assert max(stds.values()) / min(stds.values()) > 100
+
+
 def test_alignment_is_per_subject_not_per_dataset(fake_pool):
     """A per-dataset reference would leave the between-subject mixing EA removes."""
     Xe, _, g = poolmod.load(["ds_a", "ds_b"], align="euclidean")
