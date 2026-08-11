@@ -9,6 +9,7 @@ growth.
 from __future__ import annotations
 
 from eegrow.alignment import euclidean_align
+from eegrow.montage import SENSORIMOTOR_22, interpolate_to_montage
 from eegrow.convert import GrowableSequential, make_growable
 from eegrow.models.growing_deepeeg import GrowingDeepEEGNet
 from eegrow.models.growing_eegnex import GrowingEEGNeX
@@ -25,5 +26,7 @@ __all__ = [
     "GrowableSequential",
     "GromoGrowth",
     "euclidean_align",
+    "interpolate_to_montage",
+    "SENSORIMOTOR_22",
 ]
 __version__ = "0.1.0"
