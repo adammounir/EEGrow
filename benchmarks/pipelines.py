@@ -36,22 +36,26 @@ def to_float32(X):
 class RMSScaler(BaseEstimator, TransformerMixin):
     """Divide by the training set's global RMS, so the net sees an O(1) input.
 
-    MOABB serves epochs in **volts**: a motor-imagery trial has std ~5e-6, and ~3e-6 on
-    the low-gain datasets. At that scale ShallowFBCSPNet predicts one class for 99.7% of
-    trials. Measured on one BNCI2014_001 fold, 40 epochs, everything else fixed: volts
-    0.504 acc / 0.539 auc, unit RMS 0.649 / 0.733, with the initial training loss falling
-    from 9.71 to 1.04.
+    A convnet handed volt-scale EEG (std ~5e-6) collapses: on one BNCI2014_001 fold,
+    40 epochs, everything else fixed, ShallowFBCSPNet predicts one class for 99.7% of
+    trials and scores 0.504 acc / 0.539 auc, against 0.649 / 0.733 at unit RMS, with the
+    initial training loss falling from 9.71 to 1.04. BatchNorm does not make this go away:
+    it makes the *forward* pass scale-free, but AdamW's weight decay still pulls against
+    the ~1e6 first-layer weights that volt-scale inputs require, so the optimisation is not
+    scale-free even when the architecture is.
 
-    BatchNorm does not make this go away. It makes the *forward* pass scale-free, but
-    AdamW's weight decay still pulls against the ~1e6 first-layer weights that volt-scale
-    inputs require, so the optimisation is not scale-free even when the architecture is.
+    On *this* path the scaler is nearly a no-op, and that is measured rather than assumed.
+    MOABB's array branch already multiplies by ``dataset.unit_factor = 1e6``, so the
+    paradigm hands over microvolts and the nets were never in the dead regime. Re-running
+    the grid's deep arms with this step added and comparing fold by fold against the
+    original CSVs -- 8871 paired folds, BNCI2014-001 and Shin2017A, 8 architectures --
+    gives a mean difference of **-0.002**. It is kept anyway so the deep arms do not
+    silently depend on MOABB's unit default, and because ``pool.py`` reaches for Epochs and
+    so does *not* get that factor (see ``pool.TARGET_RMS``).
 
-    Only the deep arms need it. The classic arms are scale-invariant by construction --
-    CSP solves a generalised eigenproblem, the Riemannian arms work on covariances -- and
-    leaving them untouched keeps them as the control that says a change in the deep
-    numbers is numerical rather than neuroscientific. On the published grid, the Spearman
-    correlation between log dataset amplitude and mean score is +0.929 (p = 0.0009) for
-    the deep arms and +0.119 (p = 0.78) for the classic ones.
+    Only the deep arms carry it. The classic arms are scale-invariant by construction --
+    CSP solves a generalised eigenproblem, the Riemannian arms work on covariances -- so
+    adding it there could only introduce noise.
 
     The constant is fitted on train and applied to test, so no test statistic leaks: it is
     one scalar, exactly as MOABB's own scalers behave.

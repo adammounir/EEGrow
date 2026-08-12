@@ -1,9 +1,10 @@
-"""The scaling step that the deep arms cannot run without.
+"""The scaling step that guards the deep arms against the unit their input arrives in.
 
-MOABB serves epochs in volts. Without a rescale the deep arms of the published grid track
-amplifier gain rather than decodability (Spearman +0.929, p = 0.0009 over 8 datasets,
-against +0.119 for the scale-invariant classic arms). These tests pin the three properties
-that make the fix correct rather than merely present.
+A convnet handed volt-scale EEG collapses to a constant prediction; ``pool.py`` reaches for
+Epochs and so bypasses MOABB's ``unit_factor``, which is where that actually bit us. On the
+MOABB array path the step is nearly a no-op (measured: -0.002 over 8871 paired folds), and
+it is kept so the arms do not silently depend on an upstream default. These tests pin the
+three properties that make it correct rather than merely present.
 """
 
 import sys
@@ -42,7 +43,7 @@ def test_the_test_set_is_scaled_by_the_constant_fitted_on_train():
 
 def test_the_deep_pipeline_carries_the_scaler_and_the_classic_ones_do_not():
     """The classic arms must stay untouched: they are scale-invariant by construction, so
-    they are the control that attributes a change in the deep numbers to numerics."""
+    adding the step there could only introduce noise into a fixed reference."""
     import yaml
 
     cfg = Path(__file__).resolve().parent.parent / "benchmarks" / "config"

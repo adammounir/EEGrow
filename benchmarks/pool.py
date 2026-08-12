@@ -60,9 +60,14 @@ FMIN, FMAX = 8.0, 32.0
 
 #: Global RMS every arm is rescaled to, just before it is handed to a model.
 #:
-#: MOABB serves epochs in **volts**, so a motor-imagery trial has std ~5e-6 and, on the
-#: low-gain datasets, ~5e-7. Measured on one BNCI2014_001 fold with ShallowFBCSPNet,
-#: 40 epochs, everything else held fixed:
+#: ``build_subject`` calls ``paradigm.get_data(..., return_epochs=True)``, and MOABB applies
+#: its ``unit_factor = 1e6`` only on the *array* branch of ``paradigms/base.py`` (the
+#: ``FunctionTransformer(methodcaller("__mul__", dataset.unit_factor))`` around line 684).
+#: Asking for Epochs therefore skips it, and the cache holds **volts** -- std ~5e-6, and
+#: ~5e-7 on the low-gain datasets -- whereas everything that goes through MOABB's own array
+#: path gets microvolts. This is a property of *this* loader, not of MOABB.
+#:
+#: Measured on one BNCI2014_001 fold with ShallowFBCSPNet, 40 epochs, everything else fixed:
 #:
 #:     volts        acc 0.504  auc 0.539  -- predicts one class for 99.7% of trials
 #:     x1e6         acc 0.590  auc 0.692
