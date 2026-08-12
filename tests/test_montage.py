@@ -15,6 +15,7 @@ from eegrow.montage import (
     interpolate_to_montage,
     nearest_source_gaps,
     resolve_positions,
+    support_geometry,
 )
 
 MONTAGE = "standard_1005"
@@ -215,6 +216,63 @@ def test_the_threshold_is_calibrated_on_the_target_montage_density():
     assert np.median(nn) == pytest.approx(3.45, abs=0.1)
     assert nn.max() == pytest.approx(4.22, abs=0.1)
     assert nn.max() < MAX_GAP_CM
+
+
+def test_directional_support_sees_the_hole_that_nearest_distance_misses():
+    """The case that falsified the guard, pinned as a test.
+
+    POz sits 3.30 cm from Zhou2016's nearest electrode -- comfortably inside MAX_GAP_CM --
+    and reconstructs at corr 0.50 against ground truth, because that cap has nothing over
+    the parietal region and every nearby source is anterior. The distance cannot express
+    "the support is all on one side"; the sector statistic must, or it is not worth
+    recording. Compared against C1, which the same cap surrounds properly (C3 and Cz on
+    either side) and reconstructs at corr 0.97.
+    """
+    zhou14 = ["Fp1", "Fp2", "FC3", "FCz", "FC4", "C3", "Cz", "C4",
+              "CP3", "CPz", "CP4", "O1", "Oz", "O2"]
+    g = support_geometry(["POz", "C1"], zhou14)
+
+    # the current guard cannot separate them: it likes POz *better*
+    d = nearest_source_gaps(["POz", "C1"], zhou14)
+    assert d["POz"] < d["C1"]
+
+    # the directional statistic orders them the way the measured fidelity does
+    assert g["POz"]["worst_sector_cm"] > g["C1"]["worst_sector_cm"]
+    assert g["POz"]["d2"] > g["C1"]["d2"]
+
+
+def test_support_geometry_flags_an_electrode_with_no_source_behind_it():
+    """An empty angular sector means extrapolation in that direction, whatever d1 says.
+
+    Iz is at the very back of the head: given only frontal sources, every one of them lies
+    forward of it, so at least one sector is empty and the worst-sector distance is
+    infinite -- the honest answer for a point outside the sources' coverage.
+    """
+    g = support_geometry(["Iz"], ["Fp1", "Fp2", "Fz", "AFz"])["Iz"]
+    assert g["empty_sectors"] >= 1
+    assert g["worst_sector_cm"] == float("inf")
+
+    # a cap that encircles C3 leaves no sector empty
+    g = support_geometry(["C3"], ["FC3", "CP3", "C5", "C1"])["C3"]
+    assert g["empty_sectors"] == 0
+    assert np.isfinite(g["worst_sector_cm"]) and g["worst_sector_cm"] < 5.0
+
+
+def test_the_support_diagnostic_is_recorded_for_every_interpolated_channel():
+    """It has to survive into the cache, or a later analysis cannot regress on it."""
+    X = _smooth_field(CAP64)
+    src = [c for c in CAP64 if c not in ("C1", "C2")]
+    Xs = X[:, [CAP64.index(c) for c in src], :]
+    _, meta = interpolate_to_montage(Xs, src, SENSORIMOTOR_22)
+    assert set(meta["support"]) == {"C1", "C2"}
+    for v in meta["support"].values():
+        assert v["d1"] <= v["d2"]
+
+    # the pass-through branch reports the same key, so consumers need no special case
+    src = list(SENSORIMOTOR_22)
+    Xs = X[:, [CAP64.index(c) for c in src], :]
+    _, meta = interpolate_to_montage(Xs, src, SENSORIMOTOR_22)
+    assert meta["support"] == {}
 
 
 def test_a_target_electrode_the_montage_cannot_place_is_an_error():

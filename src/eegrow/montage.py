@@ -35,6 +35,23 @@ at most 4.22 cm from their nearest neighbour, so a reconstruction with a source 
 4.5 cm is no more of a stretch than the montage it is joining. The measured gaps come
 back in the diagnostics, so a paper can report them per dataset.
 
+**What that guard does not do**, measured rather than assumed. Reconstructing the target
+from Zhou2016's 14-electrode cap on Cho2017, where the truth is recorded, gives 13
+electrodes with a ground-truth correlation. Against those, the nearest-source distance has
+Spearman rho = **-0.011**: it is not weakly predictive of reconstruction quality, it is
+not predictive at all. POz clears the threshold comfortably at 3.30 cm and comes back at
+corr 0.50 with a relative error of 2.28, because every source near it lies anterior -- that
+cap has nothing over the parietal region and the spline smooths across the hole rather than
+interpolating within it. Distance to the *nearest* electrode cannot see that; direction
+can. Two directional statistics do measurably better on the same 13 points (second-nearest
+distance rho = -0.48, worst-of-three-angular-sectors rho = -0.51) and both are reported by
+:func:`support_geometry`, but 13 electrodes from a single emulation cannot calibrate a
+threshold, so neither is promoted to a gate. ``MAX_GAP_CM`` stays what it demonstrably is:
+a cheap filter that correctly refuses the datasets nothing could rescue (BNCI2014_004 at
+10.1 cm), not a certificate that an admitted channel was well reconstructed. Whether a
+dataset belongs in a pool is answered by :mod:`benchmarks.interp_fidelity`, which measures
+it against ground truth.
+
 A dataset with no coordinates at all (BNCI2014_002 ships ``EEG1``..``EEG15``) cannot be
 interpolated on any terms and raises.
 
@@ -79,6 +96,7 @@ __all__ = [
     "MAX_GAP_CM",
     "resolve_positions",
     "nearest_source_gaps",
+    "support_geometry",
     "interpolate_to_montage",
 ]
 
@@ -201,6 +219,85 @@ def nearest_source_gaps(
     return out
 
 
+def support_geometry(
+    missing, source, *, montage: str = _DEFAULT_MONTAGE, sectors: int = 3
+) -> dict[str, dict[str, float]]:
+    """Per reconstructed electrode: is it *surrounded* by sources, or merely near one?
+
+    A spherical spline interpolates inside the region its knots cover and smooths across
+    whatever they do not, and the difference is directional. The nearest-source distance
+    cannot express it -- POz sits 3.3 cm from Zhou2016's nearest electrode and reconstructs
+    at corr 0.50, because that 3.3 cm is anterior and there is nothing behind it.
+
+    Three quantities, cheapest first:
+
+    ``d1``, ``d2``
+        Distances in cm to the nearest and second-nearest source. ``d2`` already helps: a
+        point with two close neighbours on opposite sides is interpolated, a point with one
+        close neighbour and the next one 6 cm away is not.
+    ``worst_sector_cm``
+        The sources are projected into the tangent plane at the electrode and split into
+        ``sectors`` equal angular wedges; the value is the largest over wedges of the
+        distance to the closest source *in that wedge*, or ``inf`` if a wedge is empty. This
+        is "how far must I look to find support in the worst direction", which is the
+        question the spline actually answers.
+    ``empty_sectors``
+        How many wedges contain no source at all. Non-zero means the electrode is outside
+        the sources' angular coverage in that direction, i.e. extrapolated there whatever
+        ``d1`` says.
+
+    Reported, not enforced: see the module docstring for why 13 ground-truth electrodes are
+    not enough to set a threshold on any of these.
+    """
+    import mne
+
+    m = mne.channels.make_standard_montage(montage)
+    pos = {canonical(k): np.asarray(v)
+           for k, v in m.get_positions()["ch_pos"].items()}
+    radius = float(np.mean([np.linalg.norm(v) for v in pos.values()]))
+
+    out = {}
+    for name in missing:
+        key = canonical(name)
+        u = pos[key]
+        u = u / np.linalg.norm(u)
+        S = [pos[canonical(s)] / np.linalg.norm(pos[canonical(s)])
+             for s in source if canonical(s) in pos and canonical(s) != key]
+        if len(S) < 2:
+            out[str(name)] = {"d1": float("inf"), "d2": float("inf"),
+                              "worst_sector_cm": float("inf"),
+                              "empty_sectors": float(sectors)}
+            continue
+        S = np.stack(S)
+        arc = radius * np.arccos(np.clip(S @ u, -1.0, 1.0)) * 100.0
+
+        # an orthonormal basis of the tangent plane at u; the seed axis only has to be
+        # non-parallel to u, and which one is picked cannot matter because the statistic
+        # is a max over a rotation-covariant partition
+        seed = np.array([0.0, 0.0, 1.0])
+        if abs(float(u @ seed)) > 0.9:
+            seed = np.array([1.0, 0.0, 0.0])
+        e1 = seed - float(seed @ u) * u
+        e1 /= np.linalg.norm(e1)
+        e2 = np.cross(u, e1)
+        t = S - np.outer(S @ u, u)
+        az = (np.arctan2(t @ e2, t @ e1) + 2 * np.pi) % (2 * np.pi)
+        wedge = (az // (2 * np.pi / sectors)).astype(int)
+
+        worst, empty = 0.0, 0
+        for k in range(sectors):
+            sel = arc[wedge == k]
+            if len(sel) == 0:
+                empty += 1
+                worst = float("inf")
+            else:
+                worst = max(worst, float(sel.min()))
+        srt = np.sort(arc)
+        out[str(name)] = {"d1": float(srt[0]), "d2": float(srt[1]),
+                          "worst_sector_cm": worst, "empty_sectors": float(empty)}
+    return out
+
+
 def interpolate_to_montage(
     X: np.ndarray,
     ch_names,
@@ -298,6 +395,9 @@ def interpolate_to_montage(
             "present": list(target), "interpolated": [], "unknown": unknown,
             "n_support": len(keep), "gaps_cm": {},
             "max_gap_cm": 0.0, "median_gap_cm": 0.0,
+            # same keys as the interpolating branch, so a consumer never has to ask which
+            # branch produced the record it is reading
+            "support": {},
             "rank": len(target)}
 
     data = np.concatenate(
@@ -331,6 +431,10 @@ def interpolate_to_montage(
         "gaps_cm": gaps,
         "max_gap_cm": max(gaps.values()),
         "median_gap_cm": float(np.median(list(gaps.values()))),
+        # directional support, reported because the distance above is measurably blind to
+        # it (rho = -0.011 against ground-truth fidelity; see the module docstring). Recorded
+        # per cache entry so a later analysis can regress score on it without rebuilding.
+        "support": support_geometry(missing_std, renamed, montage=montage),
         # linear operator: the 22 columns span at most as many dimensions as there were
         # recorded electrodes. Carried in the results because it decides which estimators
         # are even applicable (see the module docstring).

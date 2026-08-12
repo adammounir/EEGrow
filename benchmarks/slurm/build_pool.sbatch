@@ -18,16 +18,26 @@
 # One task per dataset (not per subject): the per-subject work is minutes, and MOABB's
 # download/cache layer is happier with one process per dataset.
 #
-# Array indices follow `sorted(tier("core+interp"))`:
+# The cache lives OUTSIDE the repository, under $EEGROW_POOL_ROOT. It used to default to
+# benchmarks/pool/, i.e. inside the tree that is rsync --delete-ed from the laptop, and a
+# sync with no local benchmarks/pool/ duly wiped all 276 cached subjects here. The raw
+# MOABB data survived so it cost a rebuild, not a re-download -- but hours of derived data
+# must not sit in a mirrored directory.
+#
+# Array indices follow `sorted(tier("core+interp+lowrank"))`:
 #   0 bnci2014_001  1 cho2017  2 lee2019_mi  3 physionetmi
 #   4 schirrmeister2017  5 shin2017a  6 weibo2014  7 zhou2016
+# plus one hand-added index for the negative control:
+#   8 bnci2014_004, built with --max-gap-cm 0 (guard disabled)
 # physionetmi (109 subjects) and schirrmeister2017 (128 ch at 500 Hz) set the time
 # budget; the rest finish in well under an hour.
 #
-# bnci2014_004 is deliberately absent. Its 3 electrodes put 19 of the 22 targets more
-# than 4.5 cm from anything recorded (the worst at 10.1 cm), so the geometric guard in
-# eegrow.montage refuses it. It is only ever built by hand, as a negative control:
-#   python benchmarks/pool.py build --dataset bnci2014_004 --max-gap-cm 0
+# zhou2016 (`lowrank`) and bnci2014_004 (`extrap`) are built but NOT in the default pool.
+# zhou2016's 14 electrodes make the projection rank-14, which breaks CSP and makes
+# Euclidean alignment whiten inside a subspace; bnci2014_004's 3 electrodes put 19 of the
+# 22 targets beyond the 4.5 cm geometric guard, the worst at 10.1 cm, so it is refused
+# unless the guard is switched off on purpose. Both exist to be run as their own arms,
+# where the question is exactly "what happens when the projection is not supported".
 #SBATCH --job-name=build-pool
 #SBATCH --partition=normal,normal-best
 #SBATCH --nodes=1
@@ -36,7 +46,7 @@
 #SBATCH --mem=64G
 #SBATCH --time=12:00:00
 #SBATCH --requeue
-#SBATCH --array=0-7%4
+#SBATCH --array=0-8%5
 #SBATCH --output=/scratch/amounir/eegrow/pool_logs/build_%A_%a.out
 #SBATCH --open-mode=append
 
@@ -48,7 +58,14 @@ source /scratch/amounir/miniforge3/etc/profile.d/conda.sh
 conda activate bench
 export PYTHONPATH=/scratch/amounir/eegrow/benchmarks:/scratch/amounir/eegrow/src
 export MNE_DATA=/scratch/amounir/mne_data
+export EEGROW_POOL_ROOT=/scratch/amounir/pool_cache
 
 cd /scratch/amounir/eegrow
-srun python benchmarks/pool.py build --tier core+interp --index "${SLURM_ARRAY_TASK_ID}"
+if [ "${SLURM_ARRAY_TASK_ID}" -eq 8 ]; then
+  # the negative control: 19 of 22 channels invented from 3 electrodes, guard off
+  srun python benchmarks/pool.py build --dataset bnci2014_004 --max-gap-cm 0
+else
+  srun python benchmarks/pool.py build --tier core+interp+lowrank \
+    --index "${SLURM_ARRAY_TASK_ID}"
+fi
 echo "[$(date)] task ${SLURM_ARRAY_TASK_ID} done"

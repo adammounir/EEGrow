@@ -39,6 +39,11 @@ def fake_pool(tmp_path, monkeypatch):
                 diag=json.dumps({"present": [], "interpolated": [], "unknown": [],
                                  "n_support": 4, "gaps_cm": {}, "max_gap_cm": 0.0,
                                  "median_gap_cm": 0.0}))
+        # a completed build leaves a manifest; without one the fixture would not be a
+        # faithful stand-in for a real cache and load() would rightly refuse it
+        (d / poolmod.MANIFEST).write_text(json.dumps(
+            {"dataset": name, "n_built": 3, "subjects": ["1", "2", "3"],
+             "n_promised": 3, "unbuildable": []}))
     return tmp_path
 
 
@@ -70,6 +75,50 @@ def test_loading_nothing_is_an_error_not_an_empty_array(fake_pool):
 def test_an_unbuilt_dataset_is_named_in_the_error(fake_pool):
     with pytest.raises(FileNotFoundError, match="ds_missing"):
         poolmod.load(["ds_missing"])
+
+
+def test_a_cache_that_lost_subjects_after_the_build_refuses_to_train(fake_pool):
+    """The failure this exists for is silent, which is why it has to be an exception.
+
+    An ``rsync --delete`` from a laptop with no local cache directory removed all 276
+    cached subjects on the cluster. Nothing about the next run would have looked wrong: it
+    would have trained on whatever survived and written a perfectly normal score. Deleting
+    one subject here stands in for that, and the count has to appear in the message so the
+    operator learns how much was lost, not merely that something was.
+    """
+    (fake_pool / "ds_a" / "sub-2.npz").unlink()
+    with pytest.raises(RuntimeError, match=r"disappeared since the build"):
+        poolmod.load(["ds_a", "ds_b"])
+
+    # the check is per dataset: the intact one is still usable on its own
+    X, _, g = poolmod.load(["ds_b"])
+    assert len(set(g)) == 3
+
+
+def test_a_subject_that_never_built_does_not_block_every_later_run(fake_pool):
+    """Some subjects are permanently unreadable, and that is a fact about the dataset.
+
+    The manifest records them as ``unbuildable`` so the guard compares against what the
+    build produced, not against what MOABB promised -- otherwise one broken recording in
+    Cho2017 would abort the grid forever.
+    """
+    (fake_pool / "ds_a" / "sub-3.npz").unlink()
+    (fake_pool / "ds_a" / poolmod.MANIFEST).write_text(json.dumps(
+        {"dataset": "ds_a", "n_built": 2, "subjects": ["1", "2"],
+         "n_promised": 3, "unbuildable": ["3"]}))
+    _, _, g = poolmod.load(["ds_a"])
+    assert set(g) == {"ds_a|1", "ds_a|2"}
+
+
+def test_a_cache_with_no_manifest_is_refused_rather_than_trusted(fake_pool):
+    """A cache built before the manifest existed cannot be told apart from a damaged one,
+    so it is refused. Rebuilding is idempotent and costs seconds on a warm cache."""
+    (fake_pool / "ds_a" / poolmod.MANIFEST).unlink()
+    with pytest.raises(RuntimeError, match="build never completed"):
+        poolmod.load(["ds_a"])
+    # and it can still be waived deliberately, for a smoke test on a partial cache
+    _, _, g = poolmod.load(["ds_a"], require_complete=False)
+    assert len(set(g)) == 3
 
 
 def test_scale_equalises_the_subjects_and_keeps_the_overall_amplitude(fake_pool):

@@ -36,6 +36,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import warnings
 from pathlib import Path
@@ -121,7 +122,17 @@ POOL = {
 
 
 def pool_root() -> Path:
-    return Path(__file__).resolve().parent / "pool"
+    """Where the harmonised trial cache lives.
+
+    Overridable through ``EEGROW_POOL_ROOT``, and on the cluster it *must* be overridden
+    to a path outside the repository. The default sits under ``benchmarks/``, which is
+    inside the tree that gets ``rsync --delete``-ed from the laptop -- and a sync that had
+    no local ``benchmarks/pool/`` duly deleted all 276 cached subjects on the remote. The
+    raw MOABB data survived, so it cost a rebuild rather than a re-download, but the cache
+    is derived data measured in hours and it has no business living in a mirrored tree.
+    """
+    env = os.environ.get("EEGROW_POOL_ROOT")
+    return Path(env).expanduser() if env else Path(__file__).resolve().parent / "pool"
 
 
 def tier(names_or_tier) -> list[str]:
@@ -199,6 +210,63 @@ def build_subject(name: str, subject, *, max_gap_cm: float | None = MAX_GAP_CM,
     return {"path": str(out), "n_trials": int(len(yi)), "cached": False, "diag": diag}
 
 
+#: Written by ``build`` once a dataset has been walked end to end. Its job is to make the
+#: difference between "this subject never builds" and "this cache has been truncated"
+#: decidable at load time -- the two look identical from the file count alone, and the
+#: second one is how 276 cached subjects were silently lost to an ``rsync --delete``. A run
+#: that trains on half a pool does not crash; it returns a plausible number.
+MANIFEST = "manifest.json"
+
+
+def write_manifest(name: str) -> dict:
+    """Record what a completed build of ``name`` produced. Called at the end of a build."""
+    d = pool_root() / name
+    built = sorted(f.stem.split("sub-")[1] for f in d.glob("sub-*.npz"))
+    promised = [str(s) for s in _dataset(name).subject_list]
+    man = {"dataset": name, "n_built": len(built), "subjects": built,
+           "n_promised": len(promised),
+           "unbuildable": sorted(set(promised) - set(built))}
+    (d / MANIFEST).write_text(json.dumps(man, indent=1))
+    if man["unbuildable"]:
+        logger.warning("%s: %d/%d subjects built, never built: %s", name,
+                       len(built), len(promised), man["unbuildable"])
+    return man
+
+
+def check_complete(names) -> None:
+    """Refuse a pool whose cache is smaller than its own manifest says it should be.
+
+    Only compares against the manifest, never against MOABB's ``subject_list``: a subject
+    that has never been readable is a permanent fact about the dataset and must not block
+    every future run, whereas a subject that *was* built and is now gone means the cache
+    was damaged after the fact. That is the case worth aborting on, and it is the one a
+    file count cannot see.
+    """
+    problems = []
+    for name in names:
+        d = pool_root() / name
+        if not d.is_dir():
+            # never built at all, which is a different problem with a better message:
+            # leave it to load()'s FileNotFoundError, which names the path to build
+            continue
+        p = d / MANIFEST
+        if not p.exists():
+            problems.append(f"{name}: no {MANIFEST} -- build never completed")
+            continue
+        man = json.loads(p.read_text())
+        have = {f.stem.split("sub-")[1] for f in d.glob("sub-*.npz")}
+        lost = sorted(set(man["subjects"]) - have)
+        if lost:
+            problems.append(f"{name}: {len(lost)}/{man['n_built']} cached subjects have "
+                            f"disappeared since the build ({lost[:6]}...)")
+    if problems:
+        raise RuntimeError(
+            "pool cache is not what its build left behind:\n  "
+            + "\n  ".join(problems)
+            + f"\nRebuild with `pool.py build` (EEGROW_POOL_ROOT={pool_root()}). Training "
+              "on a truncated pool would return a number that looks perfectly normal.")
+
+
 def _global_rms(X, chunk: int = 512) -> float:
     """Root-mean-square of the whole array, accumulated in float64 chunk by chunk.
 
@@ -212,7 +280,8 @@ def _global_rms(X, chunk: int = 512) -> float:
     return float(np.sqrt(sq / X.size)) if X.size else 0.0
 
 
-def load(names, *, align: str = "none", exclude=(), subjects=None):
+def load(names, *, align: str = "none", exclude=(), subjects=None,
+         require_complete: bool = True):
     """Concatenate cached subjects into one training set.
 
     Parameters
@@ -240,6 +309,11 @@ def load(names, *, align: str = "none", exclude=(), subjects=None):
         Held-out test subjects. Passed explicitly so a caller cannot forget them.
     subjects : dict, optional
         ``{dataset: [subjects]}`` to restrict to; default is every cached subject.
+    require_complete : bool
+        Verify each dataset's cache against the manifest its build wrote, and refuse to
+        train on a pool that has lost subjects since. On by default because the failure it
+        catches is silent: a truncated pool trains happily and reports a normal-looking
+        score. Turn it off only for a deliberately partial cache, e.g. a smoke test.
 
     Returns
     -------
@@ -248,6 +322,8 @@ def load(names, *, align: str = "none", exclude=(), subjects=None):
     """
     from eegrow.alignment import euclidean_align
 
+    if require_complete:
+        check_complete(names)
     excl = {(str(d), str(s)) for d, s in exclude}
     Xs, ys, gs = [], [], []
     for name in names:
@@ -367,6 +443,11 @@ def main(argv=None) -> int:
             except Exception as e:
                 # one unreadable subject must not cost the other 108
                 logger.error("%s sub-%s ECHEC %s: %s", name, s, type(e).__name__, e)
+        # only after the whole subject_list has been walked: a manifest written mid-build
+        # would bless a partial cache as complete, which is exactly the check's blind spot
+        man = write_manifest(name)
+        logger.info("%s: manifeste ecrit, %d/%d sujets", name, man["n_built"],
+                    man["n_promised"])
     return 0
 
 
