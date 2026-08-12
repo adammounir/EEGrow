@@ -27,12 +27,25 @@ suffix: eegrow
 
 # Where per-job CSV/joblib land. null data_dir => MNE default ~/mne_data (local);
 # on the cluster set data_dir to the shared cache (see config/dataset notes).
-results_dir: ${hydra:runtime.cwd}/benchmarks/results
+# null => benchmarks/results, located from the runner's own file (see
+# utils.default_results_root). It used to be ${hydra:runtime.cwd}/benchmarks/results,
+# which makes the destination depend on where the process was launched from -- and
+# under slurm the sbatch script does not reliably control that. Set it explicitly to
+# write elsewhere.
+results_dir: null
 data_dir: null
 
 hydra:
   run:
-    dir: ${hydra:runtime.cwd}/benchmarks/outputs/${now:%Y-%m-%d_%H-%M-%S}
+    # The SLURM id is part of the name, not decoration. With a bare timestamp to the
+    # second, two array tasks of the same job start in the same second, resolve to the
+    # *same* directory and clobber each other's .hydra -- the run record of one of them
+    # simply disappears. That is not hypothetical: it destroyed the provenance of
+    # several cells of the production grid, after which the regime guard fell back to
+    # an older superseded launch and reported its sampling rate as fact.
+    # The sweep dir below never had the problem: its subdir is the override string, so
+    # it is unique per cell by construction.
+    dir: ${hydra:runtime.cwd}/benchmarks/outputs/${now:%Y-%m-%d_%H-%M-%S}_${oc.env:SLURM_JOB_ID,local}
   sweep:
     dir: ${hydra:runtime.cwd}/benchmarks/multirun/${now:%Y-%m-%d_%H-%M-%S}
     subdir: ${hydra.job.override_dirname}

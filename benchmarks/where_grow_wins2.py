@@ -1,6 +1,12 @@
 """Follow-up: absolute levels + sign test, to tell 'growth helps' from 'the fixed
 reference collapsed'. A +0.13 delta over a baseline sitting at chance is a different
 claim from a +0.03 over a baseline that trains fine.
+
+Like where_grow_wins.py, this reads ONE alignment arm at a time (default the raw one):
+aligned and raw cells share the same (eval, dataset, subject, session, seed), so a
+merge that ignores ``align`` returns a cartesian product instead of a pairing.
+
+Usage:  python where_grow_wins2.py [results_root] [align]
 """
 
 import glob
@@ -12,6 +18,7 @@ import pandas as pd
 from scipy.stats import binomtest, wilcoxon
 
 ROOT = sys.argv[1] if len(sys.argv) > 1 else "results"
+ALIGN = sys.argv[2] if len(sys.argv) > 2 else "none"
 PAIRS = [("grow_shallow", "bd_shallow"), ("grow_sccnet", "bd_sccnet"),
          ("grow_eegnex", "bd_eegnex"), ("grow_deep", "bd_deep4")]
 DEEP = {m for p in PAIRS for m in p}
@@ -34,17 +41,29 @@ for f in glob.glob(os.path.join(ROOT, "*", "*", "*.csv")):
         continue
     ev, ds, _ = f.split(os.sep)[-3:]
     d["eval"], d["dataset"] = ev, ds
+    # the raw grid predates the align axis, so its CSVs carry no such column
+    d["align"] = d["align"].fillna("none") if "align" in d.columns else "none"
     rows.append(d)
 
 df = pd.concat(rows, ignore_index=True)
 df["score"] = pd.to_numeric(df["score"], errors="coerce")
-df = df.dropna(subset=["score"]).drop_duplicates(subset=KEY + ["model", "score"])
+# `align` belongs in the dedup key: accuracy scores are quantised (0.25, 0.5, ...), so
+# a raw and an aligned row of the same cell can legitimately carry the same value, and
+# without it one of the two would be silently dropped.
+df = df.dropna(subset=["score"]).drop_duplicates(
+    subset=KEY + ["model", "align", "score"])
+df = df[df["align"] == ALIGN]
+print(f"bras align={ALIGN} : {len(df)} lignes")
+if df.empty:
+    raise SystemExit(f"aucune ligne pour align={ALIGN!r}")
 
 # --- garde-fou prétraitement : une paire dont les deux bras n'ont pas tourné a la
 # meme frequence d'echantillonnage compare du pretraitement, pas de la croissance.
 from regime_guard import assert_paired  # noqa: E402
 
-assert_paired(PAIRS, bench_root=os.path.dirname(os.path.abspath(ROOT)) or ".")
+assert_paired(PAIRS, bench_root=os.path.dirname(os.path.abspath(ROOT)) or ".",
+              scope=set(map(tuple, df[["eval", "dataset"]].drop_duplicates()
+                            .itertuples(index=False))))
 
 
 recs = []
