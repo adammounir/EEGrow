@@ -135,11 +135,23 @@ at 250 Hz and its per-seed median cost still spans 43.5 s to 242.3 s — a facto
 larger than the 4.0 a genuine 1000 Hz contamination would produce. Early stopping and
 heterogeneous GPUs dominate the cost; no threshold on that ratio can serve as a gate.
 
-**Restoring provenance to 100 %** means relaunching the 1170 cells with no trace, with the
-`sfreq` column now written into every CSV and `resample: 250.0` pinned in the 12 dataset
-configs (commit `8812860`), which makes the failure impossible to reproduce. The dominant
-cost is `schirrmeister2017/cross_subject`; the order of magnitude is a hundred GPU-hours.
-That is a decision to take before submission, not after.
+**Restoring provenance** means relaunching untraced cells, with the `sfreq` column now
+written into every CSV and `resample: 250.0` pinned in the 12 dataset configs (commit
+`8812860`), which makes the failure impossible to reproduce. The cost is not uniform, so
+it is worth pricing the scopes separately. Hours below are the sum of the recorded fit
+time over the cells to relaunch — sequential compute, not wall time on a slurm array:
+
+| scope | untraced cells | compute |
+|---|---|---|
+| `bd_shallow` + `grow_shallow` — the one pair with a positive result | 173 | 70 h GPU |
+| the 8 deep arms — every paired claim in §2 | 630 | 427 h GPU |
+| the 6 Riemann/CSP pipelines — the levels in §1 | 540 | 2425 h CPU |
+| everything | 1170 | 427 h GPU + 2425 h CPU |
+
+Within the shallow pair, 60 of the 173 cells account for 65 of the 70 hours (the
+`cross_subject` protocol on physionetmi, cho2017, shin2017a, schirrmeister2017,
+bnci2015_001); the remaining 113 cost about 5 hours in total. The decision is which of
+those scopes to buy, and it has to be taken before submission rather than after.
 
 ## Files
 
