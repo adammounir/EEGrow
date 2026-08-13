@@ -148,7 +148,9 @@ That is a decision to take before submission, not after.
 | `results_published/eegrow_benchmark_all_scores.csv.gz` | long table, 189,062 scores, one per (protocol, dataset, subject, session, model, seed) — nothing is averaged |
 | `results_published/eegrow_benchmark_levels.csv` | absolute levels per (protocol, dataset, model), seeds averaged within subject/session |
 | `results_published/eegrow_benchmark_paired.csv` | the 120 paired growing − fixed contrasts, with Wilcoxon and fraction of positive deltas |
+| `results_published/eegrow_moabb_grid_results.xlsx` | the same numbers as one spreadsheet, tables only — design, family means, sign tests, paired, levels, best model per cell, cells at chance, provenance |
 | `aggregate_published.py` | produces the three files above from `results/` |
+| `make_results_workbook.py` | produces the spreadsheet from the published CSVs |
 | `provenance_audit.py` | the table in §4, reproducible |
 | `where_grow_wins.py`, `where_grow_wins2.py` | the detailed paired analyses (§2) |
 | `regime_guard.py` | the preprocessing guard |
