@@ -109,7 +109,21 @@ G="${G:-${SLURM_GPUS_ON_NODE:-1}}"
 # is not idling and ten tenants will not run ten times faster. The gain packing
 # buys is the queue, not the silicon.
 #
-# AND K IS NOT ALWAYS A GPU BOUND. On lee2019_mi the binding constraint is host
+# AND K IS A PROPERTY OF THE MODEL, NOT OF THE CARD. Measured on one card with
+# no cap (job 463377, cross_session/zhou2016, peak reserved):
+#
+#   grow_shallow    726 MiB   ->  ~10 tenants fit
+#   grow_eegnex    6410 MiB   ->  exactly 1 fits (6410 x 2 > 10834 available)
+#
+# 6084 of those 6410 MiB are genuinely allocated, so this is not allocator slack:
+# gromo's growth statistics build a tensor product over the activations of the
+# layer being grown, and EEGNeX's conv2 is far wider than ShallowNet's conv_spat.
+# Same phenomenon as the 43 GB once seen on schirrmeister2017. A grid mixing the
+# two needs either a per-model K -- which this runner does not have, K is global
+# -- or one pass per memory class:
+#   GRID=grid_eegnex.tsv K=1 EEGROW_CUDA_FRACTION=0.75 bash pack_run.sh
+#
+# AND K IS NOT ALWAYS A GPU BOUND EITHER. On lee2019_mi the binding constraint is host
 # RAM: CrossSessionEvaluation holds the whole dataset (54 subjects x 62 channels,
 # 4.4 GB of cached arrays) in the process, and G*K=30 tenants against --mem=120G
 # is arithmetically impossible. The first packed campaign lost 30 lee2019 cells
