@@ -35,6 +35,21 @@ def pick_device(model_cfg) -> str:
     import torch
     if torch.cuda.is_available():
         return "cuda"
+    # Falling back to CPU is right on a laptop and wrong under the packed runner,
+    # which pins every deep cell to a card with CUDA_VISIBLE_DEVICES. If that
+    # variable is set and CUDA is still unavailable, the device it names does not
+    # exist -- and the cell would run ~20x slower on CPU while producing a
+    # perfectly ordinary CSV that nothing downstream could tell apart.
+    #
+    # Not hypothetical: margpu021 advertises gpu:turing:3 to SLURM and carries
+    # two cards. G came from SLURM_GPUS_ON_NODE, so a third of the tenants were
+    # pinned to device 2, silently dropped to CPU, and turned an 8-minute
+    # allocation into a 56-minute one with both real GPUs at 0 % utilisation.
+    if os.environ.get("CUDA_VISIBLE_DEVICES"):
+        raise RuntimeError(
+            f"CUDA_VISIBLE_DEVICES={os.environ['CUDA_VISIBLE_DEVICES']!r} but "
+            "torch.cuda.is_available() is False: the pinned device does not "
+            "exist. Refusing to fall back to CPU.")
     if torch.backends.mps.is_available():
         return "mps"
     return "cpu"

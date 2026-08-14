@@ -102,6 +102,21 @@ SUFFIX="${SUFFIX:-xsess}"
 # getting 2 is normal on a mixed partition, and hard-coding G would then leave
 # every fourth process pinned to a device that does not exist.
 G="${G:-${SLURM_GPUS_ON_NODE:-1}}"
+# ...and SLURM's own count can be wrong. margpu021 advertises `gpu:turing:3` and
+# `nvidia-smi -L` lists two cards; the third is gone and the node was never
+# updated. Trusting SLURM there set G=3, pinned a third of the tenants to a
+# device that does not exist, and dropped them to CPU: 9 cells still running
+# after 56 minutes with both real GPUs at 0 % utilisation, while the two healthy
+# nodes of the same campaign finished 116 cells in 8.
+#
+# Inside a job the GPU cgroup already restricts nvidia-smi to the allocated
+# cards, so this counts what this job can actually use. Take the smaller of the
+# two: SLURM may over-promise, and a manual G= override may over-ask.
+VISIBLE=$(nvidia-smi -L 2>/dev/null | grep -c '^GPU ')
+if [ "${VISIBLE:-0}" -gt 0 ] && [ "$VISIBLE" -lt "$G" ]; then
+  echo "PACK WARNING: SLURM promises $G GPU(s), nvidia-smi sees $VISIBLE -- using $VISIBLE"
+  G=$VISIBLE
+fi
 # K=10: 11264 MiB per card, 908 MiB reserved per tenant with expandable segments,
 # 15 % kept back for the CUDA context and fragmentation -> 10 fit. Note this is
 # a memory bound, not a throughput promise: the same profiling run measured the
