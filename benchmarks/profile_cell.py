@@ -42,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipelines import build_pipeline  # noqa: E402
 from utils import (  # noqa: E402
     cache_config,
+    cap_cuda_fraction,
     logger,
     pick_device,
     results_path,
@@ -72,13 +73,20 @@ class GpuSampler(threading.Thread):
         self.index = (os.environ.get("CUDA_VISIBLE_DEVICES") or "0").split(",")[0]
 
     def run(self) -> None:
-        query = ("--query-gpu=utilization.gpu,memory.used",
-                 "--format=csv,noheader,nounits", f"--id={self.index}")
+        # No --id filter. Under SLURM, CUDA_VISIBLE_DEVICES is not always the
+        # small integer nvidia-smi expects -- some configurations set it to a
+        # GPU UUID, and `--id=GPU-1c4f...` makes every call fail silently, which
+        # is how the first profiling run came back with zero samples. Query
+        # everything the job can see and keep the first row: a --gres=gpu:1 job
+        # sees exactly one device, and the packed runner pins one device per
+        # process through CUDA_VISIBLE_DEVICES anyway.
+        query = ("nvidia-smi", "--query-gpu=utilization.gpu,memory.used",
+                 "--format=csv,noheader,nounits")
         while not self._stop_evt.is_set():
             try:
-                out = subprocess.run(("nvidia-smi",) + query, capture_output=True,
-                                     text=True, timeout=5).stdout.strip()
-                u, m = (int(v) for v in out.split(","))
+                out = subprocess.run(query, capture_output=True, text=True,
+                                     timeout=5).stdout.strip()
+                u, m = (int(v) for v in out.splitlines()[0].split(","))
                 self.util.append(u)
                 self.mem.append(m)
             except Exception:  # a missing/busy nvidia-smi must not kill the run
@@ -161,6 +169,7 @@ def run(cfg: DictConfig) -> None:
     sfreq = float(dcfg.resample) if dcfg.get("resample") else 250.0
 
     device = pick_device(cfg.model)
+    cap_cuda_fraction()
     pipeline = build_pipeline(
         OmegaConf.to_container(cfg.model, resolve=True),
         OmegaConf.to_container(cfg.train, resolve=True),

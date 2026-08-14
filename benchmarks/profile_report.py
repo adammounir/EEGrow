@@ -39,33 +39,45 @@ def main() -> None:
               f"{100 * g.get('util_below_20pct', float('nan')):7.1f}"
               f"{r.get('torch_peak_reserved_mib') or g.get('mem_used_max_mib', 0):9.0f}")
 
-    # How many co-tenants a device holds, from the measured peak rather than from
-    # the "less than a gigabyte" everyone assumes. The turing nodes here are RTX
-    # 2080 Ti at 11 GB, not the 80 GB A100 the reference script was written for,
-    # so this bound is real and not academic.
-    peaks = [r.get("torch_peak_reserved_mib") or 0 for r in recs]
-    if any(peaks):
-        peak = max(peaks)
-        print(f"\npeak reserved: {peak} MiB -> on an 11 GB card, "
-              f"K <= {int(11000 * 0.85 // max(peak, 1))} co-tenants "
-              f"(15 % kept back for fragmentation and the CUDA context)")
+    # How many co-tenants a device holds. What bounds this is *reserved*, not
+    # allocated: the caching allocator keeps every block it has ever taken, so
+    # the device sees the reserved figure even though the model only needs the
+    # allocated one. The gap between the two columns is the whole packing
+    # question on Margaret, whose turing nodes are RTX 2080 Ti at 11 GB rather
+    # than the 80 GB A100 the reference script was written for.
+    alloc = max((r.get("torch_peak_alloc_mib") or 0) for r in recs)
+    resv = max((r.get("torch_peak_reserved_mib") or 0) for r in recs)
+    if resv:
+        budget = 11000 * 0.85  # 15 % back for fragmentation and the CUDA context
+        print(f"\npeak allocated {alloc} MiB, peak reserved {resv} MiB "
+              f"({resv / max(alloc, 1):.1f}x)")
+        print(f"  on an 11 GB card: K <= {int(budget // resv)} at the reserved "
+              f"figure, K <= {int(budget // max(alloc, 1))} if the reserved "
+              f"memory can be brought down to the allocated one")
 
-    # The seeds/models that share a dataset pay the preprocessing once if it is
-    # cached and 70 times if it is not. That ratio is the whole argument.
+    # The baseline for the cache is the UNCACHED run, not the cold one: a cold
+    # run pays the preprocessing *and* writes the cache, so cold-minus-warm
+    # flatters the cache by charging it for work it did once and never repeats.
     cold = next((r for r in recs if r["cache"] and r["seed"] == 0), None)
     warm = next((r for r in recs if r["cache"] and r["seed"] == 1), None)
     none = next((r for r in recs if not r["cache"]), None)
-    if cold and warm:
-        saved = cold["preprocess_all_subjects_s"] - warm["preprocess_all_subjects_s"]
-        print(f"cache saves {saved:.1f} s of preprocessing per job "
-              f"({cold['preprocess_all_subjects_s']:.1f} -> "
-              f"{warm['preprocess_all_subjects_s']:.1f} s)")
-        if none:
-            print(f"control (no cache): {none['preprocess_all_subjects_s']:.1f} s "
-                  "-- if this is close to the warm figure the saving was the OS "
-                  "page cache, not cache_config")
-        print(f"over a 14-model x 5-seed grid on this dataset: "
-              f"{69 * saved / 3600:.1f} h saved")
+    if warm and none:
+        base = none["preprocess_all_subjects_s"]
+        hot = warm["preprocess_all_subjects_s"]
+        print(f"\npreprocessing per job: {base:.1f} s uncached -> {hot:.1f} s warm "
+              f"({base / max(hot, 1e-9):.1f}x)")
+        if cold:
+            first = cold["preprocess_all_subjects_s"]
+            print(f"  the first job pays {first:.1f} s to populate the cache "
+                  f"({first - base:+.1f} s vs uncached)")
+            # 70 jobs = 14 pipelines x 5 seeds, what a dataset actually gets.
+            with_cache = first + 69 * hot
+            without = 70 * base
+            print(f"  over a 14-model x 5-seed grid on this dataset: "
+                  f"{without / 60:.0f} min -> {with_cache / 60:.0f} min "
+                  f"({(without - with_cache) / 60:.0f} min saved)")
+        print(f"  share of the cell that is preprocessing, uncached: "
+              f"{100 * none['preprocess_share']:.0f} %")
 
 
 if __name__ == "__main__":

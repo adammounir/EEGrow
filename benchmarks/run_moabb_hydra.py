@@ -40,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipelines import build_pipeline  # noqa: E402
 from utils import (  # noqa: E402
     cache_config,
+    cap_cuda_fraction,
     logger,
     pick_device,
     results_path,
@@ -155,6 +156,7 @@ def main(cfg: DictConfig) -> pd.DataFrame:
                 n_chans, n_times, n_outputs, sfreq)
 
     device = pick_device(cfg.model)
+    cap_cuda_fraction()
     pipeline = build_pipeline(
         OmegaConf.to_container(cfg.model, resolve=True),
         OmegaConf.to_container(cfg.train, resolve=True),

@@ -40,7 +40,9 @@ cache:
 profile:
   cache: ${cache.enabled}
   n_subjects: null      # truncate the subject list to bound a profiling run
-  out_dir: ${hydra:runtime.cwd}/benchmarks/profile
+  # Same anchor as the hydra dirs below, and for the same reason: the sbatch
+  # scripts cd into benchmarks/, so the cwd form writes to benchmarks/benchmarks/.
+  out_dir: ${oc.env:EEGROW_BENCH_ROOT,${hydra:runtime.cwd}/benchmarks}/profile
 
 # Where per-job CSV/joblib land. null data_dir => MNE default ~/mne_data (local);
 # on the cluster set data_dir to the shared cache (see config/dataset notes).

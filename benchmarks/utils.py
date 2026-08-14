@@ -40,6 +40,24 @@ def pick_device(model_cfg) -> str:
     return "cpu"
 
 
+def cap_cuda_fraction() -> None:
+    """Honour ``EEGROW_CUDA_FRACTION``: a per-process ceiling on the device.
+
+    Only meaningful when several processes share one GPU. The caching allocator
+    never hands a block back, so without a ceiling the first co-tenant to run a
+    large batch keeps the card and its neighbours OOM at some arbitrary later
+    point. Declaring the fraction turns that into a failure of the process that
+    actually exceeded its share, at the moment it exceeds it.
+    """
+    frac = os.environ.get("EEGROW_CUDA_FRACTION")
+    if not frac:
+        return
+    import torch
+    if torch.cuda.is_available():
+        torch.cuda.set_per_process_memory_fraction(float(frac))
+        logger.info("per-process CUDA memory fraction capped at %s", frac)
+
+
 def set_data_dir(data_dir: str | None) -> None:
     """Point MNE/MOABB at a shared dataset cache (the cluster's titanic_1/datasets).
 
