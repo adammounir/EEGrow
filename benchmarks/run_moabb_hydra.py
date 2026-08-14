@@ -39,6 +39,7 @@ from omegaconf import DictConfig, OmegaConf
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipelines import build_pipeline  # noqa: E402
 from utils import (  # noqa: E402
+    cache_config,
     logger,
     pick_device,
     results_path,
@@ -63,6 +64,9 @@ def _make_evaluation(cfg, paradigm, dataset, hdf5_path):
         hdf5_path=str(hdf5_path),
         suffix=str(cfg.suffix),
     )
+    cc = cache_config(cfg.get("cache"))
+    if cc:
+        common["cache_config"] = cc
     name = cfg.eval.name
     if name == "within_session":
         return mev.WithinSessionEvaluation(n_splits=int(cfg.eval.n_splits), **common)
@@ -139,7 +143,11 @@ def main(cfg: DictConfig) -> pd.DataFrame:
         fmin=float(cfg.paradigm.fmin), fmax=float(cfg.paradigm.fmax), **pkw)
 
     # ---- infer input dims once (on the first subject; cached afterwards) ----
-    X0, y0, _ = paradigm.get_data(dataset=dataset, subjects=[dataset.subject_list[0]])
+    # Goes through the cache as well: without it this probe alone re-derives one
+    # subject's epochs from the raw files in every single job of the grid.
+    _cc = cache_config(cfg.get("cache"))
+    X0, y0, _ = paradigm.get_data(dataset=dataset, subjects=[dataset.subject_list[0]],
+                                  **({"cache_config": _cc} if _cc else {}))
     n_chans, n_times = int(X0.shape[1]), int(X0.shape[2])
     n_outputs = int(len(set(y0)))
     sfreq = _infer_sfreq(cfg, dataset, paradigm, n_times)

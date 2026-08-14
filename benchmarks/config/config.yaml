@@ -25,6 +25,23 @@ n_jobs: 1
 overwrite: true
 suffix: eegrow
 
+# On-disk cache of the preprocessed epochs (MOABB `cache_config`). Every model and
+# every seed on a dataset derives the *same* epochs from the raw files -- 70 identical
+# filter+resample+epoch passes on a 14-model, 5-seed grid. Caching them makes the
+# first job pay and the other 69 read. Off by default so a one-off run does not
+# silently populate a shared directory; the campaign scripts turn it on.
+cache:
+  enabled: false
+  # null => MNE_DATA. Point it at a shared path so the whole fleet hits one cache.
+  path: null
+
+# `profile_cell.py` only. Kept here so the profiler reuses the production config
+# tree verbatim rather than a parallel copy that could drift from it.
+profile:
+  cache: ${cache.enabled}
+  n_subjects: null      # truncate the subject list to bound a profiling run
+  out_dir: ${hydra:runtime.cwd}/benchmarks/profile
+
 # Where per-job CSV/joblib land. null data_dir => MNE default ~/mne_data (local);
 # on the cluster set data_dir to the shared cache (see config/dataset notes).
 # null => benchmarks/results, located from the runner's own file (see
@@ -45,9 +62,17 @@ hydra:
     # an older superseded launch and reported its sampling rate as fact.
     # The sweep dir below never had the problem: its subdir is the override string, so
     # it is unique per cell by construction.
-    dir: ${hydra:runtime.cwd}/benchmarks/outputs/${now:%Y-%m-%d_%H-%M-%S}_${oc.env:SLURM_JOB_ID,local}
+    #
+    # EEGROW_BENCH_ROOT, not ${hydra:runtime.cwd}/benchmarks. The cwd form is the same
+    # trap that sent an arm of the grid to benchmarks/benchmarks/results (see
+    # utils.default_results_root): any script that cd's into benchmarks/ before running
+    # -- which the packed runner and every sbatch here do -- resolves it one level too
+    # deep. `results/` was anchored to the source file; the hydra records were not, so
+    # the run records still landed somewhere no analysis looks. Losing those records is
+    # precisely what cost this campaign its provenance, so they get an absolute anchor.
+    dir: ${oc.env:EEGROW_BENCH_ROOT,${hydra:runtime.cwd}/benchmarks}/outputs/${now:%Y-%m-%d_%H-%M-%S}_${oc.env:SLURM_JOB_ID,local}
   sweep:
-    dir: ${hydra:runtime.cwd}/benchmarks/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    dir: ${oc.env:EEGROW_BENCH_ROOT,${hydra:runtime.cwd}/benchmarks}/multirun/${now:%Y-%m-%d_%H-%M-%S}
     subdir: ${hydra.job.override_dirname}
   job:
     chdir: false

@@ -58,6 +58,38 @@ def set_data_dir(data_dir: str | None) -> None:
     logger.info("dataset cache -> %s", path)
 
 
+def cache_config(cfg) -> dict | None:
+    """MOABB ``cache_config`` for the preprocessed epochs, or ``None`` when off.
+
+    Why this matters more than any GPU tuning: the grid asks each dataset for the
+    *same* epochs 70 times (14 pipelines x 5 seeds), and without a cache MOABB
+    re-reads the raw files and redoes the band-pass, the resampling and the
+    epoching every single time -- single-threaded, on the CPU, while the GPU
+    waits. Caching the epochs makes the first job pay for the dataset and the
+    other 69 read an array back.
+
+    ``save_epochs`` and ``save_array`` are both on: the array is what
+    ``get_data`` actually returns, and the epochs level is what a
+    ``return_epochs`` evaluation would want. The raw level is *not* cached -- it
+    would duplicate the 112 GB of ``MNE_DATA`` for no gain, since nothing here
+    re-reads raws once the epochs exist.
+
+    The ``overwrite_*`` flags stay False on purpose: a cache that rewrites itself
+    on every hit is not a cache. Invalidating it is a deliberate act (delete the
+    directory), because the cache key covers the preprocessing parameters and a
+    silent overwrite is exactly how a mixed-preprocessing grid happens.
+    """
+    if cfg is None or not cfg.get("enabled"):
+        return None
+    cc = {"save_raw": False, "save_epochs": True, "save_array": True, "use": True,
+          "overwrite_raw": False, "overwrite_epochs": False,
+          "overwrite_array": False}
+    if cfg.get("path"):
+        cc["path"] = str(Path(str(cfg.path)).expanduser())
+    logger.info("epoch cache ON -> %s", cc.get("path", "MNE_DATA default"))
+    return cc
+
+
 def default_results_root() -> Path:
     """``benchmarks/results``, located from this file rather than from the cwd.
 
