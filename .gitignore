@@ -19,6 +19,17 @@ benchmarks/outputs/
 benchmarks/multirun/
 outputs/
 multirun/
+# résultats du smoke de validation : jetables par construction (CELL_TIMEOUT=7200,
+# grow_every=1), et remplacés par la campagne. Ce sont des sorties, pas des sources.
+benchmarks/results_smoke/
+# analyses régénérées : les .ipynb (outputs embarqués), leur export HTML et les figures
+# sont produits par benchmarks/analysis/build_*.py à partir des CSV. Les versionner
+# fige dans un historique additif -- où le ruleset interdit le force-push -- des
+# figures calculées sur une grille dont le plafond de croissance n'était pas branché.
+# Ce qui est versionné est ce qui les régénère : build_*.py et growth_io.py.
+benchmarks/analysis/*.ipynb
+benchmarks/analysis/*.html
+benchmarks/analysis/figures/
 *.pt
 *.npy
 *.npz
