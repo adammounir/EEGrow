@@ -44,8 +44,20 @@
 #   K            co-tenants per GPU          (default 10, see the bound below)
 #   CACHE        MOABB epoch cache           (default /scratch/amounir/moabb_cache)
 #   RESULTS_DIR  where the CSVs land         (default benchmarks/results)
+#   LOGS         where the per-cell logs land (default slurm/logs/pack)
+#   CLAIMS       atomic claim directory      (default /scratch/amounir/eegrow_claims)
 #   SUFFIX       MOABB result suffix stem    (default xsess)
 #   MAX_SWEEPS   give up after this many passes (default 3, see the loop)
+#   EXTRA        extra Hydra overrides       (default none, see the call site)
+#
+#   A run that is not the campaign -- a co-tenancy validation, a rehearsal -- must
+#   override RESULTS_DIR, LOGS *and* CLAIMS together. Sharing RESULTS_DIR makes the
+#   campaign skip cells it never ran; sharing LOGS erases evidence; and sharing
+#   CLAIMS is the worst of the three, because reap_stale only reaps claims whose
+#   owner is on THIS host. A claim left by a validation job on margpu007 is invisible
+#   to a campaign job on margpu012, which therefore skips that cell in every sweep
+#   and reports it MISSING at the end -- the exact mechanism that silently lost 32
+#   cells of the first packed campaign.
 set -uo pipefail
 
 ROOT=/scratch/amounir/eegrow
@@ -86,14 +98,26 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # schirrmeister2017 once needed 43 GB) fails as its own OOM instead of starving
 # the nine processes sharing its card.
 #
-# 0.20, not the 0.12 this started at. 0.12 was calibrated on the profiled cell
-# (grow_shallow / bnci2014_001, 908 MiB reserved) and it killed 15 cells of the
-# first packed campaign: 0.12 x 10.58 GiB = 1.27 GiB, while eegnex on zhou2016
-# and lee2019 asks for ~1.6 GiB. The logs are unambiguous -- "1.27 GiB allowed"
-# with "7.59 GiB is free" on the card. A ceiling set below what the work needs
-# does not protect the co-tenants, it just fails the cell for no reason; the
-# point of the cap is to catch a runaway, not to ration the normal case.
-export EEGROW_CUDA_FRACTION="${EEGROW_CUDA_FRACTION:-0.20}"
+# NO DEFAULT, ON PURPOSE. This was 0.20, itself a correction of the 0.12 that killed
+# 15 cells of the first packed campaign (0.12 x 10.58 GiB = 1.27 GiB, while eegnex on
+# zhou2016 asks ~1.6 GiB; the logs read "1.27 GiB allowed" with "7.59 GiB is free").
+# But 0.20 is 2166 MiB, and the measured grid (profile_grid_memory.py, 102 cells) has
+# 13 cells above that -- grow_shallow, grow_eegnex and bd_eegnex on the wide datasets.
+# They would fail deterministically, release their claim, be re-claimed, and land in
+# MISSING after MAX_SWEEPS. A ceiling below what the work needs does not protect the
+# co-tenants, it just fails the cell.
+#
+# The point is that NO constant is right: the ceiling belongs just above the worst
+# cell OF THIS PASS, so it is a property of the grid being run, not of the script.
+# plan_campaign.py derives it per pass and emits it on the sbatch line. Refusing to
+# guess is what stops the next campaign from repeating the last two.
+if [ -z "${EEGROW_CUDA_FRACTION:-}" ]; then
+  echo "PACK FATAL: EEGROW_CUDA_FRACTION unset. It is per-pass, derived from the" >&2
+  echo "  measured worst cell of THIS grid -- see benchmarks/slurm/plan_campaign.py," >&2
+  echo "  which emits the correct sbatch line for every pass. Do not pick a number." >&2
+  exit 2
+fi
+export EEGROW_CUDA_FRACTION
 
 GRID="${GRID:?set GRID to a TSV of eval<TAB>dataset<TAB>model<TAB>seed}"
 CACHE="${CACHE:-/scratch/amounir/moabb_cache}"
@@ -113,7 +137,21 @@ G="${G:-${SLURM_GPUS_ON_NODE:-1}}"
 # cards, so this counts what this job can actually use. Take the smaller of the
 # two: SLURM may over-promise, and a manual G= override may over-ask.
 VISIBLE=$(nvidia-smi -L 2>/dev/null | grep -c '^GPU ')
-if [ "${VISIBLE:-0}" -gt 0 ] && [ "$VISIBLE" -lt "$G" ]; then
+if [ "${VISIBLE:-0}" -eq 0 ]; then
+  # The `-gt 0` in the clause below was a guard against nvidia-smi being absent, and
+  # it let the worst case through: a node that grants the GRES and has no working
+  # card at all. margpu021 did exactly that on 2026-08-16 -- `nvidia-smi
+  # --query-gpu` answered "No devices were found" while SLURM had allocated gpu:1 --
+  # and the profiling job ran all 12 of its cells against a device that did not
+  # exist, failing each one on `reset_peak_memory_stats`. Under the packed runner the
+  # same node would have taken G*K cells from the queue and destroyed every one of
+  # them. Refuse the allocation instead: an allocation with no GPU cannot do the work
+  # it claimed, and failing here costs one job while continuing costs a grid.
+  echo "PACK FATAL: SLURM granted $G GPU(s) but nvidia-smi sees none on $(hostname)." >&2
+  echo "  The node advertises a GRES it cannot serve. Exclude it and resubmit." >&2
+  exit 4
+fi
+if [ "$VISIBLE" -lt "$G" ]; then
   echo "PACK WARNING: SLURM promises $G GPU(s), nvidia-smi sees $VISIBLE -- using $VISIBLE"
   G=$VISIBLE
 fi
@@ -145,8 +183,39 @@ fi
 # to the cgroup OOM killer that way -- killed mid-load, no traceback, GPU idle.
 # Run a RAM-heavy dataset as its own pass with K=2 rather than raising --mem:
 #   GRID=grid_lee.tsv K=2 bash pack_run.sh
-K="${K:-10}"
+#
+# So K has no default either, for the same reason as the ceiling above. The old K=10
+# was read off ONE cell (grow_shallow on bnci2014_001, 908 MiB) and generalised to a
+# grid whose cells span a factor of nine on the device and more than that on the host.
+# plan_campaign.py computes it per pass as min(K_gpu, K_ram) -- and K_ram carries a
+# factor G that a per-card reading cannot see, since the G*K tenants of a node share
+# one --mem.
+if [ -z "${K:-}" ]; then
+  echo "PACK FATAL: K unset. It is per-pass: min(K_gpu, K_ram), both measured." >&2
+  echo "  Run benchmarks/slurm/plan_campaign.py; it emits the sbatch line per pass." >&2
+  exit 2
+fi
 NPROC=$((G * K))
+
+# Per-cell wall-clock ceiling. This was a hard-coded `timeout 7200` -- two hours --
+# which is right for cross_session and lethal everywhere else. Measured over every
+# cell the campaign ever produced (recorded `time` column, copies removed):
+#
+#            median     p90      p99      max
+#   deep      0.03 h   1.9 h   16.3 h   38.2 h
+#   ml        0.04 h   4.9 h   52.9 h   95.0 h
+#
+# 169 of 1452 cells run longer than two hours, 118 of them cross_subject deep -- that
+# is 97 % of the grid's cost and the protocol the whole comparison rests on. Under the
+# old ceiling every one of them would be SIGTERMed, release its claim, be re-claimed,
+# killed again, and land in the MISSING list after MAX_SWEEPS. The packed runner had
+# only ever been exercised on cross_session, where 7200 s never bound.
+#
+# 48 h covers the longest deep cell (38.2 h) with margin. A CPU pass over the ML arms
+# needs more (ts_svm on schirrmeister2017 took 95 h) -- set CELL_TIMEOUT accordingly
+# there. The ceiling is not a tuning knob: it exists to stop a hung cell from holding
+# a slot forever, so it belongs just above the worst honest cell, not near the median.
+CELL_TIMEOUT="${CELL_TIMEOUT:-172800}"
 
 # Writing somewhere other than benchmarks/results makes a campaign a clean
 # re-run rather than a patch: the skip-if-done check below would otherwise treat
@@ -154,12 +223,42 @@ NPROC=$((G * K))
 RESULTS_DIR="${RESULTS_DIR:-$ROOT/benchmarks/results}"
 
 CLAIMS="${CLAIMS:-/scratch/amounir/eegrow_claims}"
-LOGS="$ROOT/benchmarks/slurm/logs/pack"
+# Overridable for the same reason as RESULTS_DIR above, and it is not cosmetic. The
+# log file name is the cell key, so a validation run and the campaign proper write to
+# the same path and the second erases the first -- and for a run whose whole output IS
+# its logs, that deletes the result.
+LOGS="${LOGS:-$ROOT/benchmarks/slurm/logs/pack}"
 mkdir -p "$CLAIMS" "$LOGS" "$CACHE" "$RESULTS_DIR"
 
-echo "PACK node=$(hostname) G=$G K=$K nproc=$NPROC grid=$GRID cells=$(wc -l < "$GRID")"
+echo "PACK node=$(hostname) G=$G K=$K nproc=$NPROC cell_timeout=${CELL_TIMEOUT}s grid=$GRID cells=$(wc -l < "$GRID")"
+# A cell that outlives the allocation is indistinguishable from one that was never
+# claimed, so refuse the combination up front rather than discover it at the end.
+if [ -n "${SLURM_JOB_ID:-}" ]; then
+  LEFT=$(squeue -h -j "$SLURM_JOB_ID" -o %L 2>/dev/null)
+  echo "PACK allocation time left: ${LEFT:-unknown} (needs to exceed CELL_TIMEOUT=$((CELL_TIMEOUT / 3600))h)"
+fi
 echo "PACK results_dir=$RESULTS_DIR cache=$CACHE start=$(date -Is)"
 nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader || true
+
+# REFUSE TO START ON AN INCOMPLETE CACHE.
+#
+# The MOABB BIDS cache is not safe for concurrent writers, and its error path is
+# destructive: bids_interface.py calls interface.erase() to "remove partial cache",
+# which deletes the entry from the shared directory -- so one tenant that stumbles
+# destroys the others' work. The 2026-08-16 co-tenancy run lost 64 of 128 cells that
+# way (rmtree "Directory not empty", FileExistsError, truncated array reads, EOFError)
+# and removed 19 of physionetmi's 109 cached sessions while doing it. Nothing reported
+# the deletion: the subject directories were all still there, merely empty inside.
+#
+# A COMPLETE cache is the fix, not a mitigation. When every entry exists the tenants
+# only read, nothing is ever partial, and the erase path is never entered. So the
+# precondition is checkable, and an unchecked precondition is how the last two
+# campaigns were lost -- hence a gate rather than a line in a runbook.
+if ! python "$ROOT/benchmarks/check_cache.py" --cache "$CACHE" --quiet; then
+  echo "PACK FATAL: refusing to run G*K tenants against an incomplete cache." >&2
+  echo "  sbatch benchmarks/slurm/warm_cache.sbatch   # serial, one process, ~15 min" >&2
+  exit 3
+fi
 
 mapfile -t ROWS < "$GRID"
 p=0
@@ -260,11 +359,23 @@ while true; do
       # same file for writing. Sequential jobs got away with it; packing does
       # not. The production fix250 scripts already carried a per-model suffix
       # for exactly this reason.
-      CUDA_VISIBLE_DEVICES=$gpu timeout 7200 python run_moabb_hydra.py \
+      # $EXTRA is unquoted on purpose: it is a list of Hydra overrides, and quoting
+      # would hand the whole string to Hydra as one malformed override. Empty by
+      # default, so a campaign run is byte-identical to what it was before this hook
+      # existed. It is for validation runs that must reach a memory peak faster than
+      # the production schedule does -- `++model.grow_every=1` is the case it was
+      # added for (see profile_grid_memory.py: the growth step's cost is set by the
+      # layer geometry, not by how many epochs preceded it, so growing every epoch
+      # approaches the same peak in a fifth of the wall clock). `++` and not `+`
+      # because the fixed arms have no such key and would refuse a plain override;
+      # they ignore the added one, since pipelines.py reads grow_every only when
+      # kind == "growing". Do not use it to change a campaign's science.
+      # shellcheck disable=SC2086
+      CUDA_VISIBLE_DEVICES=$gpu timeout "$CELL_TIMEOUT" python run_moabb_hydra.py \
         eval="$EV" dataset="$DS" model="$M" seed="$SEED" \
         cache.enabled=true cache.path="$CACHE" \
         results_dir="$RESULTS_DIR" \
-        overwrite=true suffix="${SUFFIX}_${M}_s${SEED}" \
+        overwrite=true suffix="${SUFFIX}_${M}_s${SEED}" ${EXTRA:-} \
         > "$LOGS/${EV}__${DS}__${M}__s${SEED}.log" 2>&1
       # Release the claim if nothing was written, so the next sweep retries this
       # cell instead of recording it as done. The owner file has to go first --
