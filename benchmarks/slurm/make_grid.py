@@ -27,8 +27,14 @@ CONFIG = Path(__file__).resolve().parent.parent / "config"
 CROSS_SESSION_DATASETS = ["bnci2014_001", "bnci2014_004", "bnci2015_001",
                           "lee2019_mi", "shin2017a", "zhou2016"]
 
+# Each growing arm next to the fixed model it is paired with. `grow_deep` is paired
+# with `fix_deepeeg` -- the same 2-stage architecture built at the geometry growth
+# ends on -- not with `bd_deep4`, which is a different network (4 stages,
+# 25/50/100/200 filters) and would make the contrast measure architecture. bd_deep4
+# stays in the grid as a reference level, but it is not the control for grow_deep.
 DEEP_PAIRS = ["bd_shallow", "grow_shallow", "bd_sccnet", "grow_sccnet",
-              "bd_deep4", "grow_deep", "bd_eegnex", "grow_eegnex"]
+              "fix_deepeeg", "grow_deep", "bd_eegnex", "grow_eegnex",
+              "bd_deep4"]
 
 
 def group(name: str) -> list[str]:

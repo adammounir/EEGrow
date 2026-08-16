@@ -20,8 +20,12 @@ import pandas as pd
 
 AUC_DS = {"bnci2014_004", "cho2017", "lee2019_mi", "physionetmi", "shin2017a",
           "weibo2014"}
+# A pair is only meaningful when the two arms are the SAME architecture at the same
+# final widths -- otherwise the delta measures the architecture. grow_deep is paired
+# with fix_deepeeg (GrowingDeepEEGNet built frozen at 8 -> 32 -> 8), not with
+# bd_deep4 (Deep4Net: 4 stages, 25/50/100/200 filters), which was never a control.
 PAIRS = [("grow_shallow", "bd_shallow"), ("grow_sccnet", "bd_sccnet"),
-         ("grow_eegnex", "bd_eegnex"), ("grow_deep", "bd_deep4")]
+         ("grow_eegnex", "bd_eegnex"), ("grow_deep", "fix_deepeeg")]
 ML = ["csp_lda", "csp_svm", "fgmdm", "mdm", "ts_lr", "ts_svm"]
 KEY = ["eval", "dataset", "subject", "session", "seed"]
 
@@ -42,9 +46,23 @@ df = pd.concat(rows, ignore_index=True)
 df["score"] = pd.to_numeric(df["score"], errors="coerce")
 df = df.dropna(subset=["score"])
 df["metric"] = df["dataset"].map(lambda d: "roc_auc" if d in AUC_DS else "accuracy")
-df["family"] = df["model"].map(
-    lambda m: "growing" if m.startswith("grow") else
-              ("braindecode" if m.startswith("bd_") else "riemann/csp"))
+def _family(m: str) -> str:
+    """growing / braindecode / fixed control / riemann-csp.
+
+    `fix_*` is its own family on purpose: it is an eegrow architecture built frozen at
+    the width growth ends on, not a braindecode reference. Folding it into
+    "braindecode" would claim a provenance it does not have.
+    """
+    if m.startswith("grow"):
+        return "growing"
+    if m.startswith("bd_"):
+        return "braindecode"
+    if m.startswith("fix_"):
+        return "fixed control"
+    return "riemann/csp"
+
+
+df["family"] = df["model"].map(_family)
 cols = ["eval", "dataset", "subject", "session", "seed", "model", "family", "align",
         "score", "metric", "time", "samples", "samples_test", "n_classes", "channels"]
 df = df[[c for c in cols if c in df.columns]]
