@@ -139,6 +139,35 @@ def default_results_root() -> Path:
     return Path(__file__).resolve().parent / "results"
 
 
+def provenance() -> dict:
+    """Package versions and the eegrow commit, to be stamped on every result row.
+
+    Why on the row and not in a log. The sampling rate of the production grid was only
+    ever provable from the Hydra run records, and an ``rsync --delete`` removed them:
+    1170 cells (55.7 %) became untraceable after the fact, not because anything was
+    wrong with them but because the evidence lived somewhere else. Data that carries
+    its own regime cannot lose it. The cost is a handful of constant columns.
+
+    Everything here is best-effort: a missing git binary or an unimportable package
+    must never fail a benchmark cell, so each lookup degrades to ``None``.
+    """
+    import subprocess
+
+    info: dict = {}
+    for mod in ("moabb", "braindecode", "torch", "gromo", "skorch", "sklearn", "mne"):
+        try:
+            info[f"v_{mod}"] = __import__(mod).__version__
+        except Exception:
+            info[f"v_{mod}"] = None
+    try:
+        info["eegrow_sha"] = subprocess.run(
+            ["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=5, check=True).stdout.strip()
+    except Exception:
+        info["eegrow_sha"] = None
+    return info
+
+
 def results_path(results_dir, eval_name: str, dataset: str) -> Path:
     """``<results_dir>/<eval>/<dataset>/`` (created); one folder per (eval, dataset)."""
     root = default_results_root() if results_dir in (None, "", "None", "null") \

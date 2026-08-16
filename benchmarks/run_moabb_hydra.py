@@ -43,6 +43,7 @@ from utils import (  # noqa: E402
     cap_cuda_fraction,
     logger,
     pick_device,
+    provenance,
     results_path,
     set_data_dir,
     set_seed,
@@ -157,22 +158,41 @@ def main(cfg: DictConfig) -> pd.DataFrame:
 
     device = pick_device(cfg.model)
     cap_cuda_fraction()
+    out_dir = results_path(str(cfg.results_dir), cfg.eval.name, dcfg.name)
+    stem = f"{label}__seed{cfg.seed}"
+    # One JSONL per cell: this process is its only writer, so appends from the
+    # successive folds cannot interleave. Deep arms only -- the ML pipelines have
+    # neither epochs nor a width. See eegrow.training.recording for why the growth
+    # trajectory has to be written from inside the fit.
+    record_path = (None if cfg.model.kind == "ml"
+                   else out_dir / f"{stem}__fits.jsonl")
     pipeline = build_pipeline(
         OmegaConf.to_container(cfg.model, resolve=True),
         OmegaConf.to_container(cfg.train, resolve=True),
         n_chans=n_chans, n_times=n_times, n_outputs=n_outputs, sfreq=sfreq,
-        device=device, seed=int(cfg.seed))
+        device=device, seed=int(cfg.seed), record_path=record_path)
     logger.info("pipeline ready (device=%s)", device)
 
     # ---- evaluate ----------------------------------------------------------
-    out_dir = results_path(str(cfg.results_dir), cfg.eval.name, dcfg.name)
     evaluation = _make_evaluation(cfg, paradigm, dataset, out_dir)
     results = evaluation.process({label: pipeline})
 
     results["eval"] = cfg.eval.name
     results["model"] = label
     results["seed"] = int(cfg.seed)
-    stem = f"{label}__seed{cfg.seed}"
+    # Regime + provenance ON THE ROW. `sfreq` is the rate the epochs were actually
+    # served at, not the rate a config says they should have been: a pair split across
+    # two rates measures preprocessing, not growth, and that is exactly what the
+    # published grid could no longer rule out once its Hydra records were deleted.
+    results["sfreq"] = float(sfreq)
+    results["resample_cfg"] = (float(dcfg.resample) if dcfg.get("resample") else None)
+    results["fmin"] = float(cfg.paradigm.fmin)
+    results["fmax"] = float(cfg.paradigm.fmax)
+    results["n_chans_in"] = n_chans
+    results["n_times_in"] = n_times
+    results["device"] = device
+    for k, v in provenance().items():
+        results[k] = v
     results.to_csv(out_dir / f"{stem}.csv", index=False)
     joblib.dump(results, out_dir / f"{stem}.joblib")
     logger.info("saved %d rows -> %s", len(results), out_dir / f"{stem}.csv")
