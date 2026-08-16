@@ -11,6 +11,7 @@ which is also what CI provides.
 
 from __future__ import annotations
 
+import pytest
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -85,6 +86,79 @@ def test_eegnex_grows():
         filter_1=4, filter_2=16, target_filter_1=16, device=DEVICE,
     )
     _assert_grows(model, cap=16)
+
+
+# ------------------------------------------------------- the cap actually binds
+# The four tests above take ONE growth step, which never reaches the target -- so by
+# construction they cannot see a missing cap. And the cap does not live in gromo,
+# which adds a data-dependent count per step and never stops on its own; it lives in
+# the GromoGrowth callback, which reads `getattr(model, "target_width", None)` both
+# to stop growing and to trim the step via sub_select_optimal_added_parameters.
+#
+# GrowingShallowFBCSPNet and GrowingDeepEEGNet did not declare that attribute, so for
+# them the cap silently did not exist -- measured 8 -> 77 against a target of 32 on
+# GrowingDeepEEGNet in nine growth events. The benchmark's grow/fixed pairs were
+# therefore not width-matched, and the paired contrast did not mean what it said.
+# These two tests drive the callback path -- the one the benchmark uses -- over
+# repeated growths, on every growable model.
+BUILDERS = {
+    "shallow": lambda cap: GrowingShallowFBCSPNet(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T, n_filters_time=4,
+        n_filters_spat=8, target_n_filters_time=cap, device=DEVICE),
+    "deepeeg": lambda cap: GrowingDeepEEGNet(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T, w1=4, w2=4, target_w2=cap,
+        device=DEVICE),
+    "sccnet": lambda cap: GrowingSCCNet(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T, sfreq=SFREQ,
+        n_spatial_filters=4, n_spatial_filters_smooth=8,
+        target_n_spatial_filters=cap, device=DEVICE),
+    "eegnex": lambda cap: GrowingEEGNeX(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T, filter_1=4, filter_2=16,
+        target_filter_1=cap, device=DEVICE),
+}
+CAP = 10
+
+
+@pytest.mark.parametrize("name", sorted(BUILDERS))
+def test_growable_model_declares_target_width(name):
+    """Every growable model must expose the attribute the growth callback reads."""
+    model = BUILDERS[name](CAP)
+    assert getattr(model, "target_width", None) == CAP, (
+        f"{name} does not declare target_width; GromoGrowth would read None, skip "
+        "sub_select_optimal_added_parameters and grow without any bound")
+
+
+@pytest.mark.parametrize("name", sorted(BUILDERS))
+def test_growth_saturates_at_target(name):
+    """Repeated growth lands exactly on the target and never overshoots it."""
+    from braindecode import EEGClassifier
+
+    from eegrow import GromoGrowth
+
+    model = BUILDERS[name](CAP)
+    g = torch.Generator().manual_seed(0)
+    x = torch.randn(N, C, T, generator=g).numpy().astype("float32")
+    y = torch.randint(0, N_CLASSES, (N,), generator=g).numpy().astype("int64")
+
+    widths = [model.growable_width]
+
+    class _Probe(GromoGrowth):
+        # A subclass rather than a second callback: the width has to be read *after*
+        # the growth, and callback ordering is one more thing to get wrong.
+        def on_epoch_end(self, net, **kwargs):
+            super().on_epoch_end(net, **kwargs)
+            widths.append(net.module_.growable_width)
+
+    clf = EEGClassifier(
+        model, criterion=torch.nn.CrossEntropyLoss, max_epochs=12, batch_size=16,
+        callbacks=[("gromo", _Probe(grow_every=1, verbose=False))],
+        train_split=None, device=DEVICE,
+    )
+    clf.fit(x, y)
+
+    assert max(widths) <= CAP, f"{name} overshot the cap: {widths} (cap {CAP})"
+    assert model.growable_width == CAP, (
+        f"{name} stalled at {model.growable_width} instead of reaching {CAP}: {widths}")
 
 
 # --------------------------------------------------------------- fidelity

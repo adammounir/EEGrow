@@ -81,6 +81,13 @@ class GrowingShallowFBCSPNet(SequentialGrowingModel):
             n_filters_time if target_n_filters_time is None else target_n_filters_time
         )
         self._can_grow = target > n_filters_time
+        # Cap for the growth callback. gromo does NOT enforce target_in_channels: it
+        # adds a data-dependent number of neurons per step and never stops on its own.
+        # GromoGrowth reads this attribute (`getattr(model, "target_width", None)`) to
+        # both stop growing and trim the step via sub_select_optimal_added_parameters.
+        # Without it the width is unbounded -- measured 8 -> 17 in nine growth events
+        # here, and 8 -> 77 against a target of 32 on GrowingDeepEEGNet.
+        self.target_width = target
 
         # --- head: reshape, identical to braindecode --------------------------
         self.ensuredims = Ensure4d()                       # (B,C,T) -> (B,C,T,1)

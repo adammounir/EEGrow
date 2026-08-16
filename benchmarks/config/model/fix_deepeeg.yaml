@@ -1,0 +1,22 @@
+# Fixed-width control for `grow_deep` -- the SAME architecture, built directly at the
+# geometry growth ends on, with no growth.
+#
+# Why this exists. `grow_deep` was paired against `bd_deep4` (braindecode's Deep4Net:
+# 4 stages, 25/50/100/200 filters) while `GrowingDeepEEGNet` is a 2-stage network with
+# w1=8. That contrast measures the architecture, not the growth, so it cannot support
+# the claim the pair is there to test. The three other pairs are genuinely width-
+# matched against their braindecode reference; this one had no valid control.
+#
+# Geometry. Growth widens the *intermediate* width of stage 2 (conv2a's fan-out =
+# conv2b's fan-in), not conv2b's output. `grow_deep` (w2=8, target_w2=32) therefore
+# ends at 8 -> 32 -> 8. `w2_in: 32` with no `target_w2` builds exactly that, frozen:
+# `_can_grow` is False, `_growable_layers` is empty and the growth callback is a no-op.
+kind: growing
+arch: GrowingDeepEEGNet
+label: fix_deepeeg
+needs_sfreq: false
+grow_every: 5      # irrelevant (frozen), kept so the config shape matches the arm
+module_kwargs:
+  w1: 8
+  w2: 8
+  w2_in: 32
