@@ -120,10 +120,29 @@ class GromoGrowth(Callback):
 
         if moved:  # only MPS needs the round-trip; cpu/cuda grow in place
             model.to(growth_device)
-        # Materialise the epoch's batches once on the growth device, then split them:
-        # statistics on the bulk, the line search on a disjoint held-out slice.
-        batches = [(b[0].to(growth_device), b[1].to(growth_device))
-                   for b in net.get_iterator(dataset_train, training=True)]
+        # Materialise the epoch's batches once, then split them: statistics on the
+        # bulk, the line search on a disjoint held-out slice. The *list* is what makes
+        # the split stable and disjoint -- re-iterating a shuffled loader would not
+        # partition the same way twice.
+        #
+        # They stay on the HOST, and that is the point. gromo's `compute_statistics`
+        # and `evaluate_model` each do `x, y = x.to(device), y.to(device)` per batch,
+        # so moving the whole epoch here bought nothing and cost the epoch's size in
+        # device memory, held for the duration of the growth step on top of the model
+        # and its statistics. That is what made a growing arm's device peak scale with
+        # the size of the training fold rather than with the architecture -- and a peak
+        # that depends on the data volume cannot be predicted by a probe that replaces
+        # the data. It is why profile_grid_memory.py, measuring on 512 synthetic
+        # samples, underestimated the real cells and cost the 2026-08-16 smoke run 18
+        # cells to OOMs against their own declared ceiling while the card sat 6 GiB
+        # free; the 43 GB once seen on schirrmeister2017 is the same mechanism at the
+        # other end of the scale.
+        #
+        # The cost is host-to-device traffic: the held-out slice is now transferred
+        # once per scaling factor of the line search (four) instead of once. That is
+        # PCIe bandwidth on a step that runs every `grow_every` epochs, against device
+        # memory that decided how many cells could share a card.
+        batches = list(net.get_iterator(dataset_train, training=True))
         if not batches:
             # The training iterator yielded nothing this epoch -- e.g. ``drop_last``
             # (set by EEGClassifier) drops the only sub-``batch_size`` fold. With no
