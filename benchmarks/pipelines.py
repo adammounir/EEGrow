@@ -64,7 +64,7 @@ def _ml_builders() -> dict[str, Any]:
 
 # --------------------------------------------------------------------- DL arms
 def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
-              device, seed):
+              device, seed, record_path=None):
     """A braindecode reference (``kind: bd``) or eegrow growable (``kind: growing``).
 
     The architecture comes from ``model_cfg.arch`` (resolved on ``braindecode.models``
@@ -106,6 +106,14 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
         module_params["module__device"] = device
         callbacks.append(
             ("gromo", GromoGrowth(grow_every=model_cfg["grow_every"], verbose=False)))
+    # After growth (so an epoch's recorded width is the width it ended with) and
+    # before EarlyStopping (which raises KeyboardInterrupt from on_epoch_end, skipping
+    # every callback listed after it on that final epoch). Added to the fixed arms
+    # too: their width is constant, which is what makes the curves comparable.
+    if record_path is not None:
+        from eegrow import FitRecorder
+        callbacks.append(("record", FitRecorder(
+            record_path, meta={"model": model_cfg.get("label"), "seed": seed})))
     callbacks.append(
         EarlyStopping(patience=max(15, int(train_cfg["max_epochs"]) // 10),
                       monitor="valid_acc", lower_is_better=False))
@@ -128,9 +136,15 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
 
 
 def build_pipeline(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
-                   device, seed):
-    """Dispatch on ``model_cfg.kind`` -> a fresh sklearn ``Pipeline``."""
+                   device, seed, record_path=None):
+    """Dispatch on ``model_cfg.kind`` -> a fresh sklearn ``Pipeline``.
+
+    ``record_path`` (deep arms only) is a JSONL file the fit appends its per-epoch
+    curve and growth trajectory to; see ``eegrow.training.recording``. The ML arms
+    have no epochs and no width, so it does not apply to them.
+    """
     if model_cfg["kind"] == "ml":
         return _ml_builders()[model_cfg["name"]]()
     return _build_dl(model_cfg, train_cfg, n_chans=n_chans, n_times=n_times,
-                     n_outputs=n_outputs, sfreq=sfreq, device=device, seed=seed)
+                     n_outputs=n_outputs, sfreq=sfreq, device=device, seed=seed,
+                     record_path=record_path)
