@@ -16,6 +16,13 @@
 # partition would make the campaign's launch queue behind the GPUs it is trying to
 # allocate.
 #
+# Note what a compute node can and cannot do here. `sbatch` works from `normal`
+# (verified on marg003). `sacct` does NOT: slurmdbd answers only on the login node,
+# so the gate derives the terminal state and the start time from pack_run.sh's own
+# `PACK_DONE` and `start=` markers instead. See section 0 of gate_launch.sh -- the
+# first version of this wrapper returned RED on a clean smoke for exactly that
+# reason, and left the campaign unlaunched overnight.
+#
 # afterany, not afterok: a smoke job that ends CANCELLED or FAILED must still wake the
 # gate, which then refuses out loud. afterok would leave the dependency unsatisfiable
 # and the gate would sit in PENDING forever with nobody told.
