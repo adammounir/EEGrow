@@ -1,9 +1,12 @@
-"""Build the v5 interim report: 10 figures, LaTeX tables, and an executed notebook.
+"""Build the v5 report: 10 figures, LaTeX tables, and an executed notebook.
 
-The v5 campaign is not finished (74 of 1350 cells still running), so this is an
-*interim* report and says so in every output. Generating it from a script rather than
-writing it by hand means it can be re-run the moment the last cell lands, with nothing
-in it a stale hand copy.
+The v5 campaign is complete, and the two things that made the earlier version of this an
+*interim* report are both resolved: the EEGNeX cells that had been lost to out-of-memory
+failures on 11 GB cards have run on H100s, and the 180 cells that `drop_last=True` had
+left untrained -- zero training batches at `batch_size=64`, a published initialisation
+with a well-formed CSV -- were re-run after the fix. Generating this from a script rather
+than by hand is what made that re-run cost one command instead of a hand edit per number;
+the completeness figures below are computed from the frames, never typed in.
 
     uv run --with pandas,matplotlib,numpy,nbformat,nbclient,nbconvert,ipykernel,scipy \
         python benchmarks/analysis/build_v5_report.py
@@ -22,7 +25,7 @@ Three aggregation rules are inherited from aggregate_published.py and must not b
 relaxed, because each changes the sign or the significance of a result:
 
 1. **Pairs are architecture-matched.** ``grow_deep`` pairs with ``fix_deepeeg``, never
-   with ``bd_deep4``: the mismatched pairing reads -0.022 on cross_subject where the
+   with ``bd_deep4``: the mismatched pairing reads -0.075 on cross_subject where the
    matched control reads -0.000, i.e. it measures the architecture gap.
 2. **Metrics are never pooled.** ROC-AUC for the two-class datasets, accuracy
    elsewhere.
@@ -52,17 +55,34 @@ OUT = HERE / "v5"
 FIG = OUT / "figures"
 FIG.mkdir(parents=True, exist_ok=True)
 
-# Planned grid size, from passes_v5/ on the cluster. It is the denominator of the
-# completeness statement and nothing else.
-N_PLANNED = 1350
-N_MISSING = 74  # 70 grow_eegnex + 4 bd_eegnex, still running as of 2026-08-19
 SHOWCASE = "bnci2014_001"
+
+# The deep grid this report is about: 9 arms x (12 within + 6 cross-session + 12
+# cross-subject) x 5 seeds. The classical arm ran too, but it has no width, no epochs
+# and no growth, so it is not a denominator for anything said here.
+N_PLANNED = 9 * (12 + 6 + 12) * 5
+
+
+def deep_runs_present(scores: pd.DataFrame) -> int:
+    """Count the deep (eval, dataset, model, seed) runs actually in the frames.
+
+    Measured, never typed: the previous version of this file carried
+    ``N_MISSING = 74  # still running as of 2026-08-19`` as a literal, which is exactly
+    the kind of number that keeps asserting itself after it stops being true -- it
+    survived both the EEGNeX top-up and the ``drop_last`` re-run.
+    """
+    deep = scores[scores.family != "riemann/csp"]
+    return int(deep.groupby(["eval", "dataset", "model"]).seed.nunique().sum())
+
 
 paired = pd.read_csv(SRC / "eegrow_benchmark_paired.csv")
 levels = pd.read_csv(SRC / "eegrow_benchmark_levels.csv")
 scores = pd.read_csv(SRC / "eegrow_benchmark_all_scores.csv.gz")
 fits, budget, curves = growth_io.load_tidy(SRC)
 prov = pd.read_csv(SRC / "eegrow_v5_provenance.csv")
+
+N_PRESENT = deep_runs_present(scores)
+N_MISSING = N_PLANNED - N_PRESENT
 
 # Subject/session labels for the showcase curves, joined on write order -- see
 # growth_io.attach_subjects for what the join rests on and how it was validated. Only
@@ -92,7 +112,7 @@ def efficiency(fits: pd.DataFrame, summ: pd.DataFrame) -> pd.DataFrame:
 
     The paired table is written as "growing to a target width versus training at that
     width", but the records say the growing arms mostly stop short. So the delta has to
-    be read next to the size it was achieved at -- a win from 39% of the control's
+    be read next to the size it was achieved at -- a win from 43% of the control's
     parameters is a different, stronger claim than a win at parity.
     """
     p = fits.groupby("model").params_end.mean()
@@ -179,20 +199,29 @@ tex = [
     r"\documentclass[11pt]{article}",
     r"\usepackage[margin=2.4cm]{geometry}",
     r"\usepackage{booktabs,graphicx,caption}",
-    r"\title{Growing networks for EEG decoding:\\interim results of the v5 campaign}",
+    r"\title{Growing networks for EEG decoding:\\results of the v5 campaign}",
     r"\author{Adam Mounir\\Inria TAU / Yneuro}",
     r"\date{\today}",
     r"\begin{document}", r"\maketitle",
     r"\section*{Status}",
-    (f"The v5 grid is {N_PLANNED - N_MISSING} of {N_PLANNED} cells complete "
-     f"({pct:.1f}\\%). The {N_MISSING} missing cells are all "
-     r"\texttt{grow\_eegnex} / \texttt{bd\_eegnex}: they were excluded from the "
-     r"original campaign by out-of-memory failures on 11\,GB cards, not by design, so "
-     r"they are the memory-heaviest cells of the grid and are running now on H100s. "
-     r"Every EEGNeX number below is on a biased subset and is expected to move. "
+    (f"The deep grid is {N_PRESENT} of {N_PLANNED} runs complete ({pct:.1f}\\%), "
+     r"alongside a classical arm of six Riemannian/CSP pipelines. "
      f"One single regime across the whole campaign: {prov.sfreq.iloc[0]:.0f}\\,Hz, "
      f"{prov.fmin.iloc[0]:.0f}--{prov.fmax.iloc[0]:.0f}\\,Hz, "
      f"braindecode {prov.v_braindecode.iloc[0]}, torch {prov.v_torch.iloc[0]}."),
+    "",
+    (r"\paragraph{Two corrections this grid has already absorbed.} The EEGNeX cells were "
+     r"originally lost to out-of-memory failures on 11\,GB cards --- not dropped by "
+     r"design, so the remainder was the memory-\emph{lightest} subset --- and have since "
+     r"run on H100s; EEGNeX numbers here are no longer on a biased subset. And "
+     r"\texttt{EEGClassifier} defaults to \texttt{iterator\_train\_\_drop\_last=True}: at "
+     r"\texttt{batch\_size=64}, any cell whose internal 80\,\% split held fewer than 64 "
+     r"trials produced \emph{zero} training batches, so the net took no gradient step and "
+     r"published its initialisation --- no exception, no warning, a well-formed CSV. 180 "
+     r"cells were affected and were re-run after the fix. It also explains a result the "
+     r"earlier version of this report attributed to gromo: the growing arms now grow on "
+     r"100\,\% of folds rather than two thirds, because a callback that lists an empty "
+     r"train iterator returns before it ever calls \texttt{grow\_step}."),
     "",
     (r"\paragraph{A defect that bounds every growing arm.} The scaling-factor line "
      r"search in \texttt{grow\_step} includes $0$, and when $0$ is selected the growth "
@@ -207,15 +236,19 @@ tex = [
     "",
     r"\section{What the growing arms actually did}",
     (r"The paired contrast is usually stated as \emph{growing to a target width versus "
-     r"training at that width directly}. The fit records say that is not what ran: "
-     r"across all folds, a third of them never grow at all, and "
-     r"\texttt{grow\_shallow} reaches its target width in "
+     r"training at that width directly}. The fit records say that is not what ran. "
+     f"Every growable fold now grows ({100 * width_agg.grew.min():.0f}\\,\\% in all four "
+     r"arms; the third that used to grow never was a \texttt{drop\_last} artefact, "
+     r"not a gromo one), but arriving is a different matter: growth gets one opportunity "
+     r"every \texttt{grow\_every} epochs and the stopping rule ends 40\,\% of folds by "
+     r"epoch 5, so \texttt{grow\_shallow} reaches its target width in "
      f"{100 * width_agg.loc['grow_shallow', 'reached']:.1f}\\,\\% of folds --- it "
      "stops at a mean "
      f"width of {width_agg.loc['grow_shallow', 'w_end']:.1f} against a target of "
      f"{width_agg.loc['grow_shallow', 'target']:.0f}. This does not weaken the "
      r"result, it changes what the result \emph{is}: the comparison is not "
-     r"growth-versus-parity, it is growth-versus-a-larger-model."),
+     r"growth-versus-parity, it is growth-under-early-stopping versus a larger model "
+     r"trained directly."),
     "",
     _fig("width_vs_target",
          (r"Where growth actually stopped. Bars are the mean width reached, red "
@@ -235,9 +268,9 @@ tex = [
          lambda v: f"{v:+.4f}"],
         (r"Mean final parameter count of the growing arm against its matched control, "
          r"with the range of the score delta across the three protocols. "
-         r"\texttt{grow\_shallow} beats \texttt{bd\_shallow} at 39\,\% of its "
-         r"parameters; the two arms that sit near parity in size are the two that sit "
-         r"near zero in score."),
+         r"\texttt{grow\_shallow} beats \texttt{bd\_shallow} at 43\,\% of its "
+         r"parameters; the three arms that sit near parity in size (90--98\,\%) are the "
+         r"three that sit at or below zero in score."),
         "efficiency"),
     "",
     r"\section{The paired contrast}",
@@ -372,21 +405,27 @@ tex = [
               r"after most fits ended.")), "")],
     r"\section{What this does and does not license saying}",
     (r"\textbf{Supported.} On ShallowFBCSPNet, growing from width 8 reaches a "
-     r"\emph{better} score than braindecode's reference while stopping at 39\,\% of "
-     r"its parameters, consistently across 12 datasets and three protocols. On SCCNet "
-     r"and DeepEEGNet, growth matches its matched control at 70--86\,\% of its "
-     r"parameters, with a delta inside the noise floor."),
+     r"\emph{better} score than braindecode's reference while stopping at 43\,\% of "
+     r"its parameters (35\,078 against 81\,890), and it does so in all three protocols "
+     r"($+0.019$ within-session, $+0.020$ cross-session, $+0.006$ cross-subject). On "
+     r"DeepEEGNet, growth matches its matched control to within $0.001$ on the two "
+     r"cross protocols, at 98\,\% of its parameters."),
     "",
-    (r"\textbf{Not supported.} Anything about EEGNeX (incomplete, biased subset). And "
-     r"no claim that growth is \emph{neutral} on SCCNet or DeepEEGNet: the $s=0$ "
-     r"defect froze a fraction of every growing arm's added units at zero, so their "
-     r"measured performance is a floor, not an estimate. The honest statement is that "
-     r"the matched controls are not beaten, not that growth does not help."),
+    (r"\textbf{Not supported.} That growth is \emph{neutral} on SCCNet or EEGNeX. Both "
+     r"end below their matched control --- SCCNet at $-0.035$ within-session, EEGNeX at "
+     r"$-0.042$ --- while ending at 91\,\% and 90\,\% of the control's parameters, so "
+     r"neither is a parity comparison in either direction. And no growing number here "
+     r"is an estimate: the $s=0$ defect freezes a fraction of every growing arm's added "
+     r"units at zero, so each is a floor. The honest statement is that the matched "
+     r"controls are not beaten, not that growth does not help."),
     "",
     (r"\textbf{The next measurement.} Refuse the zero-amplitude growth (two lines in "
-     r"\texttt{grow\_step}) and re-run the growing arms. Two predictions the re-run "
-     r"would test: the SCCNet and DeepEEGNet deltas move off zero, and the fraction of "
-     r"folds that never grow at all falls from a third."),
+     r"\texttt{grow\_step}) and log the winning factor, which is currently not recorded "
+     r"anywhere --- so the size of that bound cannot be read off this campaign at all. "
+     r"The prediction the re-run would test is that the SCCNet and EEGNeX deltas move "
+     r"toward zero. The other half of the old prediction is already settled: the folds "
+     r"that never grew were a \texttt{drop\_last} artefact, not a gromo one, and that "
+     r"fraction is now $0\,\%$."),
     r"\end{document}",
 ]
 (OUT / "eegrow_v5_tables.tex").write_text("\n".join(tex) + "\n")
@@ -405,13 +444,19 @@ def code(s: str) -> None:
 
 
 md(rf"""
-# Growing networks for EEG decoding — v5 interim results
+# Growing networks for EEG decoding — v5 results
 
-**Status: {N_PLANNED - N_MISSING} / {N_PLANNED} cells ({pct:.1f}%).** The {N_MISSING}
-missing cells are all `grow_eegnex` / `bd_eegnex`, and they are not a random remainder:
-they were dropped from the original campaign by out-of-memory failures on 11 GB cards,
-so they are the memory-heaviest cells in the grid. Every EEGNeX number here is on a
-biased subset.
+**Status: {N_PRESENT} / {N_PLANNED} deep runs ({pct:.1f}%)**, plus a classical arm of six
+Riemannian/CSP pipelines. Two corrections are already absorbed into these numbers. The
+EEGNeX cells had been lost to out-of-memory failures on 11 GB cards — so the surviving
+remainder was the memory-*lightest* subset, not a random one — and have since run on
+H100s. And `EEGClassifier` defaults to `iterator_train__drop_last=True`: at
+`batch_size=64`, any cell whose internal 80% split held fewer than 64 trials produced
+**zero** training batches, so the net took no gradient step and published its
+initialisation, silently, with a well-formed CSV. 180 cells were affected and were re-run
+after the fix. That also retires a claim the earlier version of this report made about
+gromo: the growing arms now grow on 100% of folds rather than two thirds, because a
+callback that lists an empty train iterator returns before it ever calls `grow_step`.
 
 Everything is recomputed from `benchmarks/results_v5_published/`; the figures come from
 `v5_figures.py`, so each one has a single reviewable definition rather than living in a
@@ -422,7 +467,7 @@ cell.
 1. **Pairs are architecture-matched.** `grow_deep` is compared to `fix_deepeeg` — the
    same architecture built frozen at the width growth ends on — not to `bd_deep4`
    (Deep4Net, four stages at 25/50/100/200 filters). The mismatched pairing gives
-   −0.022 on cross-subject where the matched control gives −0.000: it measures the
+   **−0.075** on cross-subject where the matched control gives −0.000: it measures the
    architecture gap, not growth.
 2. **Metrics are never pooled.** ROC-AUC for the two-class LeftRightImagery datasets,
    accuracy elsewhere.
@@ -481,15 +526,25 @@ prov.T
 md("""
 ## 1. What is actually there
 
-The point of this table is to make the EEGNeX gap visible *before* any of its deltas are
-read: fewer datasets, fewer observations, and the ones missing are the large ones.
+This table used to exist to make the EEGNeX gap visible *before* any of its deltas were
+read. That gap is closed — every deep arm now carries the same 12 datasets, 5 seeds and
+6 475 observations — so the table's job now is to show that, and to show the one place
+the grid is deliberately *not* rectangular: the classical pipelines run a single seed on
+the two deterministic protocols, where they take no `random_state` and the folds are an
+enumeration of the data rather than a draw.
 """)
 
 code("""
 cov = scores.groupby("model").agg(
     datasets=("dataset", "nunique"), seeds=("seed", "nunique"),
     observations=("score", "size"))
-cov["complete"] = ["no (running)" if m in {"grow_eegnex", "bd_eegnex"} else "yes"
+# Complete against the *plan*, which is 1 seed for the classical arm off within-session.
+ml = set(scores.loc[scores.family == "riemann/csp", "model"])
+n_seed = scores.groupby(["eval", "dataset", "model"]).seed.nunique().reset_index()
+n_seed["plan"] = [1 if (m in ml and e != "within_session") else 5
+                  for m, e in zip(n_seed.model, n_seed["eval"])]
+short = n_seed[n_seed.seed < n_seed.plan].groupby("model").size()
+cov["complete"] = ["no (%d cells short)" % short[m] if m in short else "yes"
                    for m in cov.index]
 cov
 """)
@@ -500,12 +555,22 @@ md("""
 This is the section that changes what the report is about.
 
 The paired contrast is usually stated as *growing to a target width versus training at
-that width directly*. The fit records say that is not what ran. A third of all folds
-**never grow at all**, and `grow_shallow` reaches its target width in **0.1%** of folds —
-it stops at a mean width of 13.5 against a target of 40.
+that width directly*. The fit records say that is not what ran.
+
+The earlier version of this section reported that **a third of all folds never grow at
+all**, and read it as a property of gromo. It was not: those folds had no training
+batches to grow from, because of `drop_last`. After the re-run every growable fold grows,
+on 100% of folds in all four arms — so that particular indictment is withdrawn.
+
+What survives the fix is the *race*, and it is the real finding. Growth gets one
+opportunity every `grow_every=5` epochs, and 40% of folds pick their best epoch by epoch
+5, so the stopping rule usually wins: `grow_shallow` reaches its target width in **0.1%**
+of folds, stopping at a mean width of 15.3 against a target of 40. `grow_eegnex` reaches
+it on 48% of folds, `grow_sccnet` on 67%, `grow_deep` on 54%.
 
 That does not weaken the result. It changes what the result *is*: the comparison is not
-growth-versus-parity, it is growth-versus-a-larger-model.
+growth-versus-parity, it is growth-under-early-stopping versus a larger model trained
+directly.
 """)
 
 code("""
@@ -527,11 +592,16 @@ eff.style.format({"grow_params": "{:,.0f}", "fixed_params": "{:,.0f}",
 """)
 
 md("""
-**`grow_shallow` beats `bd_shallow` while ending at 39% of its parameters** (31 730 vs
-81 916). And the pattern across the four architectures is worth noticing, even if four
-points is not a trend: the two arms that end nearest their control in size (DeepEEGNet at
-86%, EEGNeX at 87%) are the two that sit at or below zero in score, while the one that
-undershoots hardest is the one that wins.
+**`grow_shallow` beats `bd_shallow` while ending at 43% of its parameters** (35 078 vs
+81 890). And the pattern across the four architectures is worth noticing, even if four
+points is not a trend: the three arms that end nearest their control in size (DeepEEGNet
+at 98%, SCCNet at 91%, EEGNeX at 90%) are the three that sit at or below zero in score,
+while the one that undershoots hardest is the one that wins.
+
+The mechanism is the same race as above rather than a coincidence: an arm that reaches
+its target width ends up the size of its control and gains nothing for it, while
+`grow_shallow` — the arm early stopping cuts off soonest, at 0.1% target attainment — is
+the one whose smaller final model is doing the work.
 """)
 
 md("""
@@ -693,9 +763,11 @@ The subject label here is **inferred, not recorded**: `FitRecorder` is construct
 per cell, before MOABB clones the pipeline per fold, so it never learns which subject it
 is fitting. The join is positional — MOABB appends one score row per (subject, session)
 after that pair's five folds, so a block of five fits belongs to score row *k* — and it
-is validated at Spearman +0.94 to +0.99 for eight of the nine arms across all five
-seeds. Guessing the ordering instead (subject-major, session-major) gives +0.03 and
-+0.10, i.e. nothing. See `growth_io.attach_subjects`.
+is validated at Spearman +0.84 to +0.99 for eight of the nine arms across all five seeds
+(mean +0.89 over 45 cells; `bd_deep4` is the exception at +0.33 to +0.59, because its
+297 k parameters overfit the 46-trial internal split). Guessing the ordering instead
+(subject-major, session-major) gives +0.03 and +0.10, i.e. nothing. See
+`growth_io.attach_subjects`.
 """)
 
 code("""
@@ -714,20 +786,30 @@ md("""
 ## 9. What this does and does not license saying
 
 **Supported by the data.** On ShallowFBCSPNet, growing from width 8 reaches a *better*
-score than braindecode's reference while stopping at 39% of its parameters, consistently
-across 12 datasets and three protocols. On SCCNet and DeepEEGNet, growth matches its
-matched control at 70–86% of its parameters, with a delta inside the noise floor.
+score than braindecode's reference while stopping at 43% of its parameters (35 078 vs
+81 890), and it does so in all three protocols: +0.019 within-session, +0.020
+cross-session, +0.006 cross-subject. On DeepEEGNet, growth matches its matched control to
+within 0.001 on both cross protocols, at 98% of its parameters.
 
-**Not supported.** Anything about EEGNeX (incomplete, biased subset). And no claim that
-growth is *neutral* on SCCNet or DeepEEGNet: the s=0 defect froze a fraction of every
-growing arm's added units at zero, so their measured performance is a floor, not an
-estimate. The honest statement is that the matched controls are not beaten, not that
-growth does not help.
+**Not supported.** That growth is *neutral* on SCCNet or EEGNeX. Both end below their
+matched control — SCCNet at −0.035 within-session, EEGNeX at −0.042 — while ending at 91%
+and 90% of the control's parameters, so neither is a parity comparison in either
+direction. And no growing number here is an estimate: the s=0 defect freezes a fraction
+of every growing arm's added units at zero, so each is a floor. The honest statement is
+that the matched controls are not beaten, not that growth does not help.
 
-**The next measurement.** Refuse the zero-amplitude growth (two lines in `grow_step`)
-and re-run the growing arms. Two predictions it would test: the SCCNet and DeepEEGNet
-deltas move off zero, and the fraction of folds that never grow at all falls from a
-third.
+**Also not supported, and this is the limit that matters most.** Any claim about growth
+*at parity*. Early stopping ends the median fold at 29 epochs and 40% of folds select
+their best epoch by epoch 5, while growth gets one opportunity every 5 epochs — so
+`grow_shallow` reaches its target width on 0.1% of folds. Every number above is growth
+under a stopping rule it cannot finish under.
+
+**The next measurement.** Refuse the zero-amplitude growth (two lines in `grow_step`) and
+**log the winning scale factor**, which is currently recorded nowhere — so the size of
+the bound above cannot be read off this campaign at all. The prediction it would test is
+that the SCCNet and EEGNeX deltas move toward zero. The other half of the old prediction
+is already settled the other way: the folds that never grew were a `drop_last` artefact,
+not a gromo one, and that fraction is now 0%.
 """)
 
 nb = nbf.v4.new_notebook(cells=cells)

@@ -1,4 +1,4 @@
-"""Figures for the v5 interim report.
+"""Figures for the v5 report.
 
 One module rather than code inside notebook cells, for the reason `growth_io` exists:
 a figure that encodes a claim is a thing to review, and a cell nobody re-reads is not
@@ -204,8 +204,15 @@ def width_vs_target(fits: pd.DataFrame):
     This is the figure that reframes the whole report. The paired contrast is written
     as "growing to a target width versus training at that width directly", but the
     records say the growing arms mostly never arrive: the bar is the width reached, the
-    marker is the target. A growing arm that wins from a third of the target width is
-    making a *stronger* claim than the one the table states, not a weaker one.
+    marker is the target. ``grow_shallow`` wins from 38 % of the target width (15.3
+    against 40), which makes a *stronger* claim than the one the table states, not a
+    weaker one.
+
+    The right panel used to read "a third of folds never grow at all". That third was an
+    ``iterator_train__drop_last`` artefact -- no training batches, so the callback
+    returned before ``grow_step`` -- and after the re-run it is zero. What is left is the
+    race the left panel shows: one growth opportunity every ``grow_every`` epochs against
+    a stopping rule that ends 40 % of folds by epoch 5.
     """
     g = fits[fits.model.isin(GROW)]
     agg = g.groupby("model").agg(
@@ -244,7 +251,14 @@ def width_vs_target(fits: pd.DataFrame):
     ax2.set_xlim(0, 1.22)
     ax2.set_xlabel("fraction of folds")
     ax2.legend(fontsize=8, loc="upper right")
-    ax2.set_title("A third of folds never grow at all")
+    # Read off the data, not asserted: this title said "A third of folds never grow at
+    # all" until the `drop_last` re-run took that fraction to zero -- the folds that
+    # never grew had no training batches to grow from, which was a dataloader defect and
+    # not a gromo one. A title that states a measurement has to be one.
+    ax2.set_title(f"Every growable fold grows; {agg.reached.min():.1%}–"
+                  f"{agg.reached.max():.0%} reach the target"
+                  if agg.grew.min() > 0.999 else
+                  f"{1 - agg.grew.mean():.0%} of folds never grow at all")
     ax2.grid(axis="x", alpha=0.25)
     f.suptitle("What the growing arms actually did — v5, all folds", fontsize=11)
     f.tight_layout()
@@ -456,7 +470,14 @@ def stopping_budget(fits: pd.DataFrame, *, max_epochs: int = 200,
     how well gromo picks its neurons.
     """
     g = fits[fits.model.isin(GROW)]
-    need = {"grow_shallow": 32, "grow_sccnet": 18, "grow_deep": 24, "grow_eegnex": 6}
+    # Neurons the arm has to add, read off the fits rather than transcribed from the
+    # model configs: a hand-copied {shallow: 32, sccnet: 18, deep: 24, eegnex: 6} agrees
+    # with the current configs, and would go on agreeing with them out loud after one of
+    # them changed.
+    need = (g.groupby("model")
+             .apply(lambda d: float(d.target_width.median() - d.width_start.median()),
+                    include_groups=False)
+             .to_dict())
     order = [m for m in GROW if m in set(g.model)]
 
     f, (ax, ax2) = plt.subplots(1, 2, figsize=(12.6, 4.2))
