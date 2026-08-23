@@ -1,0 +1,3 @@
+sfreq,resample_cfg,fmin,fmax,device,v_moabb,v_braindecode,v_torch,v_gromo,v_skorch,v_sklearn,v_mne,eegrow_sha
+250.0,250.0,8.0,32.0,cuda,1.5.0,1.5.2,2.13.0+cu130,0.0.1,1.4.0,1.9.0,1.12.1,2d7a2be70aa2c200c278b42ac83c1f21cd90e004
+250.0,250.0,8.0,32.0,cpu,1.5.0,1.5.2,2.13.0+cu130,0.0.1,1.4.0,1.9.0,1.12.1,2d7a2be70aa2c200c278b42ac83c1f21cd90e004
