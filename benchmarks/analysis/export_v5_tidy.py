@@ -117,8 +117,9 @@ def main() -> None:
         print(f"  {name}: {len(frame):,} rows, "
               f"{(out / name).stat().st_size / 1e6:.2f} MB")
 
-    # Coverage, printed rather than trusted: a campaign that is still running has an
-    # uneven grid, and every figure built on it has to say so.
+    # Coverage, printed rather than trusted. It caught a running campaign's uneven
+    # grid when there was one; it stays because a re-export that silently drops an
+    # arm looks exactly like a complete one until this line is read.
     cov = (fits.groupby(["model", "eval"]).dataset.nunique().unstack()
            .fillna(0).astype(int))
     print("\ndatasets per (model, eval):")

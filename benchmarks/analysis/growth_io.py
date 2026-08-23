@@ -145,9 +145,10 @@ def attach_subjects(curves: pd.DataFrame, scores: pd.DataFrame,
     (subject-major, session-major) correlate with the published per-subject ranks at
     Spearman +0.03 and +0.10, i.e. not at all.
 
-    Validated, not assumed: within each cell, the mean best ``valid_acc`` over a block
-    of ``n_splits`` fits against the score of the row it is assigned to gives Spearman
-    +0.94 to +0.99 for eight of the nine arms across all five seeds (mean +0.89 over
+    Validated, not assumed, and re-validated on the frames as they stand after the
+    ``drop_last`` re-run: within each cell, the mean best ``valid_acc`` over a block of
+    ``n_splits`` fits against the score of the row it is assigned to gives Spearman
+    +0.84 to +0.99 for eight of the nine arms across all five seeds (mean +0.89 over
     45 cells). ``bd_deep4`` is the exception at +0.33 to +0.59 -- still positive, but
     its 297 k parameters overfit the 46-trial internal split, which makes ``valid_acc``
     a weak proxy for the test score rather than the join a weak join.
