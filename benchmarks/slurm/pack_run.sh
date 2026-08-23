@@ -278,17 +278,48 @@ start=$(date +%s)
 # its owner is gone and no CSV exists. Only this host's claims are reaped: pids
 # are node-local, and a live process on another node must not have its work
 # stolen. A claim with no owner file predates this scheme and is left alone.
+# PREEMPTION IS WHY THIS CANNOT STAY HOST-LOCAL. The host-local rule above is correct
+# but incomplete, and the gap cost this campaign two cells. When SLURM preempts a job
+# it REQUEUEs it: the processes on the old node die, the job comes back on a DIFFERENT
+# node with the SAME job id, and the claims stamped by the dead processes survive. The
+# requeued job cannot reap them -- their host is not its host -- so it sweeps, claims
+# nothing for those cells, and reports them MISSING. Job 482338 did exactly this twice
+# (`PACK sweep done, claimed=4` on a 7-cell grid), leaving schirrmeister2017 s0 locked
+# out for good until the claim was removed by hand.
+#
+# So a job id alone does not settle it either: after a requeue the id is unchanged and
+# still live. What distinguishes a dead owner from a live one is whether the claiming
+# HOST is still among the nodes that job currently holds. Hence:
+#
+#   owner on this host        -> kill -0, the authoritative local answer
+#   job id absent (old file)  -> cannot judge, leave it alone
+#   job no longer in squeue   -> every process of it is gone           -> reap
+#   job live, host not in its -> requeued or moved off that node, so   -> reap
+#     current node list          the process that stamped this is dead
+#   job live and still on     -> genuinely in flight on another node,
+#     that host                  do not steal its work
 reap_stale() {
-  local c owner pid host reaped=0
+  local c owner pid host jid key ev ds m sd reaped=0 alive jobnodes
+  # One squeue for the whole sweep: the set of live jobs is the same for every claim,
+  # and a call per claim would be hundreds of RPCs against the controller.
+  alive=" $(squeue -u "$USER" -h -o '%A' 2>/dev/null | tr '\n' ' ') "
   for c in "$CLAIMS"/*; do
     [ -d "$c" ] || continue
     owner="$c/owner"
     [ -f "$owner" ] || continue
-    IFS=' ' read -r host pid < "$owner"
-    [ "$host" = "$(hostname)" ] || continue
-    kill -0 "$pid" 2>/dev/null && continue
+    IFS=' ' read -r host pid jid < "$owner"
+    if [ "$host" = "$(hostname)" ]; then
+      kill -0 "$pid" 2>/dev/null && continue
+    elif [ -z "${jid:-}" ] || [ "${jid:-0}" = "0" ]; then
+      continue
+    elif [[ "$alive" == *" $jid "* ]]; then
+      # Live job on another node: reap only if it no longer holds the claiming host.
+      jobnodes=" $(scontrol show hostnames \
+                     "$(squeue -h -j "$jid" -o '%N' 2>/dev/null)" 2>/dev/null \
+                   | tr '\n' ' ') "
+      [[ "$jobnodes" == *" $host "* ]] && continue
+    fi
     # The cell key is the directory name: eval__dataset__model__sSEED.
-    local key ev ds m sd
     key=$(basename "$c")
     ev=${key%%__*}; sd=${key##*__s}
     m=${key%__s*}; m=${m##*__}
@@ -352,7 +383,9 @@ while true; do
       # later point is recognisable as dead rather than as in-flight. $BASHPID is
       # this subshell's pid; $$ would be the parent's and would look alive
       # forever.
-      echo "$(hostname) $BASHPID" > "$CLAIM/owner"
+      # The job id is the third field so that reap_stale can judge a claim taken on
+      # ANOTHER node, where the pid means nothing. See the comment on reap_stale.
+      echo "$(hostname) $BASHPID ${SLURM_JOB_ID:-0}" > "$CLAIM/owner"
       # The suffix must be unique per cell. MOABB keys its HDF5 store by
       # (hdf5_path, suffix), and hdf5_path is per (eval, dataset) -- so two
       # co-tenant processes on the same dataset sharing a suffix would open the

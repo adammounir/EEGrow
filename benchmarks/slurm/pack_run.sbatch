@@ -5,8 +5,18 @@
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=120G
 #SBATCH --time=3-00:00:00
+#SBATCH --exclusive
 #SBATCH --exclude=margpu021,margpu023,margpu024,margpu025,margpu026,margpu027,margpu029
 #SBATCH --output=/scratch/amounir/logs/pack_%j.log
+# --exclusive since 2026-08-18, because --mem is not enforced on this cluster: the
+# turing nodes report RealMemory=191000 and AllocMem=0, so SLURM co-scheduled two
+# 120G allocations on margpu020 (467745 + 467753) and left the node with 13.7 GB of
+# FreeMem. The arbiter then becomes the kernel OOM killer, which uses SIGKILL, which
+# no trap can catch: 85 cells died that way in the v5 campaign (73 in 467753 alone),
+# each one releasing its claim and being re-claimed until MAX_SWEEPS gave up. A
+# packing runner already decides its own co-tenancy through K -- letting the
+# scheduler add a second tenant set on top of it is oversubscription by accident.
+# The cost is queueing for a whole free node instead of a slice of a busy one.
 # margpu021 joined the exclude list on 2026-08-16. It advertises `gpu:turing:3` while
 # `nvidia-smi --query-gpu` on it answers "No devices were found": SLURM hands out a
 # GRES the node cannot serve. A job that lands there does not fail to start, it runs
