@@ -1,4 +1,4 @@
-"""The full exploration of the v5 campaign — the one that is currently running.
+"""The full exploration of the v5 campaign — complete: 450 cells, 1848 runs.
 
     uv run --with pandas,numpy,scipy,matplotlib,seaborn,nbformat,nbclient,nbconvert,ipykernel \
         python benchmarks/analysis/build_explore_v5_report.py
@@ -6,17 +6,19 @@
 **What changed on 2026-08-19, and it changes the whole report.** v5 used to declare the
 six ``ml_*`` classical pipelines and have run none of them, which made the one
 comparison the exploration turns on -- deep learning against Riemannian geometry --
-inexpressible on the only campaign with a provenance row. That arm is now running
-(``slurm/submit_ml_v5.sh``, 498 cells) and most of it has landed, so this report asks
-the deep-versus-classical question on v5 itself rather than borrowing the older grid
-for it.
+inexpressible on the only campaign with a provenance row. That arm has since run
+(``slurm/submit_ml_v5.sh``, 498 cells), so this report asks the deep-versus-classical
+question on v5 itself rather than borrowing the older grid for it.
 
 Three things still have to be read carefully, and every figure that is affected says so:
 
-* **Coverage is not uniform, because the campaign is not finished.** ``grow_eegnex`` and
-  the six classical pipelines are mid-flight. `coverage_map` is deliberately the first
-  figure: any model-averaged number moves as cells land, and that figure is where you
-  look when one of them changes between builds.
+* **Coverage is uniform against the plan, and the plan is not a rectangle.** The nine
+  deep arms carry five seeds everywhere; the six classical pipelines carry five on
+  within-session and one on the two deterministic modes, because none of them takes a
+  ``random_state`` and leave-one-session-out / leave-one-subject-out enumerate the data
+  instead of drawing a split -- verified on 516 control groups, seed 1 against seed 0,
+  max |delta| = 0.0. `coverage_map` is still the first figure, but it colours against
+  that plan, so a single seed there reads as complete rather than as a hole.
 * **`fixed control` is a family of one.** Its family mean equals its champion by
   construction; the bar and the marker coincide, and that is an artefact of the grid.
 * **A champion of a larger family wins for free.** A maximum over more candidates is
@@ -24,8 +26,7 @@ Three things still have to be read carefully, and every figure that is affected 
   (0.1-0.3) and decisive against the growing-versus-fixed one (~0.01), so the first uses
   champions and the second uses the four architecture-matched pairs.
 
-Writes benchmarks/analysis/explore_v5/ -- 30-odd figures, one tidy frame, one dataset
-order.
+Writes benchmarks/analysis/explore_v5/ -- 39 figures, one tidy frame, one dataset order.
 """
 
 from __future__ import annotations
@@ -209,22 +210,29 @@ def code(s: str) -> None:
 md(r"""
 # Reading the v5 grid — who wins, where, why, and what it cost
 
-**What this is.** The full exploration pass on **the campaign currently running**:
+**What this is.** The full exploration pass on **the completed v5 campaign**:
 `results_v5_published`. Fifteen models in four families — six `riemann/csp` classical
 pipelines, four `braindecode` reference nets, one `fixed control` (`fix_deepeeg`), four
-`growing` — over 12 datasets, 3 evaluation modes, 5 seeds, plus the per-epoch training
-records for every deep fold.
+`growing` — over 12 datasets and 3 evaluation modes, 450 cells and 1848 runs, plus the
+per-epoch training records for all 140 490 deep folds.
 
-**What changed today.** v5 used to have no classical arm at all: the six `ml_*` configs
-were declared in the grid and none had run, so the comparison every one of these figures
-turns on was inexpressible on the only campaign with a provenance row. That arm is now
-running and most of it has landed, so this notebook asks the question on v5 itself.
+**Two things that got the campaign to this state.** v5 used to have no classical arm at
+all: the six `ml_*` configs were declared in the grid and none had run, so the comparison
+every one of these figures turns on was inexpressible on the only campaign with a
+provenance row; that arm has since run (498 cells). And `EEGClassifier` defaults to
+`iterator_train__drop_last=True`, which at `batch_size=64` gave **zero** training batches
+on any cell whose internal 80 % split held fewer than 64 trials — 180 cells trained for
+exactly no steps and published their initialisation, silently, with a well-formed CSV.
+Those cells were re-run after the fix. No `train_loss` is NaN in these frames any more,
+and the growing arms grow on 100 % of folds instead of two thirds.
 
 **Three things that change how the figures must be read.**
 
-1. **The campaign is not finished.** `grow_eegnex` and the classical pipelines are
-   mid-flight. Figure 0 is the coverage map for that reason: any model-averaged number
-   here moves as cells land, and that is the figure to check when one of them changes.
+1. **Coverage is complete, but the plan is not a rectangle.** Every one of the 450 cells
+   is at its planned seed count. The nine deep arms carry five seeds in all three modes;
+   the six classical pipelines carry five within-session and one on the two deterministic
+   modes, where they take no `random_state` and the folds are an enumeration rather than
+   a draw. Figure 0 colours against that plan, so a single seed there reads as complete.
 2. **`fixed control` is a family of one.** Its family mean equals its champion by
    construction — the bar and the marker coincide, and that coincidence is an artefact.
 3. **A champion of a larger family wins for free.** A maximum over more candidates is
@@ -285,9 +293,24 @@ print(pd.read_csv(SRC / "eegrow_v5_provenance.csv").to_string(index=False))
 md(r"""
 ## 0. What has actually been measured
 
-The campaign is running, so the grid has holes. This is the first figure on purpose:
-every model-averaged number below moves as cells land, and a number that changed since
-the last build changed here first.
+The campaign is complete: 1848 cells, every one of them at its planned seed count. The
+plan is not a rectangle, and the figure now says so in colour rather than leaving it to
+this caption. The nine deep arms carry five seeds in all three modes. The six classical
+pipelines carry five on within-session and **one** on cross-session and cross-subject,
+and that single seed is the whole plan, not a hole: not one of `CSP`+LDA, `SVC(rbf)`,
+`TangentSpace`+LR, `MDM` or `FgMDM` takes a `random_state`, and leave-one-session-out
+and leave-one-subject-out enumerate the data rather than drawing a split, so the seed
+has nothing left to move. Running them five times would be the same number five times.
+
+That is a claim about the code, so the grid carries a control: seed 1 on five cheap
+(mode, dataset) combinations of the deterministic modes -- the cells reading **2**
+below. Over the 516 (mode, dataset, model, subject, session) groups they cover, seed 1
+reproduces seed 0 with a maximum absolute deviation of **0.0**. The argument holds under
+moabb 1.5.0, and the 80 % of that arm's compute it saves bought `schirrmeister2017`
+cross-subject, which is 50 h of CPU per cell.
+
+This is still the first figure on purpose: it is where you look when a model-averaged
+number changes between builds.
 """)
 
 code("""
@@ -299,8 +322,16 @@ print("datasets per model x eval (12 within, 12 cross-subject, 6 cross-session):
 print(tidy.groupby(["model","eval"]).dataset.nunique().unstack().fillna(0)
       .astype(int).to_string())
 print()
+# Completeness against the plan, not against a flat 5 -- see above. Counting cells that
+# hold five seeds would report the classical arm's deterministic modes as 80% missing.
 n_seed = scores.groupby(["eval","dataset","model"]).seed.nunique()
-print(f"cells: {len(n_seed)}, of which {int((n_seed == 5).sum())} have all 5 seeds")
+ml = set(scores.loc[scores.family == "riemann/csp", "model"])
+ix = n_seed.index.to_frame(index=False)
+plan = np.where(ix["eval"].isin(["cross_session","cross_subject"]) & ix.model.isin(ml),
+                1, ef.planned_seeds(scores))
+print(f"cells: {len(n_seed)}, runs: {int(n_seed.sum())}")
+print(f"at or above plan: {int((n_seed.values >= plan).sum())}/{len(n_seed)}, "
+      f"short of plan: {int((n_seed.values < plan).sum())}")
 """)
 
 code("""
@@ -453,14 +484,16 @@ f = ef.eval_penalty(tidy, ORDER); plt.show()
 md(r"""
 ## 6. Deep learning against Riemannian geometry, on v5
 
-The comparison this campaign could not make until today. Three views: who wins the
+The comparison v5 could not make until its classical arm ran. Three views: who wins the
 dataset, whether the win holds subject by subject, and whether the answer depends on how
 much data the fit had.
 
 On the 14-model grid this last figure was the decisive one — the deep-minus-classical
 delta tracked trials per fit at Spearman ρ = +0.82, which reframed an apparent
-evaluation-mode effect as a sample-size effect. Here it is asked again on a campaign
-whose sampling rate is pinned cell by cell.
+evaluation-mode effect as a sample-size effect. Asked again here, on a campaign whose
+sampling rate is pinned cell by cell and whose classical arm ran under that same pinned
+regime, it comes back at **ρ = +0.81 (p = 6e-08, n = 30)**. The reframing survives the
+change of campaign, which is the point of asking it twice.
 """)
 
 code("""
@@ -589,9 +622,12 @@ md(r"""
 ## 9. Where the fit ends, and whether it ended for the right reason
 
 `max_epochs=200`, `grow_every=5`, `EarlyStopping(patience=20, monitor="valid_acc")` on
-skorch's internal 20 % split. Two failure shapes are possible and the campaign has both:
-an arm cut off by the budget while still improving, and an arm that stops improving after
-a handful of epochs and then spends 20 more waiting.
+skorch's internal 20 % split. Two failure shapes are possible; the campaign has one of
+them, and overwhelmingly. Budget truncation is essentially absent — **2 folds out of
+140 490 reach 200 epochs**, so the 200-epoch ceiling is not what ends these fits. What
+does end them is the patience: the median fold runs 29 epochs, and **40 % of folds pick
+their best epoch at epoch 5 or earlier**, then spend 20 more waiting. Read the rest of
+this section as being about that shape, not about a budget that ran out.
 
 The last figure of this section is the one that could invalidate the others: early
 stopping watches an internal split, but the number reported is MOABB's held-out fold. If
@@ -727,8 +763,9 @@ print(f"campaign means on the overlap: published {A[i].mean():.4f}  v5 {B[i].mea
 md(r"""
 ## What I take from this
 
-Filled in from the printed numbers above rather than written in advance — the campaign
-is still running, so re-read this section against figure 0 before quoting any of it.
+Filled in from the printed numbers above rather than written in advance, so this section
+cannot drift from the frames it is built on. The campaign is complete, so these numbers
+are final for this grid — what would move them is a change of grid, not another cell.
 """)
 
 code("""
@@ -761,20 +798,33 @@ print(f"5. Growth: {fits[fits.target_width.notna()].reached_target.mean():.1%} o
 """)
 
 md(r"""
-### What v5 still cannot answer in this state
+### What v5 still cannot answer
 
-* **The classical arm is not complete.** Its cross-subject cells on the three biggest
-  datasets and on schirrmeister2017 are the expensive ones (4.6 h to 95 h each) and land
-  last, so every cross-subject deep-versus-classical number here is provisional until
-  figure 0 is full.
-* **Nothing about alignment.** `align` is `'none'` for every row of both campaigns, so
-  the Euclidean-alignment question is not expressible from either — it needs its own run.
-* **Model-averaged figures are slightly EEGNeX-light**, since `grow_eegnex` is the last
-  deep arm still filling in.
+These are limits of the **grid**, not of its completeness — no additional cell of this
+campaign would lift any of them. Each needs a different run or a code change.
+
+* **Nothing about alignment.** `align` is `'none'` on all 78 585 score rows of both
+  campaigns, so the Euclidean-alignment question is not expressible from either. It needs
+  its own run, not more of this one.
 * **The per-fold curves carry no subject label.** `FitRecorder` stamps
-  (eval, dataset, model, seed) but not the fold's subject, so any per-subject claim from
-  the curve figures rests on the write-order join in `growth_io.attach_subjects`. One
-  line in the callback's `meta` would make it recorded instead of inferred.
+  (eval, dataset, model, seed) but not the fold's subject — it is constructed once per
+  cell, before MOABB clones the pipeline per fold — so every per-subject claim drawn from
+  a curve figure rests on the write-order join in `growth_io.attach_subjects` (re-checked
+  on these frames: Spearman +0.84 to +0.99 on eight of nine arms, `bd_deep4` at +0.33 to
+  +0.59, mean +0.89 over 45 cells). One line in the callback's `meta` would make the
+  label recorded instead of inferred.
+* **Every growing number is a lower bound, not an estimate.** The scaling-factor line
+  search in `grow_step` includes `0.0`, and when `0.0` wins the growth is applied anyway
+  at exactly zero amplitude. A unit with zero incoming *and* zero outgoing weights sits
+  at an exact stationary point and can never recover, while `width` and `n_params` keep
+  counting it as capacity. The defect is not fixed, so "growth does not beat its matched
+  control" is what the data support — not "growth does not help".
+* **The winning scale factor is never logged**, so the size of that bound cannot be read
+  off this campaign; it can only be re-measured by a run that records it.
+* **Growth is not measured against a stopping rule it can finish under.** 40 % of folds
+  select their best epoch by epoch 5, and one growth opportunity arrives every 5 epochs,
+  so `grow_shallow` reaches its target width on 0.1 % of folds. What is measured here is
+  a race between the growth schedule and early stopping, not growth at parity.
 """)
 
 nb = nbf.v4.new_notebook(cells=cells)
