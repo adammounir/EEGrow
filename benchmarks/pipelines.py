@@ -126,6 +126,19 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
         optimizer__lr=float(train_cfg["lr"]),
         max_epochs=int(train_cfg["max_epochs"]),
         batch_size=int(train_cfg["batch_size"]),
+        # EEGClassifier defaults to drop_last=True on the *training* iterator. With
+        # batch_size=64, any cell whose skorch train split (0.8 x n_train) holds fewer
+        # than 64 trials yields ZERO batches -- not a small last batch, no batch at all
+        # -- so the net never takes a gradient step and the published score is its
+        # initialisation. It is silent: no exception, no warning, a well-formed CSV.
+        # Measured on results_v5: within_session shin2017a (13 trials in the split),
+        # physionetmi (29), alexmi (38) and cross_session shin2017a (32) all had
+        # train_loss = NaN on 100% of epochs. The growing arms never grew there either
+        # (GromoGrowth lists the train iterator, gets [], and returns before grow_step),
+        # which is a consequence of this and not a property of gromo.
+        # False keeps the short final batch; BatchNorm tolerates it (a batch of 1 would
+        # be the exception, and no split here lands on 8k+1 trials).
+        iterator_train__drop_last=False,
         train_split=ValidSplit(0.2, random_state=seed, stratified=True),
         device=device,
         callbacks=callbacks,
