@@ -882,17 +882,39 @@ def chance_map(tidy: pd.DataFrame, order: list[str]):
     return f
 
 
-def coverage_map(scores: pd.DataFrame, order: list[str]):
-    """How many seeds each (model, dataset, mode) cell actually has.
+#: Modes whose folds are an enumeration of the data rather than a random draw:
+#: leave-one-session-out and leave-one-subject-out. See `make_ml_grid.py`.
+DETERMINISTIC_EVALS = ("cross_session", "cross_subject")
 
-    A campaign that is still running has an uneven grid, and an uneven grid biases every
-    model-averaged figure toward whichever arms finished. This is the figure that makes
-    that visible instead of leaving it in a caption -- and it is the first one to look at
-    when a number in this report changes between builds.
+
+def planned_seeds(scores: pd.DataFrame) -> int:
+    """The seed count a *stochastic* cell is planned at -- the yardstick for coverage.
+
+    Read off the arms that actually consume a seed rather than hard-coded, so a campaign
+    run at three seeds does not get judged against five.
+    """
+    stoch = scores[scores.family != "riemann/csp"]
+    return int((stoch if not stoch.empty else scores).seed.nunique())
+
+
+def coverage_map(scores: pd.DataFrame, order: list[str]):
+    """Seed coverage per (model, dataset, mode), measured against the plan.
+
+    An uneven grid biases every model-averaged figure toward whichever arms finished, so
+    this is the first figure to look at when a number in this report moves between
+    builds. But "uneven" has to mean *short of plan*, not *short of five*: none of the
+    six classical pipelines takes a `random_state`, and under leave-one-session-out and
+    leave-one-subject-out the seed cannot move MOABB's split either, so their score is
+    the same number however many times it is computed. That was verified on the campaign
+    -- 516 control groups, seed 1 against seed 0, max |delta| = 0.0 -- which is why the
+    grid runs them once there on purpose. Colouring those cells against a target of five
+    painted a complete campaign as 80 % missing, so the colour is now count/plan and the
+    annotation stays the raw seed count.
     """
     f, axes = plt.subplots(1, len(EVALS), figsize=(5.6 * len(EVALS), 5.4), sharey=True)
     axes = np.atleast_1d(axes)
-    mx = int(scores.seed.nunique())
+    mx = planned_seeds(scores)
+    fam = scores.drop_duplicates("model").set_index("model")["family"]
     for ax, ev in zip(axes, EVALS):
         sub = scores[scores["eval"] == ev]
         if sub.empty:
@@ -902,13 +924,21 @@ def coverage_map(scores: pd.DataFrame, order: list[str]):
         piv = piv.reindex(index=[m for m in order_models(scores.model.unique())
                                  if m in piv.index],
                           columns=[d for d in order if d in piv.columns])
-        sns.heatmap(piv, cmap="YlGnBu", vmin=0, vmax=mx, ax=ax, annot=True, fmt=".0f",
+        # One seed is the whole plan for a deterministic pipeline in a deterministic
+        # mode; anywhere else the plan is `mx`.
+        target = pd.Series(mx, index=piv.index, dtype=float)
+        if ev in DETERMINISTIC_EVALS:
+            target[[m for m in piv.index if fam.get(m) == "riemann/csp"]] = 1.0
+        frac = piv.div(target, axis=0).clip(upper=1.0)
+        sns.heatmap(frac, cmap="YlGnBu", vmin=0, vmax=1, ax=ax, annot=piv, fmt=".0f",
                     annot_kws={"size": 6.5}, linewidths=0.4, linecolor="white",
                     cbar=False)
         ax.set_title(EVAL_LABEL[ev], fontsize=10)
         ax.set_xlabel(""); ax.set_ylabel("")
         ax.tick_params(labelsize=6.5)
-    f.suptitle(f"Seeds per cell (blank = not run yet, full = {mx})", fontsize=12)
+    f.suptitle(f"Seeds per cell -- number is the seed count, colour is coverage against "
+               f"plan\n(plan = {mx} seeds; 1 seed for the classical arms off "
+               f"within-session, where they are deterministic)", fontsize=11)
     f.tight_layout()
     return f
 
