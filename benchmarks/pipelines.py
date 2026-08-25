@@ -96,27 +96,96 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
     for k, v in (model_cfg.get("module_kwargs") or {}).items():
         module_params[f"module__{k}"] = v
 
+    # Instrumentation goes in FIRST, ahead of the growth callback. See the order
+    # contract below: `eps` must observe the optimizer that trained the epoch, and
+    # growth replaces it. (These were previously appended after `gromo`, which the
+    # comment below already described as wrong without the code agreeing.)
+    from eegrow.training.callbacks import (AdamEpsDominance, GradientNorm,
+                                           RestoreBestModel, StopReason)
     callbacks = [
         EpochScoring("accuracy", on_train=False, name="valid_acc",
                      lower_is_better=False),
+        ("grad", GradientNorm()),
+        ("eps", AdamEpsDominance()),
     ]
     if kind == "growing":
         from eegrow import GromoGrowth
+        from eegrow.training.loop import MIN_SINGULAR_RATIO
         # Growth runs on the training device for cuda/cpu; only MPS hops to CPU.
         module_params["module__device"] = device
-        callbacks.append(
-            ("gromo", GromoGrowth(grow_every=model_cfg["grow_every"], verbose=False)))
-    # After growth (so an epoch's recorded width is the width it ended with) and
-    # before EarlyStopping (which raises KeyboardInterrupt from on_epoch_end, skipping
-    # every callback listed after it on that final epoch). Added to the fixed arms
-    # too: their width is constant, which is what makes the curves comparable.
+        callbacks.append(("gromo", GromoGrowth(
+            grow_every=model_cfg["grow_every"],
+            # How many neurons a growth step may propose, as a floor relative to the
+            # best candidate's singular value. Per-model because the right value is an
+            # arm's spectrum shape, not a global constant -- see loop.grow_step.
+            min_singular_ratio=float(model_cfg.get("min_singular_ratio",
+                                                   MIN_SINGULAR_RATIO)),
+            verbose=False)))
+    # ORDER IS THE CONTRACT HERE, and each position is load-bearing:
+    #
+    #   grad      instrumentation, anywhere before `record`.
+    #   eps       instrumentation, but STRICTLY BEFORE gromo. Growth rebuilds the
+    #             optimizer, and the neurons it splices in carry no second-moment
+    #             accumulator yet (v=0 => attenuation 0 on every new coordinate). Read
+    #             after growth, the metric would report a total eps collapse that is
+    #             nothing but a fresh moment estimate -- i.e. it would manufacture
+    #             exactly the finding it exists to test. Before growth, the number
+    #             describes the optimizer that actually trained the epoch.
+    #   gromo     grows the module.
+    #   restore   snapshots/restores the module. AFTER gromo so a snapshot is the
+    #             epoch's end state; BEFORE record so the record describes the model
+    #             that is actually returned, which after a restore is not the last
+    #             epoch of the curve written next to it.
+    #   stop      writes stop_reason_, which record reads -> must precede it.
+    #   record    writes the JSONL line.
+    #   early     LAST. It raises KeyboardInterrupt from on_epoch_end, so every
+    #             callback after it is skipped for that final epoch.
+    #
+    # The instrumentation callbacks are added to the fixed arms too: their width is
+    # constant, which is what makes the curves and the selection comparable.
+
+    # Which epoch's model gets scored, and which signal ends the fit. Two separate
+    # decisions, deliberately not fused, and only one of them is settled.
+    #
+    # SETTLED: it must not be the last epoch. Early stopping ends a fit exactly
+    # `patience` epochs after its best BY CONSTRUCTION -- v5 measured
+    # `epochs - epoch_of_best` = 20 with std 0.0 on all 140 490 folds -- so every score
+    # this benchmark ever published came from a model 20 epochs past its own optimum.
+    #
+    # SETTLED: `valid_acc` is a bad *stopping* signal here. The internal split is tiny
+    # (46 trials on bnci2014_001, 3 on shin2017a), so accuracy moves in steps of
+    # 1/n_valid = 0.0213 while skorch's relative threshold is 1e-4 of ~0.7 = 7e-05 --
+    # 300x smaller than the smallest step the metric can take. The tolerance is not
+    # loosely set, it is inoperative, and the run dies when a quantised metric fails to
+    # beat an early lucky peak. On a continuous loss the same threshold works as
+    # designed. Patience is unchanged: it was never the problem, the criterion was.
+    #
+    # NOT SETTLED: whether the *selection* should also be on the loss. The argument for
+    # it is resolution; the argument against is that loss and accuracy decouple, and a
+    # first check on bnci2014_001 subject 1 went both ways -- valid_acc at the restored
+    # epoch beat the last epoch by +0.034/+0.017 on grow_eegnex/grow_sccnet and lost by
+    # -0.052 on grow_shallow/grow_deep. n=4, so that settles nothing either way, but it
+    # is enough to stop us from hard-coding the answer. Hence the knob, defaulting to
+    # the loss, with the A/B to be run on held-out accuracy before the campaign.
+    #
+    # For a growing model there is a second, structural catch: the best epoch can be a
+    # NARROWER model than the last one (grow_shallow restored width 19 against a final
+    # 25), so selection interacts with the growth story and cannot be chosen on
+    # validation resolution alone.
+    monitor = str(train_cfg.get("selection_monitor", "valid_loss"))
+    lower_is_better = monitor.endswith("loss")
+    callbacks.append(("restore", RestoreBestModel(monitor=monitor,
+                                                  lower_is_better=lower_is_better)))
+    callbacks.append(("stop", StopReason()))
     if record_path is not None:
         from eegrow import FitRecorder
         callbacks.append(("record", FitRecorder(
             record_path, meta={"model": model_cfg.get("label"), "seed": seed})))
+    stop_monitor = str(train_cfg.get("stop_monitor", "valid_loss"))
     callbacks.append(
         EarlyStopping(patience=max(15, int(train_cfg["max_epochs"]) // 10),
-                      monitor="valid_acc", lower_is_better=False))
+                      monitor=stop_monitor,
+                      lower_is_better=stop_monitor.endswith("loss")))
 
     clf = EEGClassifier(
         module=module,
@@ -124,6 +193,12 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
         criterion=torch.nn.CrossEntropyLoss,  # bd 1.x + eegrow models output logits
         optimizer=torch.optim.AdamW,
         optimizer__lr=float(train_cfg["lr"]),
+        # Torch's default (1e-8), stated rather than inherited. It is the parameter
+        # Stella's hypothesis is about, so it has to be settable to be testable at all
+        # -- and a default that is written down is a default someone can argue with.
+        # `AdamEpsDominance` measures whether it actually bites; do not raise it on
+        # the strength of the hypothesis alone.
+        optimizer__eps=float(train_cfg.get("optimizer_eps", 1e-8)),
         max_epochs=int(train_cfg["max_epochs"]),
         batch_size=int(train_cfg["batch_size"]),
         # EEGClassifier defaults to drop_last=True on the *training* iterator. With

@@ -19,6 +19,29 @@ train:
   lr: 6.25e-4
   max_epochs: 200
   batch_size: 64
+  # Which epoch's model gets scored (`selection_monitor`) and what ends the fit
+  # (`stop_monitor`). Both were implicitly `valid_acc` before, and both were wrong for
+  # the same reason: on internal validation splits this small (46 trials on
+  # bnci2014_001, 3 on shin2017a) accuracy moves in steps of 1/n_valid, which is 300x
+  # coarser than skorch's improvement threshold -- so the tolerance never fires and the
+  # run ends when a quantised metric fails to beat whichever early epoch got lucky.
+  # Worse, nothing restored the best model at all: `EarlyStopping.load_best` defaults
+  # to False and `EEGClassifier` ships no `Checkpoint`, so every score this benchmark
+  # published came from the model `patience` epochs PAST its own best -- measured at
+  # exactly 20, std 0.0, on all 140 490 folds of v5.
+  #
+  # `*_loss` => lower is better, anything else => higher is better.
+  # `stop_monitor` is settled; `selection_monitor` is not -- see pipelines.py for the
+  # A/B that has to run on held-out accuracy before the campaign commits to it.
+  selection_monitor: valid_loss
+  stop_monitor: valid_loss
+  # AdamW's denominator is `sqrt(v_hat_i) + eps`, so `eps` silently caps the step of
+  # any coordinate whose second moment falls below it -- the hypothesis for why the
+  # deep arms sit at chance on the small datasets. Torch's default, written down so it
+  # can be swept (`train.optimizer_eps=1e-6`). Do NOT raise it on the hypothesis alone:
+  # the `adam_eps_frac` column on every fit record measures the fraction of
+  # coordinates where it actually bites, and that measurement decides.
+  optimizer_eps: 1e-8
 
 # MOABB does its own per-fold parallelism off; the sweep parallelises across jobs.
 n_jobs: 1
