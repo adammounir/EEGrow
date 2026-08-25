@@ -45,6 +45,35 @@ def _n_params(module) -> int:
     return int(sum(p.numel() for p in module.parameters() if p.requires_grad))
 
 
+def _optimizer_stamp(net) -> dict | None:
+    """The optimizer hyperparameters this fit actually ran under.
+
+    Reconstructable from the config *for the run that produced it*, and not
+    reconstructable at all once records from several campaigns sit in one frame -- a
+    curve then carries no evidence of the learning rate or weight decay behind it.
+    ``eps`` in particular is the parameter under active discussion (whether AdamW's
+    default 1e-8 is too small for gradients this size), and it has never been set
+    explicitly, which is exactly the kind of thing a reader assumes was recorded.
+
+    Read off the live optimizer rather than the config, so it reports what ran and not
+    what was requested. First param group only: nothing here uses per-group settings,
+    and a stamp that silently reports one of several would be worse than none.
+    """
+    opt = getattr(net, "optimizer_", None)
+    if opt is None or not getattr(opt, "param_groups", None):
+        return None
+    group = opt.param_groups[0]
+    stamp = {"class": type(opt).__name__,
+             "n_param_groups": len(opt.param_groups),
+             "batch_size": getattr(net, "batch_size", None),
+             "criterion": type(getattr(net, "criterion_", None)).__name__}
+    for key in ("lr", "weight_decay", "eps", "betas", "momentum", "amsgrad"):
+        if key in group:
+            value = group[key]
+            stamp[key] = list(value) if isinstance(value, tuple) else value
+    return stamp
+
+
 class FitRecorder(Callback):
     """Append one JSON line per fit: per-epoch curve plus start/end capacity.
 
@@ -103,10 +132,18 @@ class FitRecorder(Callback):
         if width is not None:
             net.history.record("width", int(width))
 
+    #: Per-epoch fields lifted out of ``net.history``. The ``grow_*`` ones exist only
+    #: on epochs where a growth step actually ran, and ``grad_norm`` only when
+    #: :class:`GradientNorm` is in the callback list -- both are filtered per row, so a
+    #: fit without them writes a smaller record rather than failing.
+    CURVE_KEYS = ("epoch", "train_loss", "valid_loss", "valid_acc", "width", "n_params",
+                  "dur", "grad_norm", "grad_norm_max", "lr", "grow_s", "grow_applied",
+                  "grow_width_after", "grow_n_proposed", "grow_n_kept",
+                  "grow_first_order_improvement", "grow_eig_sum",
+                  "adam_atten_mean", "adam_atten_p05", "adam_eps_frac")
+
     def on_train_end(self, net, X=None, y=None, **kwargs):
-        keys = ("epoch", "train_loss", "valid_loss", "valid_acc", "width", "n_params",
-                "dur")
-        curve = [{k: h[k] for k in keys if k in h} for h in net.history]
+        curve = [{k: h[k] for k in self.CURVE_KEYS if k in h} for h in net.history]
         record = {
             **(self.meta or {}),
             "fit": self.fit_idx_,
@@ -119,6 +156,13 @@ class FitRecorder(Callback):
             "target_width": getattr(net.module_, "target_width", None),
             "params_start": self.params0_,
             "params_end": _n_params(net.module_),
+            # Which epoch's weights the fitted estimator actually carries, stamped by
+            # RestoreBestModel (None when nothing restored, i.e. the last epoch's).
+            # Without it `width_end` above is ambiguous after a restore: the model
+            # scored downstream may be narrower than the last epoch the curve shows.
+            "restored_epoch": getattr(net, "restored_epoch_", None),
+            "stop_reason": getattr(net, "stop_reason_", None),
+            "optimizer": _optimizer_stamp(net),
             "history": curve,
         }
         self.fit_idx_ += 1

@@ -36,22 +36,43 @@ def _loader(seed: int = 0) -> DataLoader:
     return DataLoader(TensorDataset(x, y), batch_size=16, shuffle=True)
 
 
-def _assert_grows(model, cap: int) -> None:
-    """One growth step: width strictly increases, stays <= cap, forward still works."""
+def _assert_grows(model, cap: int) -> dict:
+    """One growth step leaves the model coherent, whichever way the step decided.
+
+    This used to assert "the width strictly increases", which was only ever true
+    because ``grow_step`` applied the change unconditionally -- including at scaling
+    factor 0, where the neurons it splices in have identically zero weights and are
+    dead on arrival. Now that the step abstains at s=0, *not growing* is a legitimate
+    outcome, and on the random labels this loader produces it is often the correct
+    one: there is no signal for a new neuron to capture.
+
+    So the invariant is the one that actually matters either way -- the proposal ran,
+    the decision is internally consistent, the target cap holds, and the model still
+    computes -- and the two branches are checked separately rather than one of them
+    being asserted away.
+    """
     loader = _loader()
     x = next(iter(loader))[0]
     out_before = model(x)
     assert out_before.shape == (16, N_CLASSES)
 
     w0 = model.growable_width
-    loop.grow_step(model, loader, DEVICE)
+    result = loop.grow_step(model, loader, DEVICE)
     w1 = model.growable_width
 
-    assert w1 > w0, f"width did not grow ({w0} -> {w1})"
+    assert result["n_proposed"] >= 1, "gromo proposed no candidate neuron at all"
+    assert result["width_after"] == w1, "reported width disagrees with the model"
+    if result["applied"]:
+        assert result["s"] > 0, "applied a change at scaling factor 0"
+        assert w1 > w0, f"applied a change but width did not grow ({w0} -> {w1})"
+    else:
+        assert result["s"] == 0, "abstained at a non-zero scaling factor"
+        assert w1 == w0, f"abstained but width moved ({w0} -> {w1})"
     assert w1 <= cap, f"width {w1} exceeded target cap {cap}"
     out_after = model(x)
     assert out_after.shape == (16, N_CLASSES)
     assert torch.isfinite(out_after).all()
+    return result
 
 
 # --------------------------------------------------------------------- growth
@@ -364,3 +385,114 @@ def test_callback_skips_growth_on_empty_iterator():
     assert model.growable_width == width_before, "width changed despite no data"
     assert next(model.parameters()).device == device_before, "device not restored"
     assert not getattr(cb, "done_", False), "growth wrongly marked done on empty epoch"
+
+
+# --------------------------------------------------- s=0 abstention (dead neurons)
+def test_grow_step_abstains_instead_of_adding_dead_neurons(monkeypatch):
+    """When the line search picks s=0, the update is discarded, not applied.
+
+    gromo couples the scaling factor to every part of the change: at s=0 the optimal
+    delta is scaled by 0 and the new neurons are spliced in with identically zero
+    weights. A zero-in/zero-out neuron sits at an exact stationary point -- zero
+    activation, zero gradient -- so it stays zero for the rest of the fit while still
+    counting toward ``growable_width`` and ``n_params``. Applying that change is
+    strictly worse than skipping it: it burns width budget and inflates the parameter
+    axis the efficiency claim is measured on, and buys nothing.
+
+    Forced rather than hoped for: the line search is made to prefer s=0 outright, so
+    the test pins the behaviour instead of depending on which way random data falls.
+    """
+    model = _fresh_sccnet()
+    w0, p0 = model.growable_width, sum(p.numel() for p in model.parameters())
+
+    # Loss strictly increasing in s => 0.0 wins on merit, not on the tie-break.
+    def fake_evaluate(mdl, loader, crit, use_extended_model=True, device=None):
+        return 1.0 + float(mdl._growable_layers[0].scaling_factor.item()), None
+
+    monkeypatch.setattr(loop, "evaluate_model", fake_evaluate)
+
+    result = loop.grow_step(model, _loader(), DEVICE)
+
+    assert result["s"] == 0.0
+    assert result["applied"] is False
+    assert model.growable_width == w0, "abstained yet the width grew"
+    assert sum(p.numel() for p in model.parameters()) == p0, (
+        "abstained yet parameters were added -- these would be dead weights")
+    assert torch.isfinite(model(next(iter(_loader()))[0])).all()
+
+
+def test_callback_keeps_growing_after_an_abstention(monkeypatch):
+    """An abstention must not be read as "target reached".
+
+    ``GromoGrowth`` stops for good when a step leaves the width unchanged, which was
+    the right reading when the only way that happened was hitting the cap. An
+    abstention leaves the width unchanged too -- and if it latched ``done_`` the model
+    would freeze at its seed width after a single unlucky epoch, never to grow again.
+    """
+    from eegrow import GromoGrowth
+
+    model = _fresh_sccnet()
+    cb = GromoGrowth(grow_every=1, verbose=False)
+
+    def fake_evaluate(mdl, loader, crit, use_extended_model=True, device=None):
+        return 1.0 + float(mdl._growable_layers[0].scaling_factor.item()), None
+
+    monkeypatch.setattr(loop, "evaluate_model", fake_evaluate)
+
+    g = torch.Generator().manual_seed(1)
+    batches = [(torch.randn(8, C, T, generator=g),
+                torch.randint(0, N_CLASSES, (8,), generator=g)) for _ in range(5)]
+    net = _StubNet(model, batches, epoch=1, max_epochs=10)
+    cb.on_epoch_end(net, dataset_train=object())
+
+    assert model.growable_width == 4, "abstention should leave the width alone"
+    assert not cb.done_, "an abstention was mistaken for reaching the target width"
+
+
+# ------------------------------------------------ how many neurons a step proposes
+def test_relative_floor_beats_gromos_absolute_threshold():
+    """The neuron count must not hinge on where our gradients sit versus 1e-3.
+
+    gromo keeps candidates with ``s >= min(statistical_threshold, s.max())``, an
+    absolute cut defaulting to 1e-3. Half our arms have a singular-value spectrum
+    entirely below it, so the expression collapses to ``s >= s.max()`` and exactly one
+    neuron survives -- which is why ``grow_shallow`` needed 160 epochs to reach a
+    target its fits never had time for. The relative floor has to keep strictly more
+    than that on such a spectrum, and must still respect the width cap.
+    """
+    model = GrowingShallowFBCSPNet(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T,
+        n_filters_time=4, n_filters_spat=8, target_n_filters_time=16, device=DEVICE,
+    )
+    loader = _loader()
+
+    strict = loop.grow_step(model, loader, DEVICE, min_singular_ratio=1.0)
+    assert strict["n_candidates"] == 1, "ratio 1.0 should reproduce one-neuron steps"
+    assert strict["n_proposed"] > 1, (
+        "nothing to test: gromo proposed a single candidate before any thresholding")
+
+    model = GrowingShallowFBCSPNet(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T,
+        n_filters_time=4, n_filters_spat=8, target_n_filters_time=16, device=DEVICE,
+    )
+    loose = loop.grow_step(model, loader, DEVICE, min_singular_ratio=0.1)
+    assert loose["n_candidates"] > strict["n_candidates"], (
+        "the relative floor kept no more neurons than the one-per-step default")
+    assert model.growable_width <= 16, "the relative floor overshot the target width"
+
+
+def test_grow_step_caps_itself_at_target_width():
+    """``grow_step`` must respect ``target_width`` even when called without a cap.
+
+    The cap used to live only in the ``GromoGrowth`` callback, which was safe while a
+    step added one neuron at a time -- it could not overshoot in a single go. Now that
+    a step can propose eighteen, any direct caller (``loop.run_model``, the tests) has
+    to be protected by ``grow_step`` itself.
+    """
+    model = GrowingShallowFBCSPNet(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T,
+        n_filters_time=4, n_filters_spat=8, target_n_filters_time=6, device=DEVICE,
+    )
+    loop.grow_step(model, _loader(), DEVICE)  # no max_added passed on purpose
+    assert model.growable_width <= 6, (
+        f"width {model.growable_width} overshot target_width=6")
