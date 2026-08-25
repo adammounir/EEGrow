@@ -178,6 +178,162 @@ def loss_curves(cm: pd.DataFrame, order: list[str], eval_: str = "within_session
     return f
 
 
+# ------------------------------------------------------------- growth, in the curve
+def growth_epochs(g: pd.DataFrame) -> list[int]:
+    """Epochs of one fit at whose END the module grew, read off the width trajectory.
+
+    Derived from `width` rather than from the `grow_applied` flag on purpose: the flag
+    only exists on records written after the instrumentation landed, and the campaign
+    Stella wants to look at predates it. A width that increases between consecutive
+    epochs *is* a growth event, exactly and without inference.
+
+    Note the off-by-one that matters for reading these figures. `GromoGrowth` runs in
+    `on_epoch_end`, so epoch e's own loss and accuracy were computed BEFORE the neurons
+    were added: the first epoch that reflects a wider model is e+1. The marker is drawn
+    at e, and the effect, if any, is to its right.
+    """
+    g = g.sort_values("epoch")
+    w = g.width.to_numpy(dtype=float)
+    ep = g.epoch.to_numpy()
+    grew = np.flatnonzero(np.diff(w) > 0)
+    return [int(ep[i]) for i in grew]
+
+
+def growth_annotated_curves(curves: pd.DataFrame, model: str, dataset: str,
+                            eval_: str = "within_session", seed: int = 0,
+                            n_folds: int = 6):
+    """Per-fold training curves with a rule at every growth event -- Stella's ask.
+
+    Drawn PER FOLD and not as a mean, which is the whole point. Fold A grows at epoch 5
+    and fold B at epoch 7; average them and the discontinuity that the figure exists to
+    show is smoothed into a ramp. A pooled version of this figure would answer a
+    different question than the one asked, so there is not one.
+
+    Accuracy (left axis, solid) and validation loss (right axis, dashed) share a panel
+    because the interesting failure is when they disagree -- loss jumping while accuracy
+    holds is a model whose confidence broke and whose predictions have not yet, and that
+    is precisely the shape suspected at the growth events on the diverging folds.
+    """
+    blk = curves[(curves["eval"] == eval_) & (curves.dataset == dataset)
+                 & (curves.model == model) & (curves.seed == seed)]
+    fits = sorted(blk.fit.unique())[:n_folds]
+    f, axes = _panels(len(fits), 3, w=3.8, h=2.8)
+    for ax, fit in zip(axes, fits):
+        g = blk[blk.fit == fit].sort_values("epoch")
+        ax.plot(g.epoch, g.valid_acc, color=_color(model), lw=1.4)
+        ax.set_ylabel("valid acc", fontsize=7, color=_color(model))
+        ax2 = ax.twinx()
+        ax2.plot(g.epoch, g.valid_loss, color="0.35", lw=1.0, ls="--")
+        ax2.plot(g.epoch, g.train_loss, color="0.65", lw=0.8, ls=":")
+        ax2.set_ylabel("loss", fontsize=7, color="0.35")
+        for e in growth_epochs(g):
+            ax.axvline(e, color="0.15", lw=0.8, alpha=0.55)
+        w0, w1 = g.width.iloc[0], g.width.iloc[-1]
+        ax.set_title(f"fold {fit} — width {w0:.0f} → {w1:.0f}", fontsize=8)
+        ax.grid(alpha=0.25)
+        ax.set_xlabel("epoch", fontsize=7)
+    for ax in axes[len(fits):]:
+        ax.axis("off")
+    f.suptitle(f"{model} on {dataset} ({EVAL_LABEL[eval_]}, seed {seed}) — vertical "
+               "rules mark growth events. Solid: valid acc. Dashed: valid loss. "
+               "Dotted: train loss", fontsize=11)
+    f.tight_layout()
+    return f
+
+
+def growth_event_response(curves: pd.DataFrame, model: str, control: str,
+                          eval_: str = "within_session", window: int = 5,
+                          col: str = "valid_acc"):
+    """Peri-growth average: what the metric does around a growth event, over all folds.
+
+    "How does the accuracy change exactly at the moment you grow" is a question about an
+    average effect, and the per-fold figure above cannot answer it -- one fold is one
+    sample. So align every growth event at lag 0 and average across events, the same
+    construction as an evoked response, with the value at lag 0 subtracted so each event
+    contributes a *change* and not its level.
+
+    THE CONFOUND, AND THE CONTROL. Later epochs are better epochs: a net improves over
+    training whether or not anything was added to it, so a peri-event average of a
+    growing arm slopes upward for reasons that have nothing to do with growth. Reading
+    that slope as the effect of growth would be the whole error. Hence `control` -- a
+    FIXED arm, sampled at the same epoch numbers, which experiences the passage of
+    training and nothing else. The growth effect is the gap between the two curves, not
+    the height of either.
+
+    Shaded bands are 95% CI over events. Where the bands overlap, the data does not
+    separate growing from merely continuing.
+    """
+    def response(mod: str, at_growth: bool) -> pd.DataFrame:
+        blk = curves[(curves["eval"] == eval_) & (curves.model == mod)]
+        lags = range(-window, window + 1)
+        acc = {k: [] for k in lags}
+        for _, g in blk.groupby(["dataset", "seed", "fit"], sort=False):
+            g = g.sort_values("epoch")
+            series = dict(zip(g.epoch.to_numpy(), g[col].to_numpy(dtype=float)))
+            # The control has no growth events of its own, so it is sampled at the
+            # epochs where the growing arm would have had them: multiples of the same
+            # `grow_every`, inferred from the growing arm's own spacing below.
+            events = growth_epochs(g) if at_growth else _control_epochs(g, curves,
+                                                                        model, eval_)
+            for e in events:
+                base = series.get(e)
+                if base is None or not np.isfinite(base):
+                    continue
+                for k in lags:
+                    v = series.get(e + k)
+                    if v is not None and np.isfinite(v):
+                        acc[k].append(v - base)
+        rows = []
+        for k, vals in acc.items():
+            if len(vals) < 2:
+                continue
+            a = np.asarray(vals)
+            rows.append(dict(lag=k, mean=a.mean(), ci=1.96 * a.std(ddof=1) / len(a) ** .5,
+                             n=len(a)))
+        return pd.DataFrame(rows).sort_values("lag")
+
+    grow, ctrl = response(model, True), response(control, False)
+    f, ax = plt.subplots(figsize=(6.4, 4.0))
+    for df, lbl, c in ((grow, f"{model} (at its growth events)", _color(model)),
+                       (ctrl, f"{control} (fixed, same epochs)", "0.45")):
+        if df.empty:
+            continue
+        ax.plot(df.lag, df["mean"], color=c, lw=1.8, marker="o", ms=3.5, label=lbl)
+        ax.fill_between(df.lag, df["mean"] - df.ci, df["mean"] + df.ci, color=c,
+                        alpha=0.18, lw=0)
+    ax.axvline(0, color="0.15", lw=0.9)
+    ax.axhline(0, color="0.15", lw=0.7, ls=":")
+    ax.set_xlabel("epochs relative to the growth event (0 = last epoch before it)")
+    ax.set_ylabel(f"Δ {col} vs lag 0")
+    ax.grid(alpha=0.3)
+    ax.legend(fontsize=7)
+    n = int(grow.n.max()) if not grow.empty else 0
+    ax.set_title(f"Peri-growth response — {EVAL_LABEL[eval_]}, {n} events pooled over "
+                 "datasets/seeds/folds.\nThe effect of growth is the GAP to the fixed "
+                 "control, not the slope of either curve.", fontsize=9)
+    f.tight_layout()
+    return f
+
+
+def _control_epochs(g: pd.DataFrame, curves: pd.DataFrame, model: str,
+                    eval_: str) -> list[int]:
+    """Epochs at which to sample a fixed arm, matching the growing arm's cadence.
+
+    The growing arm grows every `grow_every` epochs; the control has to be read at the
+    same points in training or the comparison is between different parts of the curve.
+    The cadence is recovered from the data rather than hard-coded, so the control stays
+    matched if a config changes it.
+    """
+    sub = curves[(curves["eval"] == eval_) & (curves.model == model)]
+    spacings = []
+    for _, blk in sub.groupby(["dataset", "seed", "fit"], sort=False):
+        ev = growth_epochs(blk)
+        spacings += list(np.diff(ev))
+    every = int(np.median(spacings)) if spacings else 5
+    last = int(g.epoch.max())
+    return list(range(every, last + 1, max(1, every)))
+
+
 def curve_seed_band(cm: pd.DataFrame, dataset: str, eval_: str = "within_session"):
     """The same cell's curve for each of the five seeds, one panel per model.
 
