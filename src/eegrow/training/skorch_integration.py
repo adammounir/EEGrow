@@ -37,7 +37,7 @@ import logging
 import torch
 from skorch.callbacks import Callback
 
-from eegrow.training.loop import grow_step
+from eegrow.training.loop import MIN_SINGULAR_RATIO, grow_step
 
 logger = logging.getLogger(__name__)
 
@@ -78,17 +78,24 @@ class GromoGrowth(Callback):
         Only hold out a slice when the epoch has at least this many batches; below it
         the held-out side would be too small to be meaningful, so the line search
         falls back to the training batches. Default ``4``.
+    min_singular_ratio : float
+        How many neurons a step may propose, as a floor on their singular value
+        relative to the best candidate's. See ``loop.grow_step``: gromo's own cut is
+        absolute and sits above the entire spectrum of half our arms, which pins them
+        to one neuron per step regardless of the data.
     verbose : bool
         Log a one-line summary (``INFO``) at each growth.
     """
 
     def __init__(self, grow_every: int = 15, growth_device=None,
                  holdout_frac: float = 0.2, min_holdout_batches: int = 4,
+                 min_singular_ratio: float = MIN_SINGULAR_RATIO,
                  verbose: bool = True):
         self.grow_every = grow_every
         self.growth_device = growth_device
         self.holdout_frac = holdout_frac
         self.min_holdout_batches = min_holdout_batches
+        self.min_singular_ratio = min_singular_ratio
         self.verbose = verbose
         self.done_ = False
 
@@ -152,20 +159,61 @@ class GromoGrowth(Callback):
                 model.to(train_device)
             return
         stats_loader, val_loader = self._split_holdout(batches)
-        grow_step(model, stats_loader, growth_device,
-                  val_loader=val_loader, max_added=max_added)
+        result = grow_step(model, stats_loader, growth_device,
+                           val_loader=val_loader, max_added=max_added,
+                           min_singular_ratio=self.min_singular_ratio)
         if moved:
             model.to(train_device)
 
         width_after = model.growable_width
+        self._record(net, result)
+        if not result["applied"]:
+            # The line search picked s=0 and ``grow_step`` discarded the update rather
+            # than splice in dead neurons. The width is unchanged, but that is an
+            # *abstention*, not a cap: the statistics are re-estimated from scratch at
+            # the next opportunity and may well find a direction worth paying for. So
+            # ``done_`` stays False -- treating this as "reached the target" is how a
+            # model would freeze at width 8 after one unlucky epoch. The optimizer is
+            # untouched too: no parameter object changed.
+            if self.verbose:
+                logger.info("gromo epoch %d: abstained (s=0) at width %d", epoch,
+                            width_before)
+            return
         if width_after <= width_before:
             self.done_ = True  # reached the target cap: stop trying
             return
         self._refresh_optimizer(net)
         if self.verbose:
-            logger.info("gromo epoch %d: width %d -> %d (%s params)", epoch,
-                        width_before, width_after,
+            logger.info("gromo epoch %d: width %d -> %d (s=%.2g, %s params)", epoch,
+                        width_before, width_after, result["s"],
                         f"{sum(p.numel() for p in model.parameters()):,}")
+
+    @staticmethod
+    def _record(net, result) -> None:
+        """Stamp the growth decision on the current epoch of ``net.history``.
+
+        The scaling factor was the one quantity the whole step turns on and the one
+        quantity nothing kept: it was chosen and dropped inside ``grow_step``, so no
+        run of any campaign can say whether a growth event bought anything. Recorded
+        here rather than in ``FitRecorder`` because only this callback sees it, and on
+        the growth epoch only -- the reader must treat a missing key as "no growth
+        opportunity this epoch", which is what ``FitRecorder``'s ``k in h`` filter and
+        pandas' NaN both already do.
+
+        Guarded on ``record`` existing: the tests drive ``on_epoch_end`` on a stub net
+        whose ``history`` is a plain list, and instrumentation must not be the reason a
+        test double stops working.
+        """
+        record = getattr(getattr(net, "history", None), "record", None)
+        if record is None:
+            return
+        record("grow_s", result["s"])
+        record("grow_applied", bool(result["applied"]))
+        record("grow_width_after", result["width_after"])
+        record("grow_n_proposed", result["n_proposed"])
+        record("grow_n_kept", result["n_candidates"])
+        record("grow_first_order_improvement", result["first_order_improvement"])
+        record("grow_eig_sum", result["eigenvalues_extension_sum"])
 
     def _split_holdout(self, batches):
         """Split ``batches`` into (stats, line-search) loaders per ``holdout_frac``.
