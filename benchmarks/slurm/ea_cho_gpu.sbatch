@@ -21,20 +21,29 @@
 #
 #     EA_SUBJECTS=10 sbatch --array=0 benchmarks/slurm/ea_cho_gpu.sbatch
 #
-# gpu:ampere:1, NOT hopper. Every comparison here is paired within this campaign and
-# nothing pairs against the hopper grids, so the card only has to be constant across
-# these 6 cells -- and the partition holds ~18 ampere cards against 3 hopper, which is
-# the difference between draining in one wave and serialising.
+# gpu:hopper:1. This started as `ampere` on the reasoning that the partition holds ~18
+# ampere cards against 3 hopper, so the wide pool would drain in one wave. Measured on
+# 2026-08-26, that was wrong: all 18 ampere cards were allocated, one hopper card was
+# free, and slurm's own estimate for the ampere probe was a 37-hour wait. The pending
+# queue explains it -- nine array tasks asking for a generic `gres/gpu:1` with a 7-day
+# wall, which land on ampere and hold it. What matters is what is FREE, not what exists.
+#
+# Nothing here pairs against another campaign, so the card only has to be constant across
+# these 6 cells; hopper also happens to be what the bnci arm of this same replication ran
+# on, which makes stage 1 internally consistent rather than less so.
 #SBATCH --job-name=ea-cho
 #SBATCH --partition=gpu-best
-#SBATCH --gres=gpu:ampere:1
+#SBATCH --gres=gpu:hopper:1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --time=2-00:00:00
 #SBATCH --requeue
-#SBATCH --array=0-5%6
+# %3, because the partition has exactly 3 hopper cards. A higher throttle would not buy
+# any parallelism -- slurm caps at the hardware either way -- it would only queue the
+# extra tasks under our own name and make the run look stuck.
+#SBATCH --array=0-5%3
 #SBATCH --output=/scratch/amounir/eegrow_ea/logs/%A_%a.out
 #SBATCH --open-mode=append
 
