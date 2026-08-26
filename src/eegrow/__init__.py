@@ -14,6 +14,7 @@ from eegrow.models.growing_deepeeg import GrowingDeepEEGNet
 from eegrow.models.growing_eegnex import GrowingEEGNeX
 from eegrow.models.growing_sccnet import GrowingSCCNet
 from eegrow.models.growing_shallow import GrowingShallowFBCSPNet
+from eegrow.training.recording import FitRecorder
 from eegrow.training.skorch_integration import GromoGrowth
 
 __all__ = [
@@ -25,5 +26,6 @@ __all__ = [
     "GrowableSequential",
     "GromoGrowth",
     "euclidean_align",
+    "FitRecorder",
 ]
 __version__ = "0.1.0"

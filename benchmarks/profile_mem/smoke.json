@@ -1,0 +1,34 @@
+[
+  {
+    "model": "grow_shallow",
+    "dataset": "zhou2016",
+    "n_chans": 14,
+    "n_times": 1251,
+    "n_outputs": 3,
+    "peak_alloc_mib": 715.0,
+    "peak_reserved_mib": 748.0,
+    "card_total_mib": 10830.8,
+    "width_end": 40,
+    "target_width": 40,
+    "n_params": 32763,
+    "seconds": 16.8,
+    "device_name": "NVIDIA GeForce RTX 2080 Ti",
+    "error": null
+  },
+  {
+    "model": "grow_eegnex",
+    "dataset": "zhou2016",
+    "n_chans": 14,
+    "n_times": 1251,
+    "n_outputs": 3,
+    "peak_alloc_mib": 6085.2,
+    "peak_reserved_mib": 6406.0,
+    "card_total_mib": 10830.8,
+    "width_end": 8,
+    "target_width": 8,
+    "n_params": 52097,
+    "seconds": 18.6,
+    "device_name": "NVIDIA GeForce RTX 2080 Ti",
+    "error": null
+  }
+]

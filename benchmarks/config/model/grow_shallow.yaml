@@ -1,4 +1,20 @@
 # Growable ShallowFBCSPNet: temporal conv grows 8 -> 40 (the bd reference width).
+#
+# The arm with the largest gap to close (32 neurons) and the flattest candidate
+# spectrum, so it is where `min_singular_ratio` bites hardest. In v5 it reached width
+# 14 of 40 -- gromo's absolute `statistical_threshold` sits above this arm's entire
+# singular-value spectrum, which pinned it to one neuron per growth event (see
+# eegrow.training.loop.grow_step). With the relative floor, measured on bnci2014_001
+# subject 1, one seed, within-session:
+#
+#   grow_every=5  ratio=0.10   8 -> 23 / 40  in 59 epochs   acc@selected 0.690
+#   grow_every=5  ratio=0.01   8 -> 32 / 40  in 41 epochs   acc@selected 0.552
+#   grow_every=2  ratio=0.10   8 -> 27 / 40  in 41 epochs   acc@selected 0.741
+#
+# Reaching the target and scoring well pull in opposite directions here, and one
+# subject cannot arbitrate. Left on the shared default deliberately: a per-arm override
+# tuned on a single fold is how a benchmark stops measuring what it claims to. Override
+# with `model.min_singular_ratio=...` once the sweep says which way it goes.
 kind: growing
 arch: GrowingShallowFBCSPNet
 label: grow_shallow

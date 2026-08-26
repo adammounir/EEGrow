@@ -40,8 +40,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from aligned_paradigm import make_aligned_paradigm  # noqa: E402
 from pipelines import build_pipeline  # noqa: E402
 from utils import (  # noqa: E402
+    cache_config,
+    cap_cuda_fraction,
     logger,
     pick_device,
+    provenance,
     results_path,
     set_data_dir,
     set_seed,
@@ -81,6 +84,9 @@ def _make_evaluation(cfg, paradigm, dataset, hdf5_path):
         # never be served for an aligned run
         suffix=f"{cfg.suffix}_{tag}" if tag else str(cfg.suffix),
     )
+    cc = cache_config(cfg.get("cache"))
+    if cc:
+        common["cache_config"] = cc
     name = cfg.eval.name
     if name == "within_session":
         return mev.WithinSessionEvaluation(n_splits=int(cfg.eval.n_splits), **common)
@@ -169,7 +175,11 @@ def main(cfg: DictConfig) -> pd.DataFrame:
         fmin=float(cfg.paradigm.fmin), fmax=float(cfg.paradigm.fmax), **pkw)
 
     # ---- infer input dims once (on the first subject; cached afterwards) ----
-    X0, y0, _ = paradigm.get_data(dataset=dataset, subjects=[dataset.subject_list[0]])
+    # Goes through the cache as well: without it this probe alone re-derives one
+    # subject's epochs from the raw files in every single job of the grid.
+    _cc = cache_config(cfg.get("cache"))
+    X0, y0, _ = paradigm.get_data(dataset=dataset, subjects=[dataset.subject_list[0]],
+                                  **({"cache_config": _cc} if _cc else {}))
     n_chans, n_times = int(X0.shape[1]), int(X0.shape[2])
     n_outputs = int(len(set(y0)))
     sfreq = _infer_sfreq(cfg, dataset, paradigm, n_times)
@@ -177,36 +187,54 @@ def main(cfg: DictConfig) -> pd.DataFrame:
                 n_chans, n_times, n_outputs, sfreq)
 
     device = pick_device(cfg.model)
+    cap_cuda_fraction()
+    out_dir = results_path(str(cfg.results_dir), cfg.eval.name, dcfg.name)
+    logger.info("results -> %s", out_dir)
+    # The alignment tag belongs in `stem` HERE, not further down where the CSV is
+    # written, because `record_path` below is derived from it too. The raw and aligned
+    # arms of the ablation are the same (eval, dataset, model, seed) point, so an
+    # untagged stem makes the second arm overwrite the first -- silently, and for the
+    # fit records as well as for the results.
+    tag = _align_tag(cfg)
+    stem = f"{label}__{tag}__seed{cfg.seed}" if tag else f"{label}__seed{cfg.seed}"
+    # One JSONL per cell: this process is its only writer, so appends from the
+    # successive folds cannot interleave. Deep arms only -- the ML pipelines have
+    # neither epochs nor a width. See eegrow.training.recording for why the growth
+    # trajectory has to be written from inside the fit.
+    record_path = (None if cfg.model.kind == "ml"
+                   else out_dir / f"{stem}__fits.jsonl")
     pipeline = build_pipeline(
         OmegaConf.to_container(cfg.model, resolve=True),
         OmegaConf.to_container(cfg.train, resolve=True),
         n_chans=n_chans, n_times=n_times, n_outputs=n_outputs, sfreq=sfreq,
-        device=device, seed=int(cfg.seed))
+        device=device, seed=int(cfg.seed), record_path=record_path)
     logger.info("pipeline ready (device=%s)", device)
 
     # ---- evaluate ----------------------------------------------------------
-    out_dir = results_path(cfg.get("results_dir"), cfg.eval.name, dcfg.name)
-    logger.info("results -> %s", out_dir)
     evaluation = _make_evaluation(cfg, paradigm, dataset, out_dir)
     results = evaluation.process({label: pipeline})
 
     results["eval"] = cfg.eval.name
     results["model"] = label
     results["seed"] = int(cfg.seed)
-    # carried in the rows too: the ablation is read by pairing raw vs aligned, and a
-    # column survives a merge where a filename convention does not
+    # The ablation arm, carried in the rows and not only in the filename: a column
+    # survives a concat where a naming convention does not, and pairing raw against
+    # aligned is the whole point of the arm.
     results["align"] = str(cfg.align.name)
     results["align_level"] = str(cfg.align.get("level") or "")
-    # The preprocessing regime, recorded in the result itself. A grow_X/bd_X pair only
-    # measures growth if both arms saw the same sampling rate, and so far that had to
-    # be reconstructed after the fact from hydra's run directories -- a lossy record
-    # that got the answer wrong in both directions (see regime_guard). sfreq and
-    # n_times together pin the input tensor: same window, same rate, hence a fixed
-    # temporal kernel spanning the same duration.
+    # Regime + provenance ON THE ROW. `sfreq` is the rate the epochs were actually
+    # served at, not the rate a config says they should have been: a pair split across
+    # two rates measures preprocessing, not growth, and that is exactly what the
+    # published grid could no longer rule out once its Hydra records were deleted.
     results["sfreq"] = float(sfreq)
-    results["n_times"] = int(n_times)
-    tag = _align_tag(cfg)
-    stem = f"{label}__{tag}__seed{cfg.seed}" if tag else f"{label}__seed{cfg.seed}"
+    results["resample_cfg"] = (float(dcfg.resample) if dcfg.get("resample") else None)
+    results["fmin"] = float(cfg.paradigm.fmin)
+    results["fmax"] = float(cfg.paradigm.fmax)
+    results["n_chans_in"] = n_chans
+    results["n_times_in"] = n_times
+    results["device"] = device
+    for k, v in provenance().items():
+        results[k] = v
     results.to_csv(out_dir / f"{stem}.csv", index=False)
     joblib.dump(results, out_dir / f"{stem}.joblib")
     logger.info("saved %d rows -> %s", len(results), out_dir / f"{stem}.csv")

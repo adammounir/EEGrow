@@ -35,9 +35,42 @@ def pick_device(model_cfg) -> str:
     import torch
     if torch.cuda.is_available():
         return "cuda"
+    # Falling back to CPU is right on a laptop and wrong under the packed runner,
+    # which pins every deep cell to a card with CUDA_VISIBLE_DEVICES. If that
+    # variable is set and CUDA is still unavailable, the device it names does not
+    # exist -- and the cell would run ~20x slower on CPU while producing a
+    # perfectly ordinary CSV that nothing downstream could tell apart.
+    #
+    # Not hypothetical: margpu021 advertises gpu:turing:3 to SLURM and carries
+    # two cards. G came from SLURM_GPUS_ON_NODE, so a third of the tenants were
+    # pinned to device 2, silently dropped to CPU, and turned an 8-minute
+    # allocation into a 56-minute one with both real GPUs at 0 % utilisation.
+    if os.environ.get("CUDA_VISIBLE_DEVICES"):
+        raise RuntimeError(
+            f"CUDA_VISIBLE_DEVICES={os.environ['CUDA_VISIBLE_DEVICES']!r} but "
+            "torch.cuda.is_available() is False: the pinned device does not "
+            "exist. Refusing to fall back to CPU.")
     if torch.backends.mps.is_available():
         return "mps"
     return "cpu"
+
+
+def cap_cuda_fraction() -> None:
+    """Honour ``EEGROW_CUDA_FRACTION``: a per-process ceiling on the device.
+
+    Only meaningful when several processes share one GPU. The caching allocator
+    never hands a block back, so without a ceiling the first co-tenant to run a
+    large batch keeps the card and its neighbours OOM at some arbitrary later
+    point. Declaring the fraction turns that into a failure of the process that
+    actually exceeded its share, at the moment it exceeds it.
+    """
+    frac = os.environ.get("EEGROW_CUDA_FRACTION")
+    if not frac:
+        return
+    import torch
+    if torch.cuda.is_available():
+        torch.cuda.set_per_process_memory_fraction(float(frac))
+        logger.info("per-process CUDA memory fraction capped at %s", frac)
 
 
 def set_data_dir(data_dir: str | None) -> None:
@@ -58,6 +91,38 @@ def set_data_dir(data_dir: str | None) -> None:
     logger.info("dataset cache -> %s", path)
 
 
+def cache_config(cfg) -> dict | None:
+    """MOABB ``cache_config`` for the preprocessed epochs, or ``None`` when off.
+
+    Why this matters more than any GPU tuning: the grid asks each dataset for the
+    *same* epochs 70 times (14 pipelines x 5 seeds), and without a cache MOABB
+    re-reads the raw files and redoes the band-pass, the resampling and the
+    epoching every single time -- single-threaded, on the CPU, while the GPU
+    waits. Caching the epochs makes the first job pay for the dataset and the
+    other 69 read an array back.
+
+    ``save_epochs`` and ``save_array`` are both on: the array is what
+    ``get_data`` actually returns, and the epochs level is what a
+    ``return_epochs`` evaluation would want. The raw level is *not* cached -- it
+    would duplicate the 112 GB of ``MNE_DATA`` for no gain, since nothing here
+    re-reads raws once the epochs exist.
+
+    The ``overwrite_*`` flags stay False on purpose: a cache that rewrites itself
+    on every hit is not a cache. Invalidating it is a deliberate act (delete the
+    directory), because the cache key covers the preprocessing parameters and a
+    silent overwrite is exactly how a mixed-preprocessing grid happens.
+    """
+    if cfg is None or not cfg.get("enabled"):
+        return None
+    cc = {"save_raw": False, "save_epochs": True, "save_array": True, "use": True,
+          "overwrite_raw": False, "overwrite_epochs": False,
+          "overwrite_array": False}
+    if cfg.get("path"):
+        cc["path"] = str(Path(str(cfg.path)).expanduser())
+    logger.info("epoch cache ON -> %s", cc.get("path", "MNE_DATA default"))
+    return cc
+
+
 def default_results_root() -> Path:
     """``benchmarks/results``, located from this file rather than from the cwd.
 
@@ -72,6 +137,35 @@ def default_results_root() -> Path:
     ``results_dir=`` on the command line still wins.
     """
     return Path(__file__).resolve().parent / "results"
+
+
+def provenance() -> dict:
+    """Package versions and the eegrow commit, to be stamped on every result row.
+
+    Why on the row and not in a log. The sampling rate of the production grid was only
+    ever provable from the Hydra run records, and an ``rsync --delete`` removed them:
+    1170 cells (55.7 %) became untraceable after the fact, not because anything was
+    wrong with them but because the evidence lived somewhere else. Data that carries
+    its own regime cannot lose it. The cost is a handful of constant columns.
+
+    Everything here is best-effort: a missing git binary or an unimportable package
+    must never fail a benchmark cell, so each lookup degrades to ``None``.
+    """
+    import subprocess
+
+    info: dict = {}
+    for mod in ("moabb", "braindecode", "torch", "gromo", "skorch", "sklearn", "mne"):
+        try:
+            info[f"v_{mod}"] = __import__(mod).__version__
+        except Exception:
+            info[f"v_{mod}"] = None
+    try:
+        info["eegrow_sha"] = subprocess.run(
+            ["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=5, check=True).stdout.strip()
+    except Exception:
+        info["eegrow_sha"] = None
+    return info
 
 
 def results_path(results_dir, eval_name: str, dataset: str) -> Path:
