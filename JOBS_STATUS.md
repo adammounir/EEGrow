@@ -83,13 +83,62 @@ résultats sous `results_cho/`.
 Dépouillement : `analysis/ea_replication.py --root results_cho/results`.
 **Les 6 cellules tournent en parallèle**, une carte chacune, réparties sur deux jobs :
 
-| cellules | job | carte | lancé | s/fold mesuré | fin projetée |
-|---|---|---|---|---|---|
-| `bd_eegnet` × {none, euclidean} | **501914**_0-1 | H100 NVL (margpu012) | 15:52 UTC | 448 / 477 | **22:30 / 22:52 UTC** |
-| `bd_shallow` × {none, euclidean} | 501729_2-3 | RTX 2080 Ti (margpu019/020) | 14:48 UTC | 432 / 410 | 21:12 / 20:59 UTC |
-| `bd_deep4` × {none, euclidean} | 501729_4-5 | RTX 2080 Ti (margpu021/022) | 14:48 UTC | 366 / 367 | 20:13 / 20:14 UTC |
+| cellules | job | partition | carte | lancé | s/fold | fin projetée |
+|---|---|---|---|---|---|---|
+| `bd_eegnet` × {none, euclidean} | **502496**_0-1 | **tau** | RTX 2080 Ti (margpu017/019) | 17:24 UTC | ~740 | **~04:15 UTC (27/08)** |
+| `bd_shallow` × {none, euclidean} | 501729_2-3 | gpu-best | RTX 2080 Ti (margpu019/020) | 14:48 UTC | 432 / 410 | 21:12 / 20:59 UTC |
+| `bd_deep4` × {none, euclidean} | 501729_4-5 | gpu-best | RTX 2080 Ti (margpu021/022) | 14:48 UTC | 366 / 367 | 20:13 / 20:14 UTC |
 
-**Mur de la campagne : 22:52 UTC** (≈ 00h52 Paris), contre 01:30 UTC avant la bascule.
+**Mur de la campagne : ~04:15 UTC le 27/08.** Les quatre cellules turing finissent entre
+20:13 et 21:12 ; le mur, c'est la paire `bd_eegnet` redémarrée à zéro à 17:24.
+
+### `gpu-best` est une partition **préemptible** — c'est ce qui a cassé la paire eegnet
+
+Découvert à 17:20 UTC après que la surveillance a été interrompue. `scontrol` :
+
+| partition | PriorityTier | PreemptMode | GraceTime |
+|---|---|---|---|
+| `gpu-best` | **1** | REQUEUE | **0** |
+| `tau` | **100** | REQUEUE | 0 |
+
+avec `PreemptType=preempt/partition_prio` au niveau du cluster. Le « best » de `gpu-best`
+veut dire *best effort* : n'importe quel job d'une partition de tier supérieur évince le
+nôtre **instantanément**, sans délai de grâce, et `#SBATCH --requeue` le relance — **au
+fold 0**, parce que le garde de reprise est au niveau du CSV et qu'il n'existe aucun
+point de contrôle par fold. Sur une cellule de 6.7 h préemptée toutes les ~1.5 h, ce
+n'est pas un retard, c'est une boucle infinie : la cellule ne finit jamais.
+
+Trace de 501914 dans les logs : `restart=0` à 15:53 sur margpu012, `restart=1` à 17:09
+(les **deux** tâches en même temps), `restart=2` à 17:12 sur margpu013 — et la tâche 1
+repassée `PD (Resources)`, sans carte du tout. Les 3 seules cartes hopper du cluster
+(margpu012 ×2, margpu013 ×1) étaient prises. À ce moment la paire eegnet était dans le
+pire état possible : un bras sur H100, l'autre à l'arrêt.
+
+**Le fait qui change tout : `id` renvoie `gid=200434(tau)`.** On a accès à la partition
+`tau`, tier 100, 15 nœuds GPU — et margpu[017-022], où tournaient déjà nos quatre
+cellules turing, **sont des nœuds tau**. On faisait donc tourner la campagne en
+best-effort sur du matériel où on est prioritaires, en se laissant évincer par des gens
+de tier inférieur au nôtre. À retenir pour toute campagne future : **`--partition=tau`,
+pas `gpu-best`.**
+
+> **Ce qui a été fait, et ce qui a été délibérément laissé.** La paire eegnet est
+> repartie sur `tau` (502496, margpu017 + margpu019, deux RTX 2080 Ti — même génération,
+> la contrainte par paire est tenue), puis 501914 a été annulé, dans cet ordre.
+> Coût du déplacement : ~11 min de calcul, contre une paire qui pouvait ne jamais finir.
+> Prix payé : turing au lieu de hopper, ×1.60, d'où le mur à 04:15 au lieu de 22:52 —
+> mais 22:52 était un mur fictif, il supposait qu'aucune préemption n'arrive.
+>
+> Les quatre cellules `bd_shallow`/`bd_deep4` **n'ont pas été touchées** alors qu'elles
+> sont exposées au même risque. Elles ont 2 h 45 de calcul acquis et il leur reste 3 h ;
+> les déplacer, c'est jeter ces 2 h 45 avec certitude pour éviter un risque qui ne s'est
+> pas matérialisé en 2 h 45. Si l'une est préemptée, elle repart de zéro de toute façon —
+> c'est à ce moment-là qu'il faudra la resoumettre sur `tau`, et pas avant : on ne perd
+> alors rien du tout.
+>
+> Fits de la période hopper archivés en `*.pre_tau.jsonl.bak` (21 et 13 lignes) — ils
+> mélangent trois générations de cartes et ne valent rien pour une analyse de coût. La
+> science est intacte : elle est dans le CSV, écrit en fin de cellule, et aucun CSV
+> n'existait au moment de la bascule.
 
 > **Relevé à 16:46 UTC**, `n_train=10320`, `epochs=200` sur les 6 cellules — le budget
 > complet s'applique bien, `patience=200` neutralise l'arrêt anticipé comme prévu. Folds
