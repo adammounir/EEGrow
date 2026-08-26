@@ -15,7 +15,51 @@ bnci2014_001, `dataset.paradigm=LeftRightImagery` (2 classes — notre config li
 - **501098** (array `1`) = la sonde, `bd_eegnet euclidean seed42` : **COMPLETED**, wall
   **450 s**, mean 0.8220, 18 lignes. Elle compte dans le lot (le sbatch saute les
   cellules déjà faites).
-- **501101** (array `0,2-17%6`) = les 17 restantes.
+- **501101** (array `0,2-17%6`) = les 17 restantes. **TERMINÉ, 18/18 COMPLETED.**
+
+### Résultat — **SOUS-PUISSANCE, pas échec**
+
+| | Δ (EA − raw) | IC 95 % | p | win |
+|---|---|---|---|---|
+| poolé (3 nets) | **+3.17 pp** | [−0.34, +7.32] | 0.25 | 67 % |
+| `bd_shallow` | +3.98 | [+1.31, +7.04] | **0.012** | **89 %** (8/9) |
+| `bd_deep4` | +2.77 | [−2.14, +8.61] | 0.73 | 56 % |
+| `bd_eegnet` | +2.75 | [−0.79, +6.52] | 0.25 | 67 % |
+
+Écart-type **entre sujets** 6.28 pp → **MDE à n=9 = +6.69 pp**, au-dessus de la cible
++5.05. Il faudrait **13 sujets** ; ce dataset en a 9. Neuf sujets ne peuvent pas détecter
+l'effet publié même reproduit à l'identique. Et ce n'est **pas** une affaire de seeds :
+passer de 1 à 2 seeds n'a réduit la largeur de l'IC que de 8.2 à 7.5 pp. Voir
+[[underpowered-not-null]].
+
+**Où le gain vit** (par sujet retenu, poolé) : l'EA paie exactement où elle devrait —
+sujet 5 (raw 59.3) **+14.7 pp**, sujet 7 (raw 67.8) **+12.0** ; rien sur les forts
+(sujet 8 raw 96.5 → +0.06, sujet 9 raw 84.3 → −2.7). Spearman(baseline, gain) = −0.467.
+
+**Notre baseline est à 79.82 contre 68.93 dans le papier.** Le protocole corrigé a déjà
+sorti la plupart des sujets du régime où l'alignement a du bruit inter-sujet à retirer.
+Ce n'est pas un défaut de notre EA : c'est que le +5.05 pp publié est en partie un proxy
+de sous-entraînement.
+
+## Étage 1 bis — réplication EA sur **cho2017** (52 sujets) — SLURM **501230** (sonde)
+
+Même checkout `eegrow_ea`, sbatch `benchmarks/slurm/ea_cho_gpu.sbatch`, résultats sous
+`results_cho/`. **`gpu:ampere:1`** et pas hopper : la partition n'a que 3 cartes hopper
+(d'où la lenteur de 501101) contre ~18 ampere, et rien ici ne s'apparie contre les
+grilles hopper.
+
+6 cellules = 3 nets × {none, euclidean} × **1 seed**. Une seule seed parce qu'à n=52 le
+MDE tombe à ~2.4 pp : la puissance vient des sujets, pas des seeds — l'inverse exact du
+raisonnement sur bnci, et pour la même raison. cho2017 est nativement 2 classes
+(`LeftRightImagery` dans sa config), et ses 52 sujets sont déjà dans le cache MNE partagé
+(`MNE-gigadb-data`, 10 Go) : aucun job GPU ne télécharge.
+
+**501230 = sonde de chronométrage à 10 sujets** (`EA_SUBJECTS=10`), écrite dans
+`results_cho_probe10/` — elle change l'estimand (un LOSO à 10 sujets entraîne sur 9, pas
+sur 51) et ne doit jamais être confondue avec la campagne. Le coût LOSO va en **n(n−1)**,
+donc 9 → 52 sujets n'est pas ×5.8 mais ~×30, avant de compter les 64 canaux de cho contre
+22 pour bnci. Extrapolation à lire sur la sonde, pas sur cette arithmétique — mon premier
+chiffrage bnci était déjà 8× trop haut.
 
 **Garde-fou fixé d'avance** — Junqueira, Aristimunha, Chevallier & de Camargo,
 arXiv 2401.10746, Table 2, BNCI2014_001 LOSO 2 classes :
