@@ -35,6 +35,34 @@ train:
   # A/B that has to run on held-out accuracy before the campaign commits to it.
   selection_monitor: valid_loss
   stop_monitor: valid_loss
+  # Epochs without improvement on `stop_monitor` before the fit ends. null => the
+  # historical max(15, max_epochs//10) = 20. Set it >= max_epochs to disable early
+  # stopping outright, which is the only way to measure what a net would have reached
+  # if simply left to train -- on `bd_deep4` the difference is not academic, its
+  # validation loss bottoms at epoch 4 and patience 20 ends the fit at epoch 24 while
+  # the train loss is still descending.
+  patience: null
+  # Learning-rate schedule: null (constant, what the whole v5 grid ran) or `cosine`.
+  # KEEP IT null. The knob exists because it was a live hypothesis and it was tested;
+  # the test says the schedule HURTS. On the 2x2 budget/selection square (bnci2014_001
+  # within_session, 36 paired units) cosine scores 0.4276 against 0.4818 for the
+  # constant lr once both are given the full budget.
+  #
+  # Two hypotheses died on the way there, both worth keeping so they are not re-run.
+  # (1) Gradient steps per epoch: Spearman(batches/epoch, final train loss) = 0.095.
+  # (2) "bd_deep4 is the only net that cannot fit its own training data" -- median
+  # final train loss 0.24 against 0.009 for `fix_deepeeg`, which read as instability
+  # and motivated annealing. That was an artefact of `patience` above, not a property
+  # of the net: at full budget the same net reaches 0.1366 against 1.1874 at the early
+  # stop. There was no capacity problem to anneal away.
+  #
+  # T_max is `max_epochs`, i.e. the schedule is written for the full budget, so a
+  # cosine arm that stops early has spent only the flat top and decayed by ~20% --
+  # which is why the two arms were indistinguishable (+0.0018) at patience 20 and only
+  # separated once `patience >= max_epochs` let the cosine actually anneal (lr_final
+  # 0.0000). Read `lr_final` on the fit record before concluding a schedule did
+  # nothing.
+  lr_schedule: null
   # AdamW's denominator is `sqrt(v_hat_i) + eps`, so `eps` silently caps the step of
   # any coordinate whose second moment falls below it -- the hypothesis for why the
   # deep arms sit at chance on the small datasets. Torch's default, written down so it

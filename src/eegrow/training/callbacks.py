@@ -63,20 +63,31 @@ class RestoreBestModel(Callback):
 
     WHY A SEPARATE MONITOR FROM THE STOPPING RULE
     ---------------------------------------------
-    The default monitor is ``valid_loss`` even when the score reported downstream is
-    accuracy, and that is on purpose. Internal validation splits here are tiny (8 of
-    12 datasets hold fewer than 32 trials, three hold under 11), so validation accuracy
-    moves in steps of 1/n_valid -- 0.0213 on bnci2014_001's 46-trial split. Its argmax
-    is an early lucky peak far more often than it is a real optimum: on that dataset
-    the accuracy peaks at epoch 30 while the loss is still falling until epoch 38, and
-    the loss is still improving after the accuracy peak in 65 % of folds. A continuous
-    criterion picks the better model out of the same trajectory.
+    Stopping and selection are separate arguments because they can disagree, and the
+    benchmark measured that they do. The original argument for defaulting BOTH to
+    ``valid_loss`` was that validation splits here are tiny (8 of 12 datasets hold
+    fewer than 32 trials, three hold under 11), so validation accuracy moves in steps
+    of 1/n_valid -- 0.0213 on bnci2014_001's 46-trial split -- and its argmax looked
+    like a lucky early peak rather than a real optimum.
 
-    Note the trade-off honestly: a net can have rising validation loss while its
-    accuracy still climbs (confident-but-wrong predictions inflate the loss first).
-    ``monitor="valid_acc", lower_is_better=False`` restores the accuracy criterion for
-    anyone who wants to measure that, and the recorded ``restored_epoch_`` makes the
-    choice auditable after the fact rather than implicit.
+    That argument is WRONG for selection, and the 2x2 budget/selection square says so
+    on 36 paired units (bnci2014_001 within_session, ``bd_deep4``)::
+
+                          sel=valid_loss   sel=valid_acc
+        patience  20          0.3501           0.3390
+        patience 200          0.4074           0.4818
+
+    The two full-budget cells have bit-identical trajectories and differ only in which
+    epoch is handed back: ``valid_loss`` restores epoch 5, the accuracy peak is at
+    epoch 158. So the peak is not early -- it was the early STOP that made it look
+    early. The failure mode named in the docstring above is real and it is what breaks
+    the loss: a net that becomes confident-and-wrong sees its loss explode (1.15 ->
+    3.57 here) while its accuracy keeps climbing, and on 46 trials a handful of such
+    trials dominates the mean. ``valid_loss`` is a broken proxy on splits this small,
+    twice over -- as the stopping rule and as the selection rule.
+
+    ``restored_epoch_`` is recorded so the choice stays auditable after the fact rather
+    than implicit.
 
     Parameters
     ----------

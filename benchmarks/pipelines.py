@@ -160,13 +160,28 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
     # beat an early lucky peak. On a continuous loss the same threshold works as
     # designed. Patience is unchanged: it was never the problem, the criterion was.
     #
-    # NOT SETTLED: whether the *selection* should also be on the loss. The argument for
-    # it is resolution; the argument against is that loss and accuracy decouple, and a
-    # first check on bnci2014_001 subject 1 went both ways -- valid_acc at the restored
-    # epoch beat the last epoch by +0.034/+0.017 on grow_eegnex/grow_sccnet and lost by
-    # -0.052 on grow_shallow/grow_deep. n=4, so that settles nothing either way, but it
-    # is enough to stop us from hard-coding the answer. Hence the knob, defaulting to
-    # the loss, with the A/B to be run on held-out accuracy before the campaign.
+    # SETTLED SINCE, and the other way: the *selection* must NOT be on the loss. The
+    # 2x2 square (`exp_deep4_budget.py`, 36 paired units) has to be read as a square,
+    # because the two knobs interact (+0.0854, p=1.1e-07) and neither effect can be
+    # quoted alone::
+    #
+    #                       sel=valid_loss   sel=valid_acc
+    #     patience  20          0.3501           0.3390
+    #     patience 200          0.4074           0.4818
+    #
+    # The two full-budget cells train identically and differ only in the epoch handed
+    # back -- `valid_loss` restores epoch 5, the accuracy peak is at epoch 158. So the
+    # loss is a broken proxy on a 46-trial split as a SELECTION rule too, for the
+    # reason already named above: confident-and-wrong trials blow up a mean loss long
+    # before they touch an argmax of accuracy. Generalised across the other 8 arms
+    # (SLURM 500573, `analysis/budget_models.py`): the budget helps all 9 without
+    # exception, selection alone is noisy, and 6 of 9 arms were undertrained by the
+    # shipped default at subject level.
+    #
+    # The default below is still `valid_loss` ONLY because flipping it re-dates every
+    # result in `results_v5_published/`; the corrected protocol is passed explicitly
+    # (`train.patience=200 train.selection_monitor=valid_acc`) until that migration is
+    # done. Do not read the default as the recommendation -- it is the opposite.
     #
     # For a growing model there is a second, structural catch: the best epoch can be a
     # NARROWER model than the last one (grow_shallow restored width 19 against a final
@@ -181,9 +196,47 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
         from eegrow import FitRecorder
         callbacks.append(("record", FitRecorder(
             record_path, meta={"model": model_cfg.get("label"), "seed": seed})))
+    # LR schedule, AFTER every instrumentation callback and before EarlyStopping.
+    # The position is the same argument as `eps` above: `grad` and `eps` must describe
+    # the optimizer that trained the epoch just finished, and stepping the scheduler
+    # first would have them report the *next* epoch's step size.
+    schedule = train_cfg.get("lr_schedule") or None
+    if schedule is not None:
+        if kind == "growing":
+            # Not a limitation worth hiding behind a warning. skorch's LRScheduler
+            # resolves `net.optimizer_` once, in on_train_begin; GromoGrowth calls
+            # initialize_optimizer() at every growth step, so from the first growth
+            # onward the scheduler would anneal an optimizer that no longer trains
+            # anything -- silently, and with a perfectly ordinary curve to show for it.
+            # Growth-aware rebinding is a separate piece of work; until it exists,
+            # refuse rather than publish a schedule that stopped applying at epoch 10.
+            raise NotImplementedError(
+                f"train.lr_schedule={schedule!r} is not supported on growing arms: "
+                "GromoGrowth rebuilds the optimizer and skorch's LRScheduler would "
+                "keep annealing the discarded one. Fixed arms only for now.")
+        if schedule != "cosine":
+            raise ValueError(f"unknown train.lr_schedule={schedule!r} (null|cosine)")
+        from skorch.callbacks import LRScheduler
+        callbacks.append(("lrsched", LRScheduler(
+            policy=torch.optim.lr_scheduler.CosineAnnealingLR,
+            T_max=int(train_cfg["max_epochs"]), eta_min=0.0,
+            step_every="epoch")))
+
     stop_monitor = str(train_cfg.get("stop_monitor", "valid_loss"))
+    # `patience` is a knob rather than a derived constant because it is the quantity
+    # that decides how much of the budget a fit actually gets, and on `bd_deep4` that
+    # turned out to be the whole story: measured on bnci2014_001 within, subject 1, its
+    # validation loss bottoms at epoch 4 and then explodes 1.11 -> 3.27 while the TRAIN
+    # loss is still falling, so patience 20 ends the run at epoch 24. Setting it >=
+    # `max_epochs` disables early stopping outright (skorch needs `patience` misses in
+    # a row and there are only `max_epochs - 1` epochs after the first), which is the
+    # only way to measure what the net would have reached if simply left to train.
+    # null => the historical default, so every existing config keeps its behaviour.
+    patience = train_cfg.get("patience")
+    patience = (max(15, int(train_cfg["max_epochs"]) // 10) if patience is None
+                else int(patience))
     callbacks.append(
-        EarlyStopping(patience=max(15, int(train_cfg["max_epochs"]) // 10),
+        EarlyStopping(patience=patience,
                       monitor=stop_monitor,
                       lower_is_better=stop_monitor.endswith("loss")))
 
