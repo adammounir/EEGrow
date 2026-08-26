@@ -41,11 +41,18 @@ sorti la plupart des sujets du régime où l'alignement a du bruit inter-sujet �
 Ce n'est pas un défaut de notre EA : c'est que le +5.05 pp publié est en partie un proxy
 de sous-entraînement.
 
-## Étage 1 bis — réplication EA sur **cho2017** (52 sujets) — SLURM **501357** — EN COURS
+## Étage 1 bis — réplication EA sur **cho2017** (52 sujets) — SLURM **501729** — EN COURS
 
-Lancé le 26/08 à 13:20 UTC. Même checkout `eegrow_ea` (au commit `7cbaec1`), sbatch
+Lancé le 26/08 à **14:48 UTC**, checkout `eegrow_ea` au commit `ad5b85b`, sbatch
 `benchmarks/slurm/ea_cho_gpu.sbatch`, résultats sous `results_cho/`.
 Dépouillement : `analysis/ea_replication.py --root results_cho/results`.
+**Les 6 cellules tournent en parallèle**, chacune sur une RTX 2080 Ti distincte
+(margpu017/019/019/020/021/022) — vérifié cellule par cellule dans les logs.
+Fin attendue **~01:30 UTC le 27/08** (≈ 03h30 Paris).
+
+> **501357 remplace/annulé.** Premier lancement à 13:20 UTC sur `gpu:hopper:1` : 1 cellule
+> tournait, 5 attendaient. Annulé à 14:47 après ~1h30 de cellule 0. Voir l'encadré GPU
+> ci-dessous — c'est la seule chose qui a changé, la science est identique.
 
 6 cellules = 3 nets × {none, euclidean} × **1 seed**. Une seule seed parce qu'à n=52 le
 MDE tombe à ~2.4 pp : la puissance vient des sujets, pas des seeds — l'inverse exact du
@@ -55,16 +62,53 @@ raisonnement sur bnci, et pour la même raison. cho2017 est nativement 2 classes
 `Cho2017().subject_list` fait bien **52** entrées, aucune exclusion — donc n=52 pour la
 puissance, pas 49.
 
-**`gpu:hopper:1`, après avoir corrigé le mauvais critère.** J'avais épinglé `ampere` sur
-l'inventaire : ~18 cartes ampere contre 3 hopper, donc le pool large draine en une vague.
-Mesuré le 26/08, c'est faux — les 18 ampere étaient **toutes allouées**, une hopper était
-libre, et l'estimation Slurm pour la sonde ampere donnait **37 h d'attente** (501230,
-annulé). La file l'explique : neuf tâches d'un autre utilisateur demandent un
-`gres/gpu:1` générique avec un mur de 7 jours, tombent sur ampere et le tiennent. **Le
-critère est ce qui est libre, pas ce qui existe.** Rien ici ne s'apparie contre une autre
-grille, donc la seule exigence est que la carte soit constante sur les 6 cellules ; hopper
-l'est, et c'est en plus ce sur quoi le bras bnci a tourné. Throttle `%3` = le nombre de
-cartes hopper ; plus haut n'achète aucun parallélisme.
+### Le choix de la carte — deux erreurs successives, corrigées par la mesure
+
+**`ampere` → `hopper` → `turing`.** Le pin initial venait de l'inventaire : ~18 cartes
+ampere contre 3 hopper, donc le pool large draine en une vague. Faux — les 18 ampere
+étaient **toutes allouées**, et l'estimation Slurm pour la sonde ampere donnait 37 h
+d'attente (501230, annulé). D'où la règle corrigée : **le critère est ce qui est libre,
+pas ce qui existe.** La règle est bonne ; je l'ai appliquée à une liste de deux entrées.
+Un `sinfo -N` sur toute la partition montrait **10 nœuds entièrement IDLE** pendant que
+5 des 6 cellules faisaient la queue derrière 2 cartes hopper tenues par `mkalla`. Un pin
+mono-carte transforme une campagne 6-parallèle en campagne série : 6.7 h par cellule dans
+les deux cas, mais 6.7 h de mur contre ~33 h.
+
+**Toutes les cartes libres ne sont pas utilisables.** L'env `bench` porte
+`torch 2.13.0+cu130`, compilé pour sm_75/80/86/90/100/120. Les **19 cartes pascal**
+(P100, sm_60) et les **volta** (sm_70) plantent à la première convolution :
+
+```
+Tesla P100-PCIE-16GB with CUDA capability sm_60 is not compatible
+RuntimeError: GET was unable to find an engine to execute this computation
+```
+
+(sonde 501434, rc=1 après 91 s). Le pool libre réellement exploitable était donc de
+**14 cartes turing**, pas 35. À retenir pour toute campagne future sur ce cluster.
+
+**Ce que coûte le fait de quitter hopper : ×1.60, mesuré.** Sondes 501315 (hopper) et
+501433 (turing), cellule identique, mêmes 10 sujets :
+
+| carte | fold, régime permanent |
+|---|---|
+| H100 (hopper) | **81.7 s** |
+| RTX 2080 Ti (turing) | **131 s** |
+
+Une carte de 2018 qui ne perd que 60 % contre une H100, c'est la signature d'une charge
+**limitée par la latence** : ces convnets sont assez petits pour que le coût de lancement
+des noyaux domine les FLOPs. C'est la même physique qui fait que `bd_eegnet` est le plus
+cher des trois réseaux alors qu'il a le moins d'opérations. 6.7 h × 1.60 = **10.7 h par
+cellule**, 6 en parallèle, contre 33 h sérialisées sur une hopper.
+
+**La carte doit rester constante sur les 6 cellules.** Chaque contraste EA est apparié
+dans un modèle à seed fixe ; un bras sur H100 et l'autre sur 2080 Ti laisserait la
+sélection d'algorithme cuDNN différer entre les bras et ajouterait du bruit d'échelle
+« seed » au delta, gratuitement. C'est pourquoi 501357 a été annulé au lieu d'être
+recyclé : il n'achetait aucune minute de mur (les 6 cellules démarrent ensemble ici) et
+il aurait coupé la paire `bd_eegnet` en deux générations de cartes. Les enregistrements
+de fits hopper sont conservés sous
+`bd_eegnet__seed42__fits.hopper_cancelled.jsonl.bak` (697 921 octets) et ne doivent pas
+être mélangés aux fits turing dans une analyse de coût. Throttle passé de `%3` à `%6`.
 
 ### Chiffrage — sonde 501315, **COMPLETED**, 10 sujets, `bd_eegnet` raw
 
@@ -90,7 +134,11 @@ fold et aucune règle de trois ne tient.
 bnci (même code, même protocole) : `bd_deep4` ×0.59, `bd_shallow` ×0.52 —
 `bd_eegnet` est le **plus cher** des trois (46.5 s contre 27.5 et 24.0), les convolutions
 séparables d'EEGNet sont limitées par la latence, pas par les FLOPs. Donc la sonde a
-mesuré le pire cas. Total **≈28 GPU-h**, ~11 h de mur sur 3 cartes.
+mesuré le pire cas. Total **≈28 GPU-h**.
+
+Sur turing (×1.60) : `bd_eegnet` **743 s/fold → 10.7 h**, `bd_deep4` ≈ 6.3 h,
+`bd_shallow` ≈ 5.6 h. Les 6 cellules tournant en parallèle, le mur de la campagne est
+celui des deux cellules `bd_eegnet`, soit **10.7 h**.
 
 Marges : mur demandé 2 jours contre 6.7 h de pire cellule ; mémoire 64 Go contre ~21 Go
 projetés (3.96 Go × 5.2, majorant puisque l'overhead fixe ne monte pas). Les deux couvrent
