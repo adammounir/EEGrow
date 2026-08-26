@@ -1,0 +1,376 @@
+# Jobs en cours
+
+## Contrôles fixes manquants — SLURM **500952** — **TERMINÉ 24/24** (26/08)
+
+Soumis le 26/08/2026 ~07h50. Array `0-23%3`, `gpu-best`, `gpu:hopper:1` (même carte que
+500573 : les comparaisons sont appariées fit par fit). 3 modèles (`fix_shallow`,
+`fix_eegnex`, `fix_sccnet`) × carré 2×2 × 2 seeds = **24 cellules**. Durées mesurées :
+`fix_shallow` 2:25–7:31, `fix_eegnex` 14:24–22:36, `fix_sccnet` 2:03–4:54.
+
+### Résultat — famille GROWTH complète, `full_acc`, niveau sujet (n=9)
+
+| paire | Δ | IC 95 % | p | holm | win |
+|---|---|---|---|---|---|
+| `grow_sccnet` vs `fix_sccnet` | +0.0176 | [+0.004, +0.031] | 0.055 | 0.22 | 7/9 |
+| `grow_deep` vs `fix_deepeeg` | +0.0008 | [−0.018, +0.021] | 1 | 1 | 3/9 |
+| `grow_shallow` vs `fix_shallow` | −0.0064 | [−0.016, +0.003] | 0.36 | 0.72 | 4/9 |
+| `grow_eegnex` vs `fix_eegnex` | −0.0098 | [−0.020, −0.001] | 0.13 | 0.39 | 3/9 |
+
+**0/4 significatives après Holm, aucun sign flip.** Les deux résultats publiés étaient
+des artefacts de contrôle : `grow_eegnex` passe de −0.0892 (contre `bd_eegnex`, 0/9
+sujets, holm=0.012) à −0.0098 ns contre son vrai jumeau ; `grow_shallow` passe de +0.0213
+(contre `bd_shallow`) à −0.0064 ns, et vaut **−0.0307 p=0.0078** au protocole livré.
+Seul `grow_sccnet` va dans le sens de la croissance, et seulement à budget plein
+(+0.0051 ns livré → +0.0176 ; +0.0191 9/9 sujets holm=0.016 sur `full_loss`).
+Le protocole déplace le verdict sur `grow_shallow` : DiD **+0.0243 p=0.027**.
+
+Fichiers : `grid_fix_cells.txt`, `grid_fix_gpu.sbatch`, sorties dans
+`grid_models/<model>/<arm>/results/` (à côté des 64 cellules de 500573, mêmes chemins).
+Dépouillement : `analysis/growth_contrast.py --root $BUD/grid_models`.
+
+### Pourquoi
+
+Trois paires de croissance sur quatre opposaient `grow_*` à la **référence
+braindecode**. Ce ne sont pas les mêmes codebases, donc l'écart apparié contient la
+croissance **plus** tout ce qui les sépare — mesuré, l'init Xavier stock de braindecode
+démarre `bd_shallow` 0.34 nats au-dessus de ln(k) contre +0.08 pour nos réseaux. Seul le
+bras deep avait un contrôle de la même classe (`fix_deepeeg`), et c'est le seul qui ne
+dit rien. Ces 24 cellules donnent ce contrôle aux trois autres : même classe, même
+fichier, même init, mêmes callbacks, construit directement à la géométrie d'arrivée ;
+seul `_can_grow` change.
+
+### Le bug trouvé en route — `grow_eegnex` n'a jamais été width-matched
+
+Dans EEGNeX, `filter_1` dimensionne **deux** endroits : la jonction growable (conv1
+fan-out = conv2 fan-in) **et** la conv de queue `block_5 (filter_2 -> filter_1)`, dont la
+sortie est aplatie dans le classifieur. La croissance n'élargit que la jonction. Donc
+`grow_eegnex` (filter_1=2, cible 8) finit avec une jonction 8 et une **queue 2**, soit
+**70 features** en entrée du classifieur, là où `bd_eegnex` (filter_1=8) en a **280**.
+
+Conséquence directe : le **−0.089** de `grow_eegnex` (perte sur 9 sujets sur 9, le seul
+résultat à survivre à Holm, et le seul « contre la croissance ») comparait un réseau à
+classifieur 4× plus étroit à la référence. **Ce n'est pas une mesure de la croissance.**
+
+Corrigé par un kwarg `filter_1_in` (miroir de `w2_in` sur le bras deep) qui découple les
+deux largeurs ; `fix_eegnex` = `filter_1: 2, filter_1_in: 8`. Un contrôle naïf
+`filter_1: 8` aurait construit un réseau différent et plus gros (56 580 params / 280
+entrées contre 52 656 / 70).
+
+**Rien à re-lancer** : `filter_1_in` vaut `filter_1` par défaut, donc `grow_eegnex`
+construit exactement le même réseau qu'avant, bit pour bit. Les 64 cellules de 500573
+tiennent.
+
+### Vérifications faites avant de soumettre
+
+- `tests/test_models.py::test_fixed_control_matches_grown_geometry` (nouveau) : chaque
+  bras est **réellement grandi** jusqu'à sa cible via le callback du benchmark, puis les
+  shapes de son `state_dict` sont diffées contre le jumeau gelé. 4/4 MATCH (c'est ce test
+  qui a fait tomber eegnex). Suite complète : **51 passed**.
+- Les trois YAML construits par le chemin du benchmark, en local **et** sur le checkout
+  déployé : `can_grow=False`, largeurs 40 / 8 / 22, params 47 364 / 52 656 / 14 794 —
+  identiques aux réseaux grandis.
+- Garde in-job : assert `eegrow.__file__` sous `eegrow_budget/` **et** présence de
+  `filter_1_in` dans la signature (un checkout périmé construirait la mauvaise géométrie
+  en silence).
+
+### `analysis/growth_contrast.py` — deux familles désormais
+
+`FAMILIES` sépare **GROWTH** (`grow_X` vs `fix_X`, la seule question sur la croissance)
+de **REFERENCE** (`grow_X` vs `bd_X`, « notre implémentation vaut-elle la référence ? »).
+Holm s'applique **dans** une famille, jamais à travers. Une paire dont le contrôle n'est
+pas encore là est sautée explicitement, pas rapportée vide.
+
+## Généralisation aux 8 autres bras — SLURM **500573** — **TERMINÉ**
+
+Lancé le 25/08/2026 ~23h00, fini le 26/08 au matin. Array `0-63%3`, `gpu-best`,
+`gpu:hopper:1`. Carré 2×2 **complet** (`p20_loss`, `p20_acc`, `full_loss`, `full_acc`)
+× 8 modèles non-ML × 2 seeds = **64 cellules**, **64/64 à rc=0**, 36 unités appariées
+par cellule (9 sujets × 2 sessions × 2 seeds).
+
+Analyse : `analysis/budget_models.py --root $BUD/grid_models`, sortie conservée dans
+`/scratch/amounir/eegrow_budget/analysis_final.out`.
+
+### L'unité d'analyse — à lire avant les chiffres
+
+Une cellule fait 36 lignes = 9 sujets × 2 sessions × 2 seeds. Ce ne sont **pas** 36
+observations indépendantes : les seeds sont de la réplication interne du même
+sujet-session, et les deux sessions partagent un sujet. Un Wilcoxon sur 36 lignes
+corrélées surestime sa propre significativité — mesuré, jusqu'à **4 ordres de grandeur**
+(`grow_shallow`/`p20_acc` : p=3.8e-07 à n=36 contre p=0.0039 à n=9).
+
+**Tous les p ci-dessous sont au niveau sujet (n=9)**, sessions et seeds moyennées. C'est
+celui qui tient pour un papier. `analysis/budget_models.py --subject-level` et
+`analysis/growth_contrast.py` produisent les deux niveaux. Attention au plancher : à n=9
+le Wilcoxon bilatéral ne peut pas descendre sous **p=0.0039**, atteint ssi **les 9 sujets
+vont dans le même sens** — c'est l'affirmation la plus forte disponible ici, et il faut
+lire les tailles d'effet et les IC, pas les étoiles.
+
+### Résultat 1 — le défaut livré sous-entraînait 6 bras sur 9
+
+`full_acc` (budget plein + sélection `valid_acc`) contre le défaut `p20_loss` :
+
+| modèle | shipped | corrigé | Δ (p, n=9) | interaction | additif ? |
+|---|---|---|---|---|---|
+| `bd_deep4` | 0.3501 | 0.4818 | **+0.1316** (0.004 = 9/9) | +0.0854 (0.004) | **non** |
+| `grow_shallow` | 0.5316 | 0.6007 | **+0.0690** (0.004 = 9/9) | +0.0192 (0.02) | **non** |
+| `bd_shallow` | 0.5147 | 0.5793 | **+0.0646** (0.004 = 9/9) | +0.0273 (0.02) | **non** |
+| `grow_sccnet` | 0.6581 | 0.6959 | +0.0379 (0.004 = 9/9) | +0.0301 (0.2) | oui |
+| `fix_deepeeg` | 0.3853 | 0.4190 | +0.0337 (0.008) | ns | oui |
+| `grow_deep` | 0.3920 | 0.4198 | +0.0278 (0.03) | ns | oui |
+| `bd_eegnex` | 0.6262 | 0.6568 | +0.0306 (**0.1**) | ns | oui |
+| `bd_sccnet` | 0.6533 | 0.6756 | +0.0223 (**0.2**) | +0.0157 (0.07) | oui |
+| `grow_eegnex` | 0.5579 | 0.5676 | +0.0097 (**0.7**) | ns | oui |
+
+Holm sur les 9 bras : **5 survivent** (les quatre à 0.036 + `fix_deepeeg` à 0.04) ;
+`grow_deep` tombe à 0.12. À n=36 on lisait 8 bras sur 9 et une interaction sur 5 — c'était
+la corrélation intra-sujet, pas le signal.
+
+Le **budget** reste positif sur les 9 bras sans exception (dans les deux colonnes de
+sélection). La **sélection seule** est bruitée et parfois négative (`grow_eegnex` −0.0190,
+`bd_eegnex` −0.0078) : c'est la **combinaison** qui porte l'effet, pas un knob isolé.
+Interaction significative à n=9 sur **3 bras** (`bd_deep4`, `bd_shallow`, `grow_shallow`)
+→ sur ceux-là aucun effet principal ne peut être cité seul. La diagonale seule l'aurait
+raté : justification a posteriori du carré complet.
+
+`grow_eegnex` est le bras le plus plat (p=0.7) et c'est aussi le seul qui ne grandit
+quasiment pas (largeur finale médiane **8**, 2 événements) — il n'y a rien à
+sous-entraîner. Aucun des 8 nouveaux bras n'a sa cellule livrée sous le seuil de chance
+(0.295) ; `bd_deep4` reste le seul dans ce cas.
+
+### Résultat 2 — croissance vs contrôle fixe, apparié (`analysis/growth_contrast.py`)
+
+Appariement pris dans les configs, pas inventé : `grow_deep` ↔ **`fix_deepeeg`** (même
+classe gelée à la géométrie d'arrivée), les trois autres contre leur référence
+braindecode à la largeur cible. Δ = croissance − fixe, niveau sujet, IC bootstrap 95 % :
+
+| paire | protocole livré | protocole corrigé | DiD (le protocole bouge-t-il le verdict ?) |
+|---|---|---|---|
+| `grow_shallow` vs `bd_shallow` | +0.0169 [+0.003, +0.030] p=0.055 | **+0.0213** [+0.008, +0.035] p=0.039 | +0.0044 ns |
+| `grow_sccnet` vs `bd_sccnet` | +0.0048 ns (win 56 %) | **+0.0204** [+0.002, +0.037] p=0.074 | **+0.0156 p=0.012, holm=0.047** |
+| `grow_deep` vs `fix_deepeeg` | +0.0067 **p=0.91, win 44 %** | +0.0008 **p=1, win 33 %** | −0.0059 ns |
+| `grow_eegnex` vs `bd_eegnex` | −0.0683 p=0.02 | **−0.0892** [−0.111, −0.066] **win 0/9, holm=0.016** | −0.0209 p=0.074 |
+
+**Aucun sign flip.** Correction d'une affirmation antérieure : « l'avantage de la
+croissance sur le deep s'évapore avec le budget » est **faux**. `grow_deep` vs
+`fix_deepeeg` n'a jamais été significatif — p=0.91 au protocole livré, la croissance perd
+sur 5 sujets sur 9, IC [−0.015, +0.034]. Le +0.0067 était une différence de moyennes non
+appariée, exactement l'erreur que ce contraste corrige.
+
+Ce qui tient :
+- **`grow_eegnex` est le résultat le plus net, et il est *contre* la croissance** :
+  −0.089, la croissance perd sur **9 sujets sur 9**, seul à survivre à Holm. Le bras
+  atteint pourtant sa largeur cible (8/8).
+- **`grow_sccnet` est le seul cas de vraie dépendance au protocole** : DiD +0.0156,
+  holm=0.047. Il passe de « rien » à une tendance positive.
+- **`grow_shallow`** est la seule tendance positive robuste en direction (IC excluant 0
+  aux deux protocoles, 7 sujets sur 9), mais ne passe pas Holm à n=9.
+
+**Caveat à écrire dans le papier** : trois paires sur quatre opposent *notre*
+implémentation growing à *celle de braindecode*, donc l'écart contient la croissance
+**plus** tout ce qui sépare les deux codebases. Seule la paire deep est un contraste de
+croissance propre — et c'est celle qui ne dit rien.
+
+### Résultat 3 — le modèle scoré n'est pas le modèle qui a grandi
+
+`width_lost` = largeur finale − largeur à l'époque restaurée, par fit (n=180/cellule) :
+
+| bras | `frac_narrowed` | p90 | max |
+|---|---|---|---|
+| `grow_shallow` p20_loss (livré) | **0.39** | 18.9 / 40 | 22 |
+| `grow_shallow` p20_acc | 0.37 | 14.1 | 26 |
+| `grow_shallow` full_loss | 0.32 | 23 | 26 |
+| `grow_shallow` full_acc | **0.07** | 0 | 24 |
+| `grow_deep` p20_acc | 0.20 | 16 / 32 | 16 |
+| `grow_deep` full_acc | 0.08 | 0 | 16 |
+| `grow_sccnet` / `grow_eegnex` | 0.00–0.06 | 0 | ≤6 |
+
+Sur `grow_shallow`, **4 fits sur 10** au défaut livré sont scorés sur un réseau plus
+étroit que celui produit par l'entraînement, et le décile haut perd **la moitié de la
+largeur cible**. Budget plein + `valid_acc` ramène à 7 %. Le benchmark mesurait donc,
+sur une minorité substantielle de fits, une architecture qu'il n'annonçait pas — et
+l'accuracy seule ne le révèle jamais.
+
+**En médiane la perte n'est que de 0 à 1 filtre** : l'effet est concentré sur une
+minorité de fits, c'est la distribution (`frac_narrowed`, p90) qui est le bon readout,
+pas la médiane. Le `grow_step` n'est jamais le coupable : les 4 bras atteignent leur
+cible dans **les deux** budgets — le confounding budget↔largeur finale annoncé au départ
+**n'existe pas** (voir la prédiction réfutée du probe 500569 plus bas).
+
+### Design (conservé)
+
+- Modèles : `bd_shallow`, `bd_eegnex`, `bd_sccnet`, `fix_deepeeg`,
+  `grow_shallow`, `grow_deep`, `grow_eegnex`, `grow_sccnet`.
+- Cellules : `grid_models_cells.txt` (`MODEL ARM PATIENCE SEL SCHED SEED`).
+- Sbatch : `grid_models_gpu.sbatch`, logs `grid_models_logs/500573_<task>.out`.
+- Sortie : `/scratch/amounir/eegrow_budget/grid_models/<model>/<arm>/results/...`
+  (`grid/` de bd_deep4 n'est pas touché).
+- Reprise : chaque tâche saute sa cellule si le CSV existe (`--requeue` sûr).
+
+**Pourquoi le carré complet et pas la diagonale** : sur `bd_deep4` la diagonale seule
+aurait dit « +0.132, le budget était trop court » et aurait raté le fait que les effets
+simples ne s'additionnent pas (interaction +0.085, p=1.1e-07). Refaire la diagonale
+seule ici reproduirait l'ambiguïté 8 fois. Le surcoût est ~1 h de mur.
+
+### Probe **500569** (`grow_shallow`, H100) — la porte avant de soumettre
+
+Coût, mesuré sur le pire cas des bras growing (gap 8→40, donc le plus d'événements) :
+**31.5 s/fold-row** à budget plein et **13.9 s** à patience 20, contre 23.7 / 7.3 pour
+`bd_deep4`. La croissance ne coûte que **×1.33** : le `grow_step` (et son `eigh`) ne
+tourne qu'une époque sur cinq et s'arrête dès `target_width` atteint.
+
+**Une prédiction réfutée.** J'annonçais que patience 20 couperait les fits à l'époque 24
+et laisserait 4 événements de croissance, donc un réseau inachevé. Mesuré : les fits
+`p20_loss` durent **36 à 94 époques** (7 événements) et atteignent **40/40 dans les deux
+bras**. L'extrapolation venait de `bd_deep4`, dont la valid_loss explose à l'époque 4 ;
+`grow_shallow` n'a pas ce défaut. Pas de confounding budget↔largeur finale.
+
+**Mais un effet structurel, mesuré pour la première fois** :
+
+```
+p20_loss  restored=23  width_at_restored=30   width_final=40
+p20_loss  restored=16  width_at_restored=25   width_final=40
+p20_loss  restored=19  width_at_restored=26   width_final=40
+full_acc  restored=193 width_at_restored=40   width_final=40   (40/40 sur les 10 fits)
+```
+
+Le réseau finit de grandir, mais `RestoreBestModel` sur `valid_loss` rend un modèle à
+**25–30 filtres sur 40**. Le modèle scoré n'est pas le modèle qui a grandi — le
+benchmark mesurait une architecture plus petite que celle qu'il annonçait. Même cause
+racine que `bd_deep4` (`valid_loss` sur 46 essais de validation), effet structurel et
+non plus seulement temporel. Sujet 1 : 0.7170 contre 0.6770 (+0.040).
+
+Note : le « 14/40 » de v5 n'est plus le comportement du code — c'était le
+`statistical_threshold` absolu de gromo, remplacé depuis par le plancher relatif.
+
+Détail à connaître de tout lecteur de largeur : `grow_width_after` n'est enregistré que
+**sur les époques de croissance** (`skorch_integration._record_growth`), donc lire la clé
+à une époque arbitraire rend `None` 4 fois sur 5 ; il faut la dernière valeur enregistrée
+avant cette époque.
+
+## bd_deep4 — budget × sélection (Margaret, GPU) — **run principal**
+
+SLURM **500458** (cellules 0-7) + **500475** (`full_loss`, cellules 8-9), array,
+partition `gpu-best`, `gpu:hopper:1` (H100 NVL). **TERMINÉ** le 25/08/2026 ~20h45,
+18 min de mur pour les 10 cellules.
+
+### Résultat — le carré 2×2, apparié sur 36 unités (9 sujets × 2 sessions × 2 seeds)
+
+```
+                    sel=valid_loss   sel=valid_acc
+patience  20            0.3501           0.3390
+patience 200            0.4074           0.4818
+```
+
+| contraste | effet | p (Wilcoxon) |
+|---|---|---|
+| budget, à sélection `valid_loss` | +0.0573 | 1e-04 |
+| budget, à sélection `valid_acc` | +0.1428 | 7.4e-09 |
+| sélection, à patience 20 | −0.0111 | 0.003 |
+| sélection, à patience 200 | +0.0743 | 5.5e-07 |
+| **interaction** | **+0.0854** | **1.1e-07** |
+| les deux vs le défaut livré | +0.1316 | 6.9e-08 |
+
+Les effets simples **ne s'additionnent pas** : il faut les deux knobs. Mécanisme —
+`full_loss` et `full_acc` ont des trajectoires bit-identiques (`final_tr` 0.1366,
+`best_vacc` 0.5592 identiques), mais `full_loss` restaure l'époque **5** quand le pic
+de valid_acc est à l'époque **158**. `valid_loss` est un proxy cassé sur ces splits
+de validation (46 essais) et il l'est deux fois : comme critère d'arrêt et comme
+critère de sélection.
+
+Corollaires : perte train finale **0.1366** à budget plein contre 1.1874 à l'arrêt
+anticipé (ln 4 = 1.386) — « `bd_deep4` n'ajuste pas ses données » était un artefact du
+budget. Le **cosine nuit** une fois réellement recuit (`lr_final` 0.0000) : 0.4276
+contre 0.4818, restored 99 contre 158. Piste à retirer.
+
+Portée : `patience` et `selection_monitor` sont **globaux**. Reste à mesurer lesquels
+des 8 autres bras deep sont dans le même cas avant de conclure sur v5.
+
+- Checkout **neuf** `/scratch/amounir/eegrow_budget` (archive envoyée du portable).
+  `/scratch/amounir/eegrow` n'est PAS touché : il porte du travail v5 non commité.
+  `PYTHONPATH=$BUD/src` écrase le `.pth` editable de l'env `bench` qui pointe sur
+  l'ancien checkout ; le job l'`assert` avant de lancer.
+- Env : conda `bench`, torch 2.13+cu130, **braindecode 1.5.2** (= la stack de v5,
+  contre 1.7.0 en local). Env partagé non modifié.
+- Cellules : `grid_cells.txt` (arm patience sel sched seed), une par tâche d'array.
+- Sortie : `/scratch/amounir/eegrow_budget/grid/<arm>/results/...`, logs
+  `grid_logs/500458_<task>.out`.
+- Reprise : chaque tâche saute sa cellule si le CSV existe (`--requeue` sûr).
+- Analyse : `PYTHONPATH=$BUD/src python analysis/deep4_budget.py --root $BUD/grid`
+
+Probe **500457** (margpu012, H100), sujet 1 seed 42 — la porte avant de soumettre :
+
+| | local MPS / bd 1.7.0 | H100 / bd 1.5.2 |
+|---|---|---|
+| `full_acc` | 0.5538 | 0.5728 |
+| `p20_loss` | 0.4185 | 0.3764 |
+
+47 s/sujet à budget plein contre 574 s en local (**×12** ; ×4.6 seulement sur les
+cellules courtes, où le coût fixe d'épochage MOABB domine et ne dépend pas du device).
+Les deux stacks concordent sur le sens et l'ordre de grandeur ; le +0.196 côté cluster
+est obtenu sur **exactement** la stack de v5.
+
+## bd_deep4 — budget × sélection (local, MacBook) — **ARRÊTÉ, objectif atteint**
+
+Lancé le 25/08/2026 ~20h00 (PID 37506), **arrêté le 25/08 ~23h20** : la réplication
+croisée qu'il devait fournir était acquise, le reste ne mesurait plus rien.
+
+### Ce qu'il a livré — réplication sur 2 devices et 2 versions de braindecode
+
+| bras | local (MPS, bd 1.7.0) | cluster (CUDA, bd 1.5.2) | écart |
+|---|---|---|---|
+| `p20_loss` | 0.3507 | 0.3501 | 6e-4 |
+| `p20_acc` | 0.3432 | 0.3390 | 4e-3 |
+| `full_acc` seed0 | 0.4801 | 0.4818 | 2e-3 |
+
+Trois coins du carré sur quatre, dont **`full_acc`, celui qui porte le résultat**. Le
+`+0.132` n'est donc pas un artefact de stack ni de device — c'est l'argument qu'on veut
+pouvoir écrire dans le papier.
+
+### Pourquoi la fin ne servait plus
+
+Restaient `full_acc` seed1 (~75 min) et les deux `full_cos` (~150 min). La seed
+supplémentaire n'ajoutait qu'une réplication de plus sur un effet déjà répliqué, et le
+bras cosine est une piste **abandonnée** : le cluster l'a mesuré nuisible une fois
+réellement recuit (0.4276 contre 0.4818). ~3 h 40 de MacBook libérées.
+
+### Détails du run (conservés pour la reprise si jamais nécessaire)
+
+Détaché (`nohup`), séquentiel, **reprenable** : relancer la même commande saute les
+cellules dont le CSV existe (le CSV est écrit en dernier).
+
+- Launcher : `benchmarks/exp_deep4_budget.py` (doc = design complet + ce qui a été réfuté avant)
+- Analyse : `benchmarks/analysis/deep4_budget.py --root <out>`
+- Sortie : `/private/tmp/claude-501/-Users-adammounir-Desktop-Inria-Exploration-Braindecode/8345a69a-724a-4bf4-8212-43fd080b8230/scratchpad/budget`
+- Log : le même chemin + `.log`
+- Reprise après interruption : relancer exactement la même commande, les cellules finies sont sautées
+  (le CSV par cellule est écrit en dernier, donc sa présence = cellule terminée).
+
+8 cellules = 4 bras × seeds {0,1}, bnci2014_001 / within_session / bd_deep4, 9 sujets.
+
+| bras | patience | selection_monitor | schedule | ~min/cellule |
+|---|---|---|---|---|
+| `p20_loss` | 20 (défaut) | valid_loss | — | 12 |
+| `p20_acc` | 20 | valid_acc | — | 12 |
+| `full_acc` | 200 = pas d'early stopping | valid_acc | — | 85 |
+| `full_cos` | 200 | valid_acc | cosine | 85 |
+
+Total attendu ≈ **6 h 30**, mesuré (574 s/sujet à budget plein sur le probe, pas extrapolé).
+
+### Ce qu'on teste
+
+L'expérience LR a réfuté le pas de gradient (cosine +0.0018, lowlr explose pareil).
+Le mécanisme mesuré est ailleurs : la valid loss touche son minimum à l'**époque 4** puis
+explose, `stop_monitor=valid_loss` + patience 20 coupe à 24, et `RestoreBestModel` rend
+**le modèle de l'époque 4**. Le benchmark scorait un réseau entraîné 4 époques.
+
+Probe (sujet 1, seed 42, budget plein + sélection valid_acc) : **0.5538** contre 0.4185
+à patience 20 et 0.272 pour v5. Perte train finale 0.076–0.118 au lieu de 0.869 —
+« bd_deep4 n'ajuste pas ses données » était un artefact du budget. `ep_max_vacc` tombe
+entre 85 et 182, ce qui réfute au passage l'idée que l'argmax de valid_acc serait un
+pic chanceux précoce.
+
+### Portée si ça se confirme
+
+`selection_monitor` et `patience` sont des knobs **globaux**. Un effet de sélection ici
+est un résultat sur le protocole du benchmark, pas un patch sur un modèle — et il
+invalide les cellules deep de v5, qu'il faudra relancer.
