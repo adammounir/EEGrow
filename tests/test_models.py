@@ -182,6 +182,63 @@ def test_growth_saturates_at_target(name):
         f"{name} stalled at {model.growable_width} instead of reaching {CAP}: {widths}")
 
 
+# The frozen twin of each growing arm: the SAME class built directly at the geometry
+# growth ends on. These are the benchmark's fixed controls (config/model/fix_*.yaml),
+# and the whole growth contrast rests on them being width-matched.
+#
+# Two of the four need a dedicated "junction width" kwarg, because the width knob also
+# sizes a FIXED module that growth never touches: `w2` sizes conv2b's output as well as
+# the junction, and `filter_1` sizes block_5 (hence the classifier) as well as the
+# junction. Building the naive twin (`w2=cap`, `filter_1=cap`) gives a genuinely
+# different, larger network -- on EEGNeX, 280 classifier inputs against the grown net's
+# 70. That is what this test exists to catch.
+FIXED_TWINS = {
+    "shallow": lambda cap: GrowingShallowFBCSPNet(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T, n_filters_time=cap,
+        n_filters_spat=8, device=DEVICE),
+    "deepeeg": lambda cap: GrowingDeepEEGNet(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T, w1=4, w2=4, w2_in=cap,
+        device=DEVICE),
+    "sccnet": lambda cap: GrowingSCCNet(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T, sfreq=SFREQ,
+        n_spatial_filters=cap, n_spatial_filters_smooth=8, device=DEVICE),
+    "eegnex": lambda cap: GrowingEEGNeX(
+        n_chans=C, n_outputs=N_CLASSES, n_times=T, filter_1=4, filter_1_in=cap,
+        filter_2=16, device=DEVICE),
+}
+
+
+@pytest.mark.parametrize("name", sorted(BUILDERS))
+def test_fixed_control_matches_grown_geometry(name):
+    """The frozen control is the network growth ends on, parameter for parameter.
+
+    Shapes, not values: the control is trained from its own init, so only the geometry
+    has to match. Any key whose shape differs means the pair is not width-matched and
+    the paired contrast is measuring architecture on top of growth.
+    """
+    from braindecode import EEGClassifier
+
+    from eegrow import GromoGrowth
+
+    grown = BUILDERS[name](CAP)
+    g = torch.Generator().manual_seed(0)
+    x = torch.randn(N, C, T, generator=g).numpy().astype("float32")
+    y = torch.randint(0, N_CLASSES, (N,), generator=g).numpy().astype("int64")
+    EEGClassifier(
+        grown, criterion=torch.nn.CrossEntropyLoss, max_epochs=12, batch_size=16,
+        callbacks=[("gromo", GromoGrowth(grow_every=1, verbose=False))],
+        train_split=None, device=DEVICE,
+    ).fit(x, y)
+    assert grown.growable_width == CAP
+
+    fixed = FIXED_TWINS[name](CAP)
+    assert not getattr(fixed, "_can_grow", True), f"{name} twin is not frozen"
+    a = {k: tuple(v.shape) for k, v in grown.state_dict().items()}
+    b = {k: tuple(v.shape) for k, v in fixed.state_dict().items()}
+    diff = {k: (a.get(k), b.get(k)) for k in set(a) | set(b) if a.get(k) != b.get(k)}
+    assert not diff, f"{name} control is not width-matched with the grown net: {diff}"
+
+
 # --------------------------------------------------------------- fidelity
 def test_sccnet_equivalence_with_braindecode():
     """A frozen GrowingSCCNet loaded with braindecode weights is bit-exact."""

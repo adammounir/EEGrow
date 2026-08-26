@@ -14,8 +14,17 @@ BatchNorm between the two convs is carried as ``block_1``'s ``post_layer_functio
 gromo's own VGG container does.
 
 Everything downstream (the depthwise spatial conv, the dilated temporal stack, the
-classifier) is kept identical to braindecode as *fixed* modules: their dimensions
-do not depend on ``filter_1``.
+classifier) is kept identical to braindecode as *fixed* modules.
+
+One of them is NOT independent of the width knob, and it matters. braindecode's
+``block_5`` ends on a conv ``(filter_2 -> filter_1)`` whose output is flattened into
+the classifier, so ``filter_1`` sizes two places: the growable junction AND that
+fixed tail. Growth widens only the junction. A model built with ``filter_1=2`` and
+grown to 8 therefore ends up with a width-8 junction and a width-**2** tail, i.e. a
+70-feature classifier where the braindecode reference (filter_1=8) has 280. That is
+not a width-matched comparison. ``filter_1_in`` decouples the two so the geometry
+growth ends on can also be built directly -- the same role ``w2_in`` plays in
+``GrowingDeepEEGNet``.
 
 Faithful analog, not bit-exact
 ------------------------------
@@ -54,12 +63,19 @@ class GrowingEEGNeX(SequentialGrowingModel):
     n_chans, n_outputs, n_times : int
         Signal parameters (same conventions as braindecode).
     filter_1 : int
-        INITIAL width of the first temporal conv (= fan-in of the second temporal
-        conv). This is the axis gromo grows.
+        braindecode's ``filter_1``. Sizes the FIXED tail conv (``block_5``) and
+        hence the classifier input. Growth never touches it -- see ``filter_1_in``.
     filter_2 : int
         Width of the second temporal conv (fixed here).
+    filter_1_in : int | None
+        INITIAL width of the growable junction (conv1 fan-out = conv2 fan-in).
+        Defaults to ``filter_1``, which is braindecode's geometry. Passing it
+        explicitly builds the junction and the tail at different widths, which is
+        what the end of growth actually looks like: it is the only way to write an
+        honest frozen control for the growing arm.
     target_filter_1 : int | None
-        TARGET width to grow towards. If None or == filter_1, the model is frozen.
+        TARGET junction width to grow towards. If None or == ``filter_1_in``, the
+        model is frozen.
     depth_multiplier, kernel_block_1_2, kernel_block_4, dilation_block_4,
     avg_pool_block4, kernel_block_5, dilation_block_5, avg_pool_block5,
     drop_prob, max_norm_conv, max_norm_linear, activation :
@@ -73,6 +89,7 @@ class GrowingEEGNeX(SequentialGrowingModel):
         n_times: int,
         filter_1: int = 8,
         filter_2: int = 32,
+        filter_1_in: int | None = None,
         target_filter_1: int | None = None,
         depth_multiplier: int = 2,
         kernel_block_1_2: int = 64,
@@ -93,12 +110,17 @@ class GrowingEEGNeX(SequentialGrowingModel):
         self.n_chans = n_chans
         self.n_outputs = n_outputs
         self.n_times = n_times
+        # filter_1 sizes the fixed tail (block_5 -> classifier); filter_1_in sizes the
+        # growable junction. They are the same number in braindecode, and different at
+        # the end of growth, which is why they are separate knobs here.
+        filter_1_in = filter_1 if filter_1_in is None else filter_1_in
         self.filter_1 = filter_1
+        self.filter_1_in = filter_1_in
         self.filter_2 = filter_2
         self.filter_3 = filter_2 * depth_multiplier
 
-        target = filter_1 if target_filter_1 is None else target_filter_1
-        self._can_grow = target > filter_1
+        target = filter_1_in if target_filter_1 is None else target_filter_1
+        self._can_grow = target > filter_1_in
         self.target_width = target  # cap for the growth callback (gromo does not enforce it)
 
         # symmetric integer padding for the growable temporal convs (gromo cannot
@@ -110,16 +132,16 @@ class GrowingEEGNeX(SequentialGrowingModel):
         self.ensure_dim = Rearrange("batch ch time -> batch 1 ch time")
 
         # --- the two growable temporal convs ---------------------------------
-        # conv1: (1 -> filter_1). Its OUTPUT grows when conv2 grows its fan-in. The
+        # conv1: (1 -> filter_1_in). Its OUTPUT grows when conv2 grows its fan-in. The
         # BatchNorm of block_1 lives in the junction -> carried as a growing
         # post_layer_function.
         self.conv1 = Conv2dGrowingModule(
             in_channels=1,
-            out_channels=filter_1,
+            out_channels=filter_1_in,
             kernel_size=(1, kernel_block_1_2),
             padding=(0, pad_w),
             use_bias=False,
-            post_layer_function=GrowingBatchNorm2d(filter_1, device=self.device),
+            post_layer_function=GrowingBatchNorm2d(filter_1_in, device=self.device),
             previous_module=None,
             allow_growing=False,
             input_size=(n_chans, n_times),
@@ -127,10 +149,10 @@ class GrowingEEGNeX(SequentialGrowingModel):
             device=self.device,
         )
         t1 = n_times + 2 * pad_w - (kernel_block_1_2 - 1)
-        # conv2: (filter_1 -> filter_2). The growable junction: growing its fan-in
-        # grows filter_1 (= conv1 fan-out). bias=False (a BN follows in the tail).
+        # conv2: (filter_1_in -> filter_2). The growable junction: growing its fan-in
+        # grows conv1's fan-out. bias=False (a BN follows in the tail).
         self.conv2 = Conv2dGrowingModule(
-            in_channels=filter_1,
+            in_channels=filter_1_in,
             out_channels=filter_2,
             kernel_size=(1, kernel_block_1_2),
             padding=(0, pad_w),
@@ -210,7 +232,7 @@ class GrowingEEGNeX(SequentialGrowingModel):
 
     @property
     def growable_width(self) -> int:
-        """Width of the growable axis (= filter_1)."""
+        """Width of the growable axis (= the junction, ``filter_1_in``)."""
         return self.conv1.out_channels
 
     # ------------------------------------------------------------------ utils
