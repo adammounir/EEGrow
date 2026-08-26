@@ -21,29 +21,49 @@
 #
 #     EA_SUBJECTS=10 sbatch --array=0 benchmarks/slurm/ea_cho_gpu.sbatch
 #
-# gpu:hopper:1. This started as `ampere` on the reasoning that the partition holds ~18
-# ampere cards against 3 hopper, so the wide pool would drain in one wave. Measured on
-# 2026-08-26, that was wrong: all 18 ampere cards were allocated, one hopper card was
-# free, and slurm's own estimate for the ampere probe was a 37-hour wait. The pending
-# queue explains it -- nine array tasks asking for a generic `gres/gpu:1` with a 7-day
-# wall, which land on ampere and hold it. What matters is what is FREE, not what exists.
+# gpu:turing:1, and the route here is worth recording because two intuitions were wrong.
 #
-# Nothing here pairs against another campaign, so the card only has to be constant across
-# these 6 cells; hopper also happens to be what the bnci arm of this same replication ran
-# on, which makes stage 1 internally consistent rather than less so.
+# It started as `ampere` on inventory (~18 ampere cards against 3 hopper, so the wide pool
+# drains in one wave). All 18 were allocated, so it moved to `hopper`, on the corrected
+# rule "what matters is what is FREE, not what exists". That rule is right and the
+# conclusion was still wrong, because it was applied to a two-item list: `sinfo -N` over
+# the whole partition showed 10 nodes fully IDLE while these 6 cells queued behind two
+# hopper cards held by another user. A single-card pin turns a 6-way parallel campaign
+# into a serial one -- 6.7 h per cell either way, but 6.7 h of wall against ~33 h.
+#
+# WHICH FREE CARDS ARE REAL. Not all of them. `bench` carries torch 2.13.0+cu130, built
+# for sm_75/80/86/90/100/120, so the 19 idle pascal cards (P100, sm_60) and the volta
+# cards (sm_70) crash at the first conv with "GET was unable to find an engine to execute
+# this computation" -- 91 s in, exit 1. Probe 501434 is that failure. The usable idle
+# pool was therefore 14 turing, not 35 cards.
+#
+# WHAT IT COSTS TO LEAVE HOPPER. Measured, not assumed: probes 501315 (hopper) and 501433
+# (turing) ran the identical 10-subject cell. Steady per-fold 81.7 s on H100 against 131 s
+# on RTX 2080 Ti = 1.60x. A seven-year-old card losing only 60% to an H100 is the
+# signature of a latency-bound workload -- these convnets are small enough that kernel
+# launch overhead, not FLOPs, sets the pace, which is also why bd_eegnet is the most
+# expensive of the three nets despite having the fewest operations. 6.7 h x 1.60 = 10.7 h
+# per cell, all 6 in parallel, against 33 h serialized on one hopper card.
+#
+# The card still has to be CONSTANT across the 6 cells: each EA contrast is paired within
+# a model at a fixed seed, and running one arm on H100 and the other on turing would let
+# cuDNN algorithm selection differ between arms, adding seed-scale noise to the delta for
+# no reason. That is why job 501357 was cancelled 1 h into cell 0 rather than kept -- it
+# bought no wall time, since all 6 cells start at once here, and it would have split the
+# bd_eegnet pair across two card generations.
 #SBATCH --job-name=ea-cho
 #SBATCH --partition=gpu-best
-#SBATCH --gres=gpu:hopper:1
+#SBATCH --gres=gpu:turing:1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --time=2-00:00:00
 #SBATCH --requeue
-# %3, because the partition has exactly 3 hopper cards. A higher throttle would not buy
-# any parallelism -- slurm caps at the hardware either way -- it would only queue the
-# extra tasks under our own name and make the run look stuck.
-#SBATCH --array=0-5%3
+# %6, i.e. no throttle. This was %3 under the hopper pin, where a higher number would have
+# bought nothing since slurm caps at the hardware anyway. With 6 free turing cards the
+# throttle IS the wall time: %3 would run the campaign in two waves of 10.7 h.
+#SBATCH --array=0-5%6
 #SBATCH --output=/scratch/amounir/eegrow_ea/logs/%A_%a.out
 #SBATCH --open-mode=append
 
