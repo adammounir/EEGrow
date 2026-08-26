@@ -145,11 +145,55 @@ def main() -> int:
         if m in per_sub.index.get_level_values("model"):
             print(line(m, per_sub.xs(m, level="model").to_numpy()))
 
+    # WHERE the gain lives. EA removes inter-subject nuisance, so if it is doing what it
+    # claims, it should pay most on the subjects that transfer worst -- and a harness
+    # that already lifts a subject out of that regime leaves it less to remove. This is
+    # the quantity that decides whether a smaller-than-published effect means "our EA is
+    # broken" or "our baseline is higher", which the pooled delta alone cannot say.
+    raw_by_sub = (d[(d["align"] == "none") & (d["model"].isin(MODELS))]
+                  .groupby("subject")["score"].mean())
+    gain = pd.Series(pooled_sub, index=per_sub.index.get_level_values("subject").unique()
+                     .sort_values())
+    both = pd.concat([raw_by_sub.rename("raw"), gain.rename("gain")], axis=1).dropna()
+    rho, prho = stats.spearmanr(both["raw"], both["gain"])
+    print("\n" + "=" * 84)
+    print("WHERE THE GAIN LIVES (per held-out subject)")
+    print("=" * 84)
+    print((both * 100).round(2).to_string())
+    print(f"\n  Spearman(raw baseline, EA gain) = {rho:+.3f}  p={prho:.3g}  n={len(both)}")
+    print(f"  our raw baseline {both['raw'].mean() * 100:.2f}  vs the paper's "
+          f"{PAPER['no_ea'] * 100:.2f}")
+
+    # POWER FIRST. A CI that spans zero has two readings -- "no effect" and "this study
+    # could not have seen one" -- and only the second is available until the minimum
+    # detectable effect is on the table. Reporting FAIL without it is how an
+    # underpowered design gets written up as a negative result.
+    n = len(pooled_sub)
+    sd = float(pooled_sub.std(ddof=1))
+    mde = float((stats.t.ppf(0.975, n - 1) + stats.t.ppf(0.80, n - 1)) * sd / np.sqrt(n))
+    need = float(np.ceil(((stats.norm.ppf(0.975) + stats.norm.ppf(0.80))
+                          * sd / PAPER["delta"]) ** 2))
+    print("\n" + "=" * 84)
+    print("POWER  (between-subject sd is what limits this, not the number of seeds)")
+    print("=" * 84)
+    print(f"  sd across held-out subjects   {sd * 100:5.2f} pp   n={n}")
+    print(f"  MDE at this n, power .80     {mde * 100:+6.2f} pp")
+    print(f"  subjects needed for +5.05 pp  {need:.0f}")
+
     lo, hi = boot_ci(pooled_sub)
     print("\n" + "=" * 84)
-    verdict = ("PASS" if lo > 0 else
-               "FAIL -- CI includes 0" if hi > 0 else
-               "FAIL -- alignment HURTS")
+    if lo > 0:
+        verdict = "PASS"
+    elif mde > PAPER["delta"]:
+        # The design cannot resolve the effect it was built to check, so neither a PASS
+        # nor a FAIL is available from it. Say that, and say what would fix it.
+        verdict = (f"UNDERPOWERED -- MDE {mde * 100:+.2f} pp exceeds the "
+                   f"{PAPER['delta'] * 100:+.2f} pp target; this design cannot "
+                   f"resolve it at n={n}")
+    elif hi > 0:
+        verdict = "FAIL -- powered for the target, and the CI still includes 0"
+    else:
+        verdict = "FAIL -- alignment HURTS"
     print(f"VERDICT: {verdict}")
     if lo > 0:
         # A positive CI is necessary but not sufficient: an effect an order of magnitude
