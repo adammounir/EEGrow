@@ -40,13 +40,18 @@ RNG = np.random.default_rng(0)
 BOOT = 20000
 
 
-def load(root: Path) -> pd.DataFrame:
+def load(root: Path, dataset: str = "bnci2014_001") -> pd.DataFrame:
     """Every cross_subject CSV under `root`, raw and aligned arms together.
 
     The arm is read off the `align` COLUMN, not off the filename: the column is written
     by the run itself and survives a concat, which a naming convention does not.
+
+    `dataset` is a parameter and not a constant because the gate MOVED: bnci2014_001
+    could not resolve +5.05 pp at n=9, so the same analysis has to run unchanged on
+    cho2017 at n=52. Unchanged is the point -- a second copy of this file specialised to
+    the new dataset is how two datasets end up analysed by two slightly different tests.
     """
-    files = sorted(root.rglob("cross_subject/bnci2014_001/*.csv"))
+    files = sorted(root.rglob(f"cross_subject/{dataset}/*.csv"))
     if not files:
         raise SystemExit(f"no cross_subject results under {root}")
     d = pd.concat([pd.read_csv(p) for p in files], ignore_index=True)
@@ -115,16 +120,26 @@ def line(name: str, a: np.ndarray) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", type=Path, required=True)
+    ap.add_argument("--dataset", default="bnci2014_001")
     args = ap.parse_args()
-    d = load(args.root)
+    d = load(args.root, args.dataset)
+
+    # The paper's target is a BNCI2014-001 number. Printing it beside a delta measured
+    # on another dataset invites reading one as the replication of the other, so say so
+    # once, loudly, rather than trusting the reader to remember.
+    if args.dataset != "bnci2014_001":
+        print(f"[{args.dataset}] the +5.05 pp target below is the paper's BNCI2014-001 "
+              "value; it is the effect SIZE being checked, not a same-dataset target")
 
     print("=" * 84)
     print("LEVELS  (mean over subjects and seeds; NOT the test -- harnesses differ)")
     print("=" * 84)
     lvl = d.pivot_table(index="model", columns="align", values="score", aggfunc="mean")
     print((lvl * 100).round(2).to_string())
-    pooled = d[d["model"].isin(MODELS)].groupby("align")["score"].mean()
-    print(f"\n  pooled over the paper's 3 nets:  no-EA {pooled.get('none', np.nan)*100:.2f}"
+    have = d[d["model"].isin(MODELS)]
+    pooled = have.groupby("align")["score"].mean()
+    print(f"\n  pooled over {have['model'].nunique()} of the paper's 3 nets:  "
+          f"no-EA {pooled.get('none', np.nan)*100:.2f}"
           f"  ->  EA {pooled.get('euclidean', np.nan)*100:.2f}")
     print(f"  paper (Table 2):                 no-EA {PAPER['no_ea']*100:.2f}"
           f"  ->  EA {PAPER['ea']*100:.2f}")
@@ -138,7 +153,11 @@ def main() -> int:
     # per subject, so the nets are averaged inside a subject rather than stacked -- three
     # nets on the same subject are not three independent observations.
     pooled_sub = per_sub.groupby(level="subject").mean().to_numpy()
-    print(line("POOLED (3 nets)", pooled_sub))
+    # Count the nets ACTUALLY present, never the 3 the paper used: a campaign is read
+    # out cell by cell as it lands, and a label that says "3 nets" over one net's data
+    # is a claim about a pooling that did not happen.
+    n_nets = per_sub.index.get_level_values("model").nunique()
+    print(line(f"POOLED ({n_nets} net{'s' if n_nets > 1 else ''})", pooled_sub))
     print(f"  {'paper target':<26}{PAPER['delta'] * 100:+6.2f} pp\n")
 
     for m in MODELS:
