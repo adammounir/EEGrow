@@ -41,18 +41,60 @@ sorti la plupart des sujets du régime où l'alignement a du bruit inter-sujet �
 Ce n'est pas un défaut de notre EA : c'est que le +5.05 pp publié est en partie un proxy
 de sous-entraînement.
 
-## Étage 1 bis — réplication EA sur **cho2017** (52 sujets) — SLURM **501729** — EN COURS
+## Étage 1 bis — réplication EA sur **cho2017** (52 sujets) — SLURM **501729 + 501914** — EN COURS
 
-Lancé le 26/08 à **14:48 UTC**, checkout `eegrow_ea` au commit `ad5b85b`, sbatch
-`benchmarks/slurm/ea_cho_gpu.sbatch`, résultats sous `results_cho/`.
+Checkout `eegrow_ea` au commit `ad5b85b`, sbatch `benchmarks/slurm/ea_cho_gpu.sbatch`,
+résultats sous `results_cho/`.
 Dépouillement : `analysis/ea_replication.py --root results_cho/results`.
-**Les 6 cellules tournent en parallèle**, chacune sur une RTX 2080 Ti distincte
-(margpu017/019/019/020/021/022) — vérifié cellule par cellule dans les logs.
-Fin attendue **~01:30 UTC le 27/08** (≈ 03h30 Paris).
+**Les 6 cellules tournent en parallèle**, une carte chacune, réparties sur deux jobs :
 
-> **501357 remplace/annulé.** Premier lancement à 13:20 UTC sur `gpu:hopper:1` : 1 cellule
+| cellules | job | carte | lancé | fin attendue |
+|---|---|---|---|---|
+| `bd_eegnet` × {none, euclidean} | **501914**_0-1 | H100 NVL (margpu012) | 15:52 UTC | **22:33 UTC** |
+| `bd_shallow` × {none, euclidean} | 501729_2-3 | RTX 2080 Ti (margpu019/020) | 14:48 UTC | 20:25 UTC |
+| `bd_deep4` × {none, euclidean} | 501729_4-5 | RTX 2080 Ti (margpu021/022) | 14:48 UTC | 21:05 UTC |
+
+**Mur de la campagne : 22:33 UTC** (≈ 00h35 Paris), contre 01:30 UTC avant la bascule.
+
+> **Pourquoi deux jobs.** À 15:50 UTC les cartes hopper que `mkalla` tenait ce matin se
+> sont libérées (3 dispos). Le mur de la campagne, ce sont les deux cellules `bd_eegnet`
+> et elles seules : 10.7 h sur turing contre 6.7 h sur hopper. Les quatre autres cellules
+> finissent à 20:25 et 21:05 quoi qu'il arrive, donc les redémarrer aurait jeté 1 h de
+> calcul pour zéro gain de mur — elles restent sur turing. Seule la paire `bd_eegnet` a
+> été relancée sur hopper (501914), avec les deux bras sur **le même nœud margpu012**.
+>
+> **La contrainte de carte constante est par PAIRE, pas globale.** Le test EA est un delta
+> apparié *à l'intérieur* d'un modèle ; le Δ de `bd_eegnet` n'est jamais comparé à celui de
+> `bd_shallow`. Il suffit donc que les deux bras d'une même paire partagent la carte, ce
+> qui est vérifié ici (H100 NVL / H100 NVL, RTX 2080 Ti / RTX 2080 Ti). Formulation plus
+> juste que celle de l'encadré ci-dessous, écrite quand j'imposais l'homogénéité aux six
+> cellules à la fois.
+>
+> **Ordre de la bascule, pour ne pas perdre de folds.** 501914 a été soumis *avant*
+> d'annuler 501729_0-1, et l'annulation n'est intervenue qu'une fois les deux tâches
+> hopper RUNNING. La fenêtre de recouvrement (~1 min) est sans risque parce qu'une cellule
+> passe ses ~3 premières minutes à charger les données, avant toute écriture dans le
+> `__fits.jsonl`. Si hopper avait été pris entre-temps, on n'aurait rien perdu du tout.
+> Les fits turing partiels sont archivés en `*.turing_cancelled.jsonl.bak` (907 419 et
+> 284 386 octets) — à ne pas mélanger aux fits hopper dans une analyse de coût.
+
+> **501357 remplacé/annulé.** Premier lancement à 13:20 UTC sur `gpu:hopper:1` : 1 cellule
 > tournait, 5 attendaient. Annulé à 14:47 après ~1h30 de cellule 0. Voir l'encadré GPU
 > ci-dessous — c'est la seule chose qui a changé, la science est identique.
+
+> **Inventaire GPU au 26/08 15:50 UTC** (cartes libres et *utilisables*, cf. plancher
+> sm_75) : 3 hopper (margpu012 ×2, margpu013), 5 ampere (margpu005/006/008, + margpu010
+> ×2 en partition `gpu`), 3 rtx (margpu003 ×2, margpu002), 1 turing (margpu028). Les 15
+> pascal et 3 volta libres ne comptent pas. Margaret est le **seul** cluster accessible :
+> `~/.ssh/config` ne contient que `margaret02` et la passerelle `ssh-sif.inria.fr`.
+>
+> **Le vrai levier pour les campagnes suivantes n'est pas la carte, c'est le sharding des
+> folds.** Une LOSO à 52 sujets, c'est 52 folds indépendants exécutés *en série* dans une
+> seule cellule. Les répartir sur 4 cartes diviserait le mur par ~4 — bien plus que le
+> ×1.60 hopper/turing. On ne peut pas le faire en restreignant `dataset.subjects` (ça
+> change l'ensemble d'entraînement, donc l'estimand) : il faudrait exposer « évalue ces
+> folds-là, entraîne sur tous les autres » dans `run_moabb_hydra.py`. À faire avant
+> l'étage 2 si le volume augmente.
 
 6 cellules = 3 nets × {none, euclidean} × **1 seed**. Une seule seed parce qu'à n=52 le
 MDE tombe à ~2.4 pp : la puissance vient des sujets, pas des seeds — l'inverse exact du
