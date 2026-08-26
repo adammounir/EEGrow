@@ -1,5 +1,41 @@
 # Jobs en cours
 
+## Étage 1 — réplication Euclidean Alignment — SLURM **501098** + **501101** (26/08)
+
+Checkout **`/scratch/amounir/eegrow_ea`** (branche `exp/ea-replication`, clone git, donc
+`provenance()` stampe le SHA sur chaque ligne). Résultats sous `results_ea/results/`.
+Logs `logs/%A_%a.out`. `gpu-best`, `gpu:hopper:1`, array `%6`.
+
+18 cellules = 3 nets (`bd_eegnet`, `bd_shallow`, `bd_deep4`) × {`align=none`,
+`align=euclidean`} × 3 seeds (42/43/44). Chaque cellule est un LOSO complet à 9 folds sur
+bnci2014_001, `dataset.paradigm=LeftRightImagery` (2 classes — notre config livre le
+4-classes, les chiffres du papier sont en 2 classes), protocole **corrigé**
+(`train.patience=200 train.selection_monitor=valid_acc`).
+
+- **501098** (array `1`) = la sonde, `bd_eegnet euclidean seed42` : **COMPLETED**, wall
+  **450 s**, mean 0.8220, 18 lignes. Elle compte dans le lot (le sbatch saute les
+  cellules déjà faites).
+- **501101** (array `0,2-17%6`) = les 17 restantes.
+
+**Garde-fou fixé d'avance** — Junqueira, Aristimunha, Chevallier & de Camargo,
+arXiv 2401.10746, Table 2, BNCI2014_001 LOSO 2 classes :
+No-EA 68.93 ± 12.61 → Offline-EA 73.98 ± 11.21, soit **+5.05 pp**. Le niveau absolu
+n'est **pas** le test (leur harness n'est pas le nôtre) ; le test est le delta apparié
+par sujet, où tout ce qui sépare les harnesses est commun aux deux bras et s'annule.
+Dépouillement : `analysis/ea_replication.py --root results_ea/results`.
+
+**Coût mesuré, et ma première estimation était 8× trop haute.** J'avais lu les médianes
+v5 cross_subject (330 s pour `bd_shallow`) comme du temps *par fit* alors que c'est du
+temps *par ligne*, et une cellule fait 18 lignes pour 9 fits. Réel : ~3.7 GPU-h pour les
+18 cellules, pas 30.
+
+**Le niveau 0.822 n'est pas une fuite.** Vérifié : le classement par sujet de la sonde
+(3, 8, 9 en tête ; 2, 5, 6 en bas) reproduit celui de v5 sur ce dataset. L'écart au
+papier vient de la tâche 2 classes et du protocole corrigé — v5 tournait le protocole
+cassé. L'EA aligne chaque sujet sur sa propre covariance sans jamais toucher `y`, donc le
+sujet retenu est aligné avec son propre enregistrement non labellisé : c'est le réglage
+« offline » du papier, rien ne traverse la frontière train/test.
+
 ## Contrôles fixes manquants — SLURM **500952** — **TERMINÉ 24/24** (26/08)
 
 Soumis le 26/08/2026 ~07h50. Array `0-23%3`, `gpu-best`, `gpu:hopper:1` (même carte que
