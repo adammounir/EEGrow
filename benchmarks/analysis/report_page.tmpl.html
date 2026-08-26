@@ -1,0 +1,384 @@
+<title>EEGrow — state of the benchmark</title>
+<style>
+  :root {
+    --ground: #fbfbfc; --surface: #f2f4f8; --ink: #14171c; --ink-2: #4a525e;
+    --ink-3: #79828f; --rule: #dfe3ea; --accent: #14568f; --accent-soft: #e7eff7;
+    --paper: #ffffff; --done: #2e7d32; --run: #a8640a; --wait: #6b7280;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0e1114; --surface: #171b21; --ink: #e4e7eb; --ink-2: #a8b0bb;
+      --ink-3: #7c8593; --rule: #262c34; --accent: #6aa9e6; --accent-soft: #14212e;
+      --paper: #ffffff; --done: #62b96a; --run: #d99433; --wait: #8b939f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0e1114; --surface: #171b21; --ink: #e4e7eb; --ink-2: #a8b0bb;
+    --ink-3: #7c8593; --rule: #262c34; --accent: #6aa9e6; --accent-soft: #14212e;
+    --paper: #ffffff; --done: #62b96a; --run: #d99433; --wait: #8b939f;
+  }
+  :root[data-theme="light"] {
+    --ground: #fbfbfc; --surface: #f2f4f8; --ink: #14171c; --ink-2: #4a525e;
+    --ink-3: #79828f; --rule: #dfe3ea; --accent: #14568f; --accent-soft: #e7eff7;
+    --paper: #ffffff; --done: #2e7d32; --run: #a8640a; --wait: #6b7280;
+  }
+
+  body {
+    background: var(--ground); color: var(--ink);
+    font: 400 16px/1.62 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1080px; margin: 0 auto; padding: 56px 24px 96px; }
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- masthead ------------------------------------------------------------- */
+  .eyebrow {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  h1 {
+    font-size: clamp(30px, 5vw, 42px); line-height: 1.1; font-weight: 650;
+    letter-spacing: -0.022em; text-wrap: balance; margin: 10px 0 14px;
+  }
+  .standfirst { font-size: 18px; color: var(--ink-2); max-width: 62ch; }
+  .masthead { border-bottom: 2px solid var(--ink); padding-bottom: 26px; }
+  .byline {
+    margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px 22px;
+    font-size: 13px; color: var(--ink-3);
+  }
+
+  /* --- stage rail ----------------------------------------------------------- */
+  .stages { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 34px 0 8px; }
+  @media (max-width: 720px) { .stages { grid-template-columns: 1fr; } }
+  .stage {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 3px;
+    padding: 16px 18px 18px; border-top: 3px solid var(--c);
+  }
+  .stage .n { font-size: 12px; letter-spacing: 0.12em; color: var(--c); font-weight: 600; }
+  .stage h3 { font-size: 16px; font-weight: 620; margin: 6px 0 6px; letter-spacing: -0.01em; }
+  .stage p { font-size: 14px; color: var(--ink-2); line-height: 1.5; }
+  .s-done { --c: var(--done); } .s-run { --c: var(--run); } .s-wait { --c: var(--wait); }
+
+  /* --- sections ------------------------------------------------------------- */
+  section { margin-top: 58px; }
+  h2 {
+    font-size: 25px; font-weight: 640; letter-spacing: -0.018em; margin-bottom: 6px;
+    text-wrap: balance;
+  }
+  h2 + .kicker { color: var(--ink-3); font-size: 14px; margin-bottom: 22px; }
+  h3.sub {
+    font-size: 17px; font-weight: 620; margin: 34px 0 8px; letter-spacing: -0.01em;
+  }
+  p { max-width: 68ch; margin-bottom: 14px; }
+  p + p { margin-top: -2px; }
+  strong { font-weight: 620; }
+  em { font-style: normal; color: var(--accent); font-weight: 560; }
+  a { color: var(--accent); }
+
+  /* --- figures -------------------------------------------------------------- */
+  figure {
+    margin: 26px 0 8px; background: var(--paper); border: 1px solid var(--rule);
+    border-radius: 3px; padding: 14px 14px 6px; overflow-x: auto;
+  }
+  figure svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+  figcaption {
+    font-size: 13.5px; color: var(--ink-2); line-height: 1.5; max-width: 78ch;
+    margin: 14px 4px 22px; padding-left: 12px; border-left: 2px solid var(--rule);
+  }
+  figcaption b {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3);
+    display: block; margin-bottom: 3px; font-weight: 500;
+  }
+
+  /* --- numbers -------------------------------------------------------------- */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 1px;
+           background: var(--rule); border: 1px solid var(--rule); margin: 24px 0 8px; }
+  .stat { background: var(--ground); padding: 15px 16px 16px; }
+  .stat .v {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 24px;
+    font-weight: 500; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+  }
+  .stat .k { font-size: 12.5px; color: var(--ink-3); line-height: 1.35; margin-top: 4px; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 18px 0 8px; }
+  .tw { overflow-x: auto; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--rule); }
+  th { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3);
+       font-weight: 500; }
+  td.n, th.n { text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+               font-variant-numeric: tabular-nums; }
+  .pill {
+    display: inline-block; font-size: 11.5px; letter-spacing: 0.06em; padding: 2px 8px;
+    border-radius: 2px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    text-transform: uppercase;
+  }
+  .p-run { background: var(--run); color: #fff; }
+  .p-done { background: var(--done); color: #fff; }
+
+  .callout {
+    background: var(--accent-soft); border-left: 3px solid var(--accent);
+    padding: 16px 18px; margin: 24px 0; border-radius: 0 3px 3px 0;
+  }
+  .callout p { margin: 0; max-width: 74ch; }
+  .callout p + p { margin-top: 10px; }
+
+  ul { margin: 0 0 16px 0; padding-left: 20px; max-width: 68ch; }
+  li { margin-bottom: 7px; }
+  footer {
+    margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--rule);
+    font-size: 13px; color: var(--ink-3);
+  }
+</style>
+
+<div class="page">
+
+<header class="masthead">
+  <div class="eyebrow">EEGrow · benchmark status</div>
+  <h1>Growing networks for EEG decoding: what the grid says, and what the audit changed</h1>
+  <p class="standfirst">
+    Everything below is measured on results already on disk. Two claims from the v5
+    write-up no longer hold as written; one survives the correction. Stage&nbsp;1, the
+    Euclidean-Alignment replication, is complete on BNCI2014-001 and running on Cho2017.
+  </p>
+  <div class="byline">
+    <span class="mono">Adam Mounir · Inria TAU / Yneuro</span>
+    <span class="mono">26 August 2026</span>
+    <span class="mono">branch exp/ea-replication · nothing merged</span>
+  </div>
+</header>
+
+<div class="stages">
+  <div class="stage s-done">
+    <div class="n mono">STAGE 0 — DONE</div>
+    <h3>Audit of the v5 grid</h3>
+    <p>Chance-level correction and the accuracy-per-parameter front, on the 2100 runs
+       already computed. No new compute.</p>
+  </div>
+  <div class="stage s-run">
+    <div class="n mono">STAGE 1 — RUNNING</div>
+    <h3>Replicate Euclidean Alignment</h3>
+    <p>BNCI2014-001 answered and underpowered; Cho2017 (n&nbsp;=&nbsp;52) running now,
+       6 cells, 52-fold LOSO each.</p>
+  </div>
+  <div class="stage s-wait">
+    <div class="n mono">STAGE 2 — QUEUED</div>
+    <h3>Everything on, then attribution</h3>
+    <p>One gate with alignment + growing together. Per-component attribution only if
+       that gate moves.</p>
+  </div>
+</div>
+
+<section>
+  <h2>1 · The regime, not the leaderboard</h2>
+  <div class="kicker">12 MOABB motor-imagery datasets · 3 protocols · 14 pipelines · 5 seeds · 2100 runs · 189,062 scores</div>
+
+  <p>
+    The single most reproducible thing in the grid is not which network wins but
+    <em>when a network wins at all</em>. Within one subject's session there are a few
+    hundred trials, and a Riemannian classifier — whose inductive bias already encodes
+    the spatial covariance structure of the signal — beats a network that has to learn
+    it. Only when training pools dozens of subjects does the order reverse.
+  </p>
+
+  {{fig:family_levels}}
+  <figcaption><b>Figure 1 — absolute level per family</b>
+    ROC-AUC averaged over the 6 two-class datasets, where chance is 0.5 and the scales
+    are comparable. Counted per cell rather than averaged, the best model within-session
+    is Riemannian on 10 of the 12 datasets. Caveat carried from the protocol audit
+    below: these levels come from runs with <span class="mono">patience&nbsp;20</span>
+    and no best-model restore, so no bar here is the level of a fully trained network.
+  </figcaption>
+
+  <h3 class="sub">What the chance-level audit changed</h3>
+  <p>
+    A paired delta says nothing unless both of its arms are decoding. We now test each
+    arm against its own exact chance threshold — binomial for accuracy, Mann-Whitney for
+    AUC, at that cell's actual number of units. <strong>27 of the 120 growing-vs-fixed
+    comparisons have at least one arm that does not clear it</strong>, and those 27
+    include the largest positive deltas in the whole grid.
+  </p>
+
+  {{fig:paired_forest}}
+  <figcaption><b>Figure 2 — growing minus fixed, per cell</b>
+    Hollow markers are the comparisons where at least one arm sits at chance. The
+    <span class="mono">+0.116</span> for Deep4Net on
+    <span class="mono">bnci2014_001 / cross-session</span> is the clearest case: the
+    growing arm scores 0.419 and the fixed arm 0.306 against a chance level of 0.250 —
+    that is Deep4 failing to train on those 9 subjects, not growing being worth eleven
+    points.
+  </figcaption>
+
+  <div class="stats">
+    <div class="stat"><div class="v">22 / 25</div><div class="k">credible cells won by growing on ShallowFBCSPNet</div></div>
+    <div class="stat"><div class="v">25 / 25</div><div class="k">of those cells where the grown net is also smaller</div></div>
+    <div class="stat"><div class="v">1.83×</div><div class="k">median parameter reduction on that pair</div></div>
+    <div class="stat"><div class="v">27 / 120</div><div class="k">comparisons with an arm at chance</div></div>
+  </div>
+
+  <p>
+    So one pair out of the four survives everything: <strong>ShallowFBCSPNet</strong>.
+    The effect is small (median +0.008) but it is on the same side of zero almost
+    everywhere, and it comes with a network that is consistently smaller. The other three
+    pairs are not wins, and one of them is not even a fair test.
+  </p>
+
+  {{fig:accuracy_per_param}}
+  <figcaption><b>Figure 3 — the same contrast on two axes</b>
+    Right of the vertical line the grown network is smaller; above the horizontal line
+    it is also more accurate. 29 of the 93 credible cells sit in that quadrant, 22 of
+    them from ShallowFBCSPNet. Deep4Net's grown arm is 20–36× smaller and pays for it
+    almost everywhere — a real trade, but a trade.
+  </figcaption>
+
+  <div class="callout">
+    <p><strong>Two claims in the v5 write-up no longer hold as written.</strong></p>
+    <p><strong>(a) EEGNeX is not a width-matched pair.</strong> In
+      <span class="mono">EEGNeX</span>, <span class="mono">filter_1</span> sizes the fixed
+      tail as well as the block the growing arm widens, so the grown arm also ships a
+      permanently narrower tail that growth never reaches. That pair contrasts two
+      different target architectures; its −0.032 measures the missing tail. The honest
+      count is <strong>three</strong> pairs, not four, until it is re-run matched.</p>
+    <p><strong>(b) The whole grid ran a training protocol we have since shown to be
+      wrong.</strong> Every cell used <span class="mono">patience 20</span> with
+      <span class="mono">selection_monitor: valid_acc</span> and nothing restored the best
+      model — every score is the weights exactly 20 epochs past that arm's own best
+      (std 0.0 across all 140,490 folds). On the budget × selection square that costs
+      0.339 against 0.482 at full budget, and 6 of the 9 arms audited are undertrained by
+      +0.02 to +0.13. It does not flip the regime story, since it hits both deep families
+      the same way. It does mean every <em>new</em> campaign passes
+      <span class="mono">train.patience=200 train.selection_monitor=valid_acc</span>
+      explicitly.</p>
+  </div>
+</section>
+
+<section>
+  <h2>2 · Stage 1 — does our Euclidean Alignment reproduce the published effect?</h2>
+  <div class="kicker">Target fixed before the run: Junqueira, Aristimunha, Chevallier &amp; de Camargo, arXiv 2401.10746, Table 2 — BNCI2014-001 LOSO, 68.93 → 73.98, <span class="mono">Δ = +5.05 pp</span></div>
+
+  <p>
+    The absolute level is deliberately <em>not</em> the test. Their harness is not ours —
+    different early stopping, different selection rule, different seeds — so landing four
+    points either side of 68.93 would say nothing. The <strong>paired per-subject
+    delta</strong> is the test, because everything that separates the two harnesses is
+    shared between our raw and our aligned arm and cancels in the difference. The unit of
+    analysis is the held-out subject: sessions and seeds are replication layers and are
+    averaged inside a subject before anything is computed.
+  </p>
+
+  {{fig:ea_gate}}
+  <figcaption><b>Figure 4 — the gate on BNCI2014-001</b>
+    Left: mean paired delta per network with its 95 % bootstrap CI over the 9 held-out
+    subjects; small dots are the subjects. Right: each subject's raw → aligned pair,
+    pooled over the three networks. Alignment moves in the published direction on every
+    network, and on ShallowFBCSPNet the CI clears zero
+    (<span class="mono">+3.98 pp [+1.31, +7.04], p = 0.012</span>). Pooled it does not
+    (<span class="mono">+3.17 pp [−0.34, +7.32]</span>).
+  </figcaption>
+
+  <div class="stats">
+    <div class="stat"><div class="v">+3.17 pp</div><div class="k">paired delta, pooled over 3 nets, n = 9</div></div>
+    <div class="stat"><div class="v">6 / 9</div><div class="k">held-out subjects that gain</div></div>
+    <div class="stat"><div class="v">6.69 pp</div><div class="k">minimum detectable effect at n = 9</div></div>
+    <div class="stat"><div class="v">13</div><div class="k">subjects needed to resolve +5.05 pp</div></div>
+  </div>
+
+  <p>
+    That is <strong>not a negative result — it is an underpowered one</strong>, and the
+    difference matters. The minimum detectable effect at n = 9 is +6.69 pp, larger than
+    the +5.05 pp the gate exists to check. A design that cannot see the effect it was
+    built to test yields neither a pass nor a fail, and reporting the wide CI as "no
+    effect" is exactly how an underpowered study gets written up as a null.
+  </p>
+
+  {{fig:ea_power}}
+  <figcaption><b>Figure 5 — why the gate moved datasets</b>
+    Minimum detectable effect against the number of held-out subjects, at the measured
+    between-subject sd of 6.28 pp. The limit is that sd, not the seed count: going from
+    one seed to two moved the CI width only from 8.2 to 7.5 pp, because seeds replicate
+    <em>inside</em> a subject and shrink a variance component that is already small. Only
+    more subjects move this curve — hence Cho2017, where the MDE falls to 2.44 pp.
+  </figcaption>
+
+  <h3 class="sub">Where the gain lives — and why subject selection would destroy it</h3>
+  <p>
+    Our raw baseline is 79.82 % against the paper's 68.93 %, i.e. about eleven points of
+    headroom that alignment no longer has to recover. That alone predicts a smaller
+    delta than published. The per-subject picture says the same thing more directly.
+  </p>
+
+  {{fig:ea_where}}
+  <figcaption><b>Figure 6 — alignment pays the subjects the decoder fails on</b>
+    Spearman ρ = −0.467 between a subject's raw accuracy and their gain from alignment.
+    Subject 5 goes from 59.3 % raw to +14.7 pp; subject 8, already at 96.5 %, gains
+    +0.06. The practical consequence: any protocol that filters out "bad" subjects
+    removes precisely the subjects carrying the effect, and would report a null.
+  </figcaption>
+</section>
+
+<section>
+  <h2>3 · Running right now</h2>
+  <div class="kicker">Cho2017 · 52 subjects · 3 networks × {raw, Euclidean} · one seed · full 52-fold LOSO per cell</div>
+
+  <p>
+    One seed rather than three: at n = 52 the between-subject sd already puts the MDE at
+    2.44 pp, well under the target, and seeds do not buy power here. Per-fold cost is
+    measured from the fit records rather than estimated, so the finish times below are a
+    projection off the observed rate.
+  </p>
+
+  <div class="tw">
+  <table>
+    <tr><th>cell</th><th>partition</th><th class="n">folds done</th><th class="n">s / fold</th><th>projected end (UTC)</th><th>state</th></tr>
+    <tr><td class="mono">bd_deep4 · euclidean</td><td class="mono">gpu-best</td><td class="n">52 / 52</td><td class="n">367</td><td class="mono">20:13</td><td><span class="pill p-done">done</span></td></tr>
+    <tr><td class="mono">bd_deep4 · raw</td><td class="mono">gpu-best</td><td class="n">43 / 52</td><td class="n">396</td><td class="mono">20:17</td><td><span class="pill p-run">running</span></td></tr>
+    <tr><td class="mono">bd_shallow · euclidean</td><td class="mono">gpu-best</td><td class="n">36 / 52</td><td class="n">431</td><td class="mono">21:14</td><td><span class="pill p-run">running</span></td></tr>
+    <tr><td class="mono">bd_shallow · raw</td><td class="mono">gpu-best</td><td class="n">36 / 52</td><td class="n">436</td><td class="mono">21:15</td><td><span class="pill p-run">running</span></td></tr>
+    <tr><td class="mono">bd_eegnet · raw</td><td class="mono">tau</td><td class="n">8 / 52</td><td class="n">717</td><td class="mono">04:03 (+1d)</td><td><span class="pill p-run">running</span></td></tr>
+    <tr><td class="mono">bd_eegnet · euclidean</td><td class="mono">tau</td><td class="n">7 / 52</td><td class="n">764</td><td class="mono">04:51 (+1d)</td><td><span class="pill p-run">running</span></td></tr>
+  </table>
+  </div>
+
+  <p>
+    Two operational notes worth recording. <span class="mono">gpu-best</span> is a
+    best-effort preemptible partition with a zero-second grace time, and a requeued cell
+    restarts at fold 0 because the resume guard keys on the final CSV; the EEGNet pair
+    was preempted and moved to <span class="mono">tau</span>, which we have priority on,
+    which is why its fold count is behind. And EEGNet is the most expensive of the three
+    networks despite having the fewest operations — these convnets are small enough that
+    kernel-launch latency, not FLOPs, sets the pace, which is also why a 2018 Turing card
+    only loses a factor 1.60 to an H100 here.
+  </p>
+</section>
+
+<section>
+  <h2>4 · Next</h2>
+  <ul>
+    <li><strong>Read out the Cho2017 gate</strong> at n = 52 — the same paired analysis,
+        now with an MDE of 2.44 pp, so it returns an answer rather than an
+        "underpowered".</li>
+    <li><strong>Donor / receiver structure</strong> (Coelho Rodrigues 2019, Fig. 4.7):
+        one Riemannian model per source subject evaluated on the 51 others — 52 fits per
+        cell, not 2652 — used as a per-subject covariate for the alignment gains rather
+        than as a result of its own.</li>
+    <li><strong>Stage 2, everything on</strong>: one two-arm gate with alignment,
+        electrode alignment and growing together. Per-component attribution is only worth
+        buying if that gate moves.</li>
+    <li><strong>Re-run EEGNeX width-matched</strong>, and recompute the v5 p-values at
+        subject level rather than at (subject, session) level.</li>
+  </ul>
+</section>
+
+<footer>
+  Figures regenerate from <span class="mono">benchmarks/analysis/report_figures.py</span>;
+  the EA numbers come from <span class="mono">analysis/ea_replication.py</span>, which is
+  the same code that prints them, so a figure cannot drift from the text. Raw per-cell
+  CSVs live on Margaret; <span class="mono">results_published/</span> is the versioned
+  aggregate and is sufficient to redo the analysis without cluster access.
+</footer>
+
+</div>
