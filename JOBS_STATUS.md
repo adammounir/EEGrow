@@ -41,37 +41,71 @@ sorti la plupart des sujets du régime où l'alignement a du bruit inter-sujet �
 Ce n'est pas un défaut de notre EA : c'est que le +5.05 pp publié est en partie un proxy
 de sous-entraînement.
 
-## Étage 1 bis — réplication EA sur **cho2017** (52 sujets) — SLURM **501230** (sonde)
+## Étage 1 bis — réplication EA sur **cho2017** (52 sujets) — SLURM **501357** — EN COURS
 
-Même checkout `eegrow_ea`, sbatch `benchmarks/slurm/ea_cho_gpu.sbatch`, résultats sous
-`results_cho/`. **`gpu:ampere:1`** et pas hopper : la partition n'a que 3 cartes hopper
-(d'où la lenteur de 501101) contre ~18 ampere, et rien ici ne s'apparie contre les
-grilles hopper.
+Lancé le 26/08 à 13:20 UTC. Même checkout `eegrow_ea` (au commit `7cbaec1`), sbatch
+`benchmarks/slurm/ea_cho_gpu.sbatch`, résultats sous `results_cho/`.
+Dépouillement : `analysis/ea_replication.py --root results_cho/results`.
 
 6 cellules = 3 nets × {none, euclidean} × **1 seed**. Une seule seed parce qu'à n=52 le
 MDE tombe à ~2.4 pp : la puissance vient des sujets, pas des seeds — l'inverse exact du
 raisonnement sur bnci, et pour la même raison. cho2017 est nativement 2 classes
 (`LeftRightImagery` dans sa config), et ses 52 sujets sont déjà dans le cache MNE partagé
-(`MNE-gigadb-data`, 10 Go) : aucun job GPU ne télécharge.
+(`MNE-gigadb-data`, 10 Go) : aucun job GPU ne télécharge. Vérifié dans moabb 1.5.0 :
+`Cho2017().subject_list` fait bien **52** entrées, aucune exclusion — donc n=52 pour la
+puissance, pas 49.
 
-**501230 = sonde de chronométrage à 10 sujets** (`EA_SUBJECTS=10`), écrite dans
-`results_cho_probe10/` — elle change l'estimand (un LOSO à 10 sujets entraîne sur 9, pas
-sur 51) et ne doit jamais être confondue avec la campagne. Le coût LOSO va en **n(n−1)**,
-donc 9 → 52 sujets n'est pas ×5.8 mais ~×30, avant de compter les 64 canaux de cho contre
-22 pour bnci. Extrapolation à lire sur la sonde, pas sur cette arithmétique — mon premier
-chiffrage bnci était déjà 8× trop haut.
+**`gpu:hopper:1`, après avoir corrigé le mauvais critère.** J'avais épinglé `ampere` sur
+l'inventaire : ~18 cartes ampere contre 3 hopper, donc le pool large draine en une vague.
+Mesuré le 26/08, c'est faux — les 18 ampere étaient **toutes allouées**, une hopper était
+libre, et l'estimation Slurm pour la sonde ampere donnait **37 h d'attente** (501230,
+annulé). La file l'explique : neuf tâches d'un autre utilisateur demandent un
+`gres/gpu:1` générique avec un mur de 7 jours, tombent sur ampere et le tiennent. **Le
+critère est ce qui est libre, pas ce qui existe.** Rien ici ne s'apparie contre une autre
+grille, donc la seule exigence est que la carte soit constante sur les 6 cellules ; hopper
+l'est, et c'est en plus ce sur quoi le bras bnci a tourné. Throttle `%3` = le nombre de
+cartes hopper ; plus haut n'achète aucun parallélisme.
+
+### Chiffrage — sonde 501315, **COMPLETED**, 10 sujets, `bd_eegnet` raw
+
+Écrite dans `results_cho_probe10/` : elle change l'estimand (un LOSO à 10 sujets entraîne
+sur 9, pas sur 51) et ne doit jamais être confondue avec la campagne.
+
+| mesure | valeur |
+|---|---|
+| WALL | 1053 s, dont 1002 s de fits → 51 s de chargement de données |
+| fold, régime permanent | **81.7 s** à `n_train=1880` (le 1ᵉʳ fold à 138 s est le warmup CUDA) |
+| régime d'entraînement | `stop_reason: budget`, **200 époques à chaque fold** |
+| `MaxRSS` | **3.96 Go** |
+| dims | 64 canaux, 750 échantillons |
+| score moyen | 0.6959 AUC — loin du hasard, le harness marche sur cho2017 |
+
+**Pourquoi l'extrapolation est fiable ici et pas en général** : `patience=200` avec
+`max_epochs=200` désactive l'arrêt anticipé, donc chaque fit consomme exactement 200
+époques et le temps est **linéaire en `n_train`**. Sans ça le nombre d'époques varie par
+fold et aucune règle de trois ne tient.
+
+À 52 sujets : `n_train` = 51/9 × 1880 ≈ 10 650 (×5.67), 52 folds →
+**463 s/fold × 52 ≈ 6.7 h** pour `bd_eegnet`. Ratios inter-modèles mesurés sur le lot
+bnci (même code, même protocole) : `bd_deep4` ×0.59, `bd_shallow` ×0.52 —
+`bd_eegnet` est le **plus cher** des trois (46.5 s contre 27.5 et 24.0), les convolutions
+séparables d'EEGNet sont limitées par la latence, pas par les FLOPs. Donc la sonde a
+mesuré le pire cas. Total **≈28 GPU-h**, ~11 h de mur sur 3 cartes.
+
+Marges : mur demandé 2 jours contre 6.7 h de pire cellule ; mémoire 64 Go contre ~21 Go
+projetés (3.96 Go × 5.2, majorant puisque l'overhead fixe ne monte pas). Les deux couvrent
+un requeue en cours de route.
+
+**Piège d'estimation à ne pas refaire** : mon premier chiffrage bnci était 8× trop haut —
+j'avais lu les médianes v5 cross_subject (330 s pour `bd_shallow`) comme du temps *par
+fit* alors que c'est du temps *par ligne*, et une cellule fait 18 lignes pour 9 fits.
+D'où la règle : sonder, puis lire l'extrapolation sur la sonde.
 
 **Garde-fou fixé d'avance** — Junqueira, Aristimunha, Chevallier & de Camargo,
 arXiv 2401.10746, Table 2, BNCI2014_001 LOSO 2 classes :
 No-EA 68.93 ± 12.61 → Offline-EA 73.98 ± 11.21, soit **+5.05 pp**. Le niveau absolu
 n'est **pas** le test (leur harness n'est pas le nôtre) ; le test est le delta apparié
 par sujet, où tout ce qui sépare les harnesses est commun aux deux bras et s'annule.
-Dépouillement : `analysis/ea_replication.py --root results_ea/results`.
-
-**Coût mesuré, et ma première estimation était 8× trop haute.** J'avais lu les médianes
-v5 cross_subject (330 s pour `bd_shallow`) comme du temps *par fit* alors que c'est du
-temps *par ligne*, et une cellule fait 18 lignes pour 9 fits. Réel : ~3.7 GPU-h pour les
-18 cellules, pas 30.
 
 **Le niveau 0.822 n'est pas une fuite.** Vérifié : le classement par sujet de la sonde
 (3, 8, 9 en tête ; 2, 5, 6 en bas) reproduit celui de v5 sur ce dataset. L'écart au
