@@ -12,9 +12,10 @@ level that lands 4 points either side of 68.93 says nothing. The paired per-subj
 DELTA is the test, because everything that separates the two harnesses is shared
 between our raw and aligned arms and cancels in the difference.
 
-UNIT OF ANALYSIS: the held-out subject. A LOSO row is one held-out subject, and the
-seeds are replication of that same subject, so seeds are averaged INSIDE a subject
-before anything is tested. n = 9. At n=9 a two-sided Wilcoxon floors at p=0.0039
+UNIT OF ANALYSIS: the held-out subject. A cross_subject cell writes 18 rows, which are
+9 held-out subjects x 2 SESSIONS of each -- and the seeds are a third layer of
+replication on top. Sessions and seeds are both averaged INSIDE a subject before
+anything is tested. n = 9. At n=9 a two-sided Wilcoxon floors at p=0.0039
 (attained iff all 9 subjects agree), so the readout is the effect size and its
 bootstrap CI; the p-value is there to be reported, not to be the verdict.
 
@@ -65,29 +66,43 @@ def wilcoxon(a: np.ndarray) -> float:
 
 
 def paired_delta(d: pd.DataFrame, models: list[str]) -> pd.Series:
-    """EA minus raw, per held-out subject, averaged over seeds inside the subject.
+    """EA minus raw, per held-out subject, sessions and seeds averaged inside it.
 
-    Restricted to the (model, subject, seed) points BOTH arms scored: a subject whose
-    aligned run failed must drop out of the raw arm too, or the delta silently becomes
-    a comparison of two different subject sets.
+    Restricted to the points BOTH arms scored: a cell whose aligned run failed must drop
+    out of the raw arm too, or the delta silently becomes a comparison of two different
+    subject sets.
+
+    THE KEY MUST INCLUDE `session`. A cross_subject cell writes 18 rows -- 9 held-out
+    subjects x 2 sessions -- so a (model, subject, seed) key is duplicated twice over.
+    Aligning two Series on a duplicated index is not a pairing: `.loc[common]` returns
+    the cartesian product of the matching rows on each side, which silently doubles the
+    row count and pairs session 0 of one arm against session 1 of the other. It also
+    made the completeness check report 27 phantom half-paired points on a tree where
+    every cell was complete. The key is the full unit; the collapse to the subject
+    happens afterwards, deliberately.
     """
     # `d["align"]`, never `d.align`: DataFrame.align is a pandas METHOD, so the
     # attribute form compares a bound method to a string, yields False, and pandas then
     # reads False as a column label. Same trap as `d.eval`, and it fails loudly here
     # only by luck -- with a boolean column in the frame it would filter silently.
     d = d[d["model"].isin(models)]
-    key = ["model", "subject", "seed"]
+    key = ["model", "subject", "session", "seed"]
     ea = d[d["align"] == "euclidean"].set_index(key)["score"]
     raw = d[d["align"] == "none"].set_index(key)["score"]
+    for name, s in (("euclidean", ea), ("none", raw)):
+        if s.index.duplicated().any():
+            raise SystemExit(
+                f"the {name} arm has duplicate {tuple(key)} rows: pairing on a "
+                "duplicated index would silently take a cartesian product")
     common = ea.index.intersection(raw.index)
     if len(common) == 0:
-        raise SystemExit("no (model, subject, seed) point has both arms")
+        raise SystemExit(f"no {tuple(key)} point has both arms")
     dropped = len(ea.index.union(raw.index)) - len(common)
     if dropped:
-        print(f"  [warn] {dropped} (model, subject, seed) points have only one arm "
+        print(f"  [warn] {dropped} {tuple(key)} points have only one arm "
               "and are excluded from every number below")
     delta = (ea.loc[common] - raw.loc[common]).sort_index()
-    # seeds are replication of the same held-out subject -> collapse them first
+    # sessions and seeds are both replication of the same held-out subject
     return delta.groupby(level=["model", "subject"]).mean()
 
 
