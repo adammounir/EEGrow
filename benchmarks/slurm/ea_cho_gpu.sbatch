@@ -64,11 +64,17 @@ if [ -z "${MODEL:-}" ]; then echo "no cell for task $SLURM_ARRAY_TASK_ID"; exit 
 # EA_SUBJECTS caps the subject list for the timing probe. It changes the ESTIMAND -- a
 # LOSO over 10 subjects trains on 9, not 51 -- so probe results go to a separate tree
 # and can never be mistaken for the real campaign.
+#
+# EA_TAG suffixes that tree. Without it a probe can only ever be run ONCE: the resume
+# guard below sees the first probe's CSV and exits 0, so a second probe on a different
+# card silently reports success in 2 seconds having measured nothing. That is exactly
+# the comparison this file needs to support -- the same cell, same subjects, different
+# GPU -- so the tree has to be keyed on the card too (EA_TAG=_turing, _pascal, ...).
 SUBJ_OVERRIDE=""
 OUT=$EA/results_cho
 if [ -n "${EA_SUBJECTS:-}" ]; then
     SUBJ_OVERRIDE="dataset.subjects=[$(seq -s, 1 "$EA_SUBJECTS")]"
-    OUT=$EA/results_cho_probe${EA_SUBJECTS}
+    OUT=$EA/results_cho_probe${EA_SUBJECTS}${EA_TAG:-}
 fi
 export EEGROW_BENCH_ROOT=$OUT
 
