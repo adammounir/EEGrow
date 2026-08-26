@@ -1,0 +1,18 @@
+# Fixed-width control for `grow_sccnet` -- the SAME class, built directly at the
+# geometry growth ends on, with no growth. See fix_shallow.yaml for why the braindecode
+# reference is not a sufficient control on its own.
+#
+# Geometry. Growth widens `n_spatial_filters` (Nu = spatial_conv's fan-out =
+# spatial_filt_conv's fan-in); `n_spatial_filters_smooth` is untouched, and the
+# classifier is sized from the smooth width, not from Nu. `grow_sccnet` (4 -> 22)
+# therefore ends at 22/20, and `n_spatial_filters: 22` with no target builds exactly
+# that, frozen. Verified by shape diff -- the 11 params that depend on the knob are all
+# inside the junction (spatial_conv + its growing BatchNorm, spatial_filt_conv fan-in).
+kind: growing
+arch: GrowingSCCNet
+label: fix_sccnet
+needs_sfreq: true
+grow_every: 5      # irrelevant (frozen), kept so the config shape matches the arm
+module_kwargs:
+  n_spatial_filters: 22
+  n_spatial_filters_smooth: 20
