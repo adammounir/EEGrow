@@ -1,5 +1,40 @@
 # Jobs en cours
 
+## À FAIRE juste après le dépouillement de l'étage 1 bis — matrice donneurs/receveurs
+
+Demandé par Adam le 26/08, sur la base de la **figure 4.7 (p. 109) de la thèse Coelho
+Rodrigues 2019** : trois matrices 52×52 de transfert appairé sur **Cho2017**, source en
+colonnes, cible en lignes, réordonnées par sériation (§4.5.2), pour trois procédures de
+transfert (DCT, RCT, RPA). Ce qu'elles montrent : des colonnes sombres = bons donneurs,
+des lignes sombres = bons receveurs, et un panneau RPA **gris uniforme** là où DCT/RCT
+sont contrastés — l'alignement n'améliore pas le transfert partout, il le rend moins
+dépendant du couple.
+
+**Ce n'est pas dans le plan actuel, et c'est structurel.** Le LOSO est exactement la marge
+en lignes de cette matrice : il écrase tout l'axe source dans un seul agrégat. On obtient
+donc les receveurs gratuitement (52 points, dès le dépouillement de ce soir) et on perd
+totalement les donneurs.
+
+**Ne pas la refaire avec les réseaux.** Une case de la matrice = un entraînement sur ~210
+essais d'un seul sujet. C'est le régime où `RESULTS.md` §1 mesure braindecode à 0.63
+contre 0.71 pour Riemann, et §3 trouve des cellules où les 8 réseaux sont pile à la
+chance. Une matrice de convnets serait probablement une bouillie grise — indistinguable
+du panneau RPA, donc ininterprétable : on ne saurait pas séparer « l'alignement a
+homogénéisé » de « rien n'a appris ».
+
+**Plan retenu** : refaire la matrice avec les pipelines riemanniens déjà présents
+(`ts_lr`, `fgmdm`), sur Cho2017, × {`none`, `euclidean`}. CPU, donc sur les 46 nœuds des
+partitions `normal`/`normal-best` qui dorment, sans toucher au budget GPU.
+
+- coût réel : **52 entraînements, pas 2652** — un modèle par sujet source, évalué sur les
+  51 autres cibles ; l'inférence est quasi gratuite ;
+- ce n'est **pas** une cellule Hydra : `run_moabb_hydra.py` n'a pas de mode source→cible
+  (même limitation que le sharding de folds). Script `pyriemann` autonome à écrire, sous
+  `benchmarks/analysis/`, ~une demi-journée ;
+- **usage** : pas un bras de plus dans l'étage 2. Le score de donneur par sujet devient une
+  **covariable** pour expliquer les gains EA des réseaux — l'analogue par couple du
+  Spearman(baseline, gain) = −0.467 mesuré sur bnci.
+
 ## Étage 1 — réplication Euclidean Alignment — SLURM **501098** + **501101** (26/08)
 
 Checkout **`/scratch/amounir/eegrow_ea`** (branche `exp/ea-replication`, clone git, donc
@@ -48,13 +83,21 @@ résultats sous `results_cho/`.
 Dépouillement : `analysis/ea_replication.py --root results_cho/results`.
 **Les 6 cellules tournent en parallèle**, une carte chacune, réparties sur deux jobs :
 
-| cellules | job | carte | lancé | fin attendue |
-|---|---|---|---|---|
-| `bd_eegnet` × {none, euclidean} | **501914**_0-1 | H100 NVL (margpu012) | 15:52 UTC | **22:33 UTC** |
-| `bd_shallow` × {none, euclidean} | 501729_2-3 | RTX 2080 Ti (margpu019/020) | 14:48 UTC | 20:25 UTC |
-| `bd_deep4` × {none, euclidean} | 501729_4-5 | RTX 2080 Ti (margpu021/022) | 14:48 UTC | 21:05 UTC |
+| cellules | job | carte | lancé | s/fold mesuré | fin projetée |
+|---|---|---|---|---|---|
+| `bd_eegnet` × {none, euclidean} | **501914**_0-1 | H100 NVL (margpu012) | 15:52 UTC | 448 / 477 | **22:30 / 22:52 UTC** |
+| `bd_shallow` × {none, euclidean} | 501729_2-3 | RTX 2080 Ti (margpu019/020) | 14:48 UTC | 432 / 410 | 21:12 / 20:59 UTC |
+| `bd_deep4` × {none, euclidean} | 501729_4-5 | RTX 2080 Ti (margpu021/022) | 14:48 UTC | 366 / 367 | 20:13 / 20:14 UTC |
 
-**Mur de la campagne : 22:33 UTC** (≈ 00h35 Paris), contre 01:30 UTC avant la bascule.
+**Mur de la campagne : 22:52 UTC** (≈ 00h52 Paris), contre 01:30 UTC avant la bascule.
+
+> **Relevé à 16:46 UTC**, `n_train=10320`, `epochs=200` sur les 6 cellules — le budget
+> complet s'applique bien, `patience=200` neutralise l'arrêt anticipé comme prévu. Folds
+> faits : deep4 18/52, shallow 15/52, eegnet 6/52 (le job hopper **reprend au fold 0**, le
+> garde de reprise est au niveau du CSV, pas du fold — les 13 et 4 folds turing archivés en
+> `.bak` ne comptent pas). Projection = (52 − faits) × médiane des 6 derniers folds, en
+> excluant les folds turing des deux cellules eegnet. L'extrapolation initiale à partir de
+> la sonde 10 sujets (463 s/fold hopper) donnait 22:33 — elle était juste à 4 % près.
 
 > **Pourquoi deux jobs.** À 15:50 UTC les cartes hopper que `mkalla` tenait ce matin se
 > sont libérées (3 dispos). Le mur de la campagne, ce sont les deux cellules `bd_eegnet`
