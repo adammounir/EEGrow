@@ -76,21 +76,64 @@ sorti la plupart des sujets du régime où l'alignement a du bruit inter-sujet �
 Ce n'est pas un défaut de notre EA : c'est que le +5.05 pp publié est en partie un proxy
 de sous-entraînement.
 
-## Étage 1 bis — réplication EA sur **cho2017** (52 sujets) — SLURM **501729 + 501914** — EN COURS
+## Étage 1 bis — réplication EA sur **cho2017** (52 sujets) — **TERMINÉ 6/6, `rc=0`** (27/08 04:10 UTC)
 
 Checkout `eegrow_ea` au commit `ad5b85b`, sbatch `benchmarks/slurm/ea_cho_gpu.sbatch`,
 résultats sous `results_cho/`.
-Dépouillement : `analysis/ea_replication.py --root results_cho/results`.
-**Les 6 cellules tournent en parallèle**, une carte chacune, réparties sur deux jobs :
+Dépouillement : `analysis/ea_replication.py --root results_cho/results --dataset cho2017`
+(le `--dataset` est nouveau — commit `3fd3f27` — le script était cloué sur bnci).
 
-| cellules | job | partition | carte | lancé | s/fold | fin projetée |
-|---|---|---|---|---|---|---|
-| `bd_eegnet` × {none, euclidean} | **502496**_0-1 | **tau** | RTX 2080 Ti (margpu017/019) | 17:24 UTC | ~740 | **~04:15 UTC (27/08)** |
-| `bd_shallow` × {none, euclidean} | 501729_2-3 | gpu-best | RTX 2080 Ti (margpu019/020) | 14:48 UTC | 432 / 410 | 21:12 / 20:59 UTC |
-| `bd_deep4` × {none, euclidean} | 501729_4-5 | gpu-best | RTX 2080 Ti (margpu021/022) | 14:48 UTC | 366 / 367 | 20:13 / 20:14 UTC |
+| cellule | job | partition | s/fold | wall | fin UTC |
+|---|---|---|---|---|---|
+| `bd_deep4` euclidean | 501729_5 | gpu-best | 367 | 5 h 23 | 26/08 20:11 |
+| `bd_deep4` none | 501729_4 | gpu-best | 396 | 5 h 29 | 26/08 20:18 |
+| `bd_shallow` euclidean | 501729_3 | gpu-best | 431 | 6 h 24 | 26/08 21:12 |
+| `bd_shallow` none | 501729_2 | gpu-best | 436 | 6 h 28 | 26/08 21:17 |
+| `bd_eegnet` none | 502496_0 | **tau** | 717 | 10 h 04 | 27/08 03:28 |
+| `bd_eegnet` euclidean | 502496_1 | **tau** | 764 | 10 h 45 | 27/08 04:10 |
 
-**Mur de la campagne : ~04:15 UTC le 27/08.** Les quatre cellules turing finissent entre
-20:13 et 21:12 ; le mur, c'est la paire `bd_eegnet` redémarrée à zéro à 17:24.
+**Coût total 44.6 h GPU**, 6 cartes en parallèle. Les ETA projetées la veille au soir
+(20:13 / 20:17 / 21:14 / 21:15 / 04:03 / 04:51) sont tombées à moins de 5 min près : la
+médiane des 10 derniers folds est une base de projection fiable.
+
+### RÉSULTAT — le gate passe, à **un tiers** de l'effet publié
+
+```
+POOLED (3 nets)   +1.51 pp  [+0.14, +2.83]  p=0.0062  win=67%  n=52
+  bd_deep4        +2.26 pp  [+0.80, +3.71]  p=0.003   win=67%
+  bd_eegnet       +1.68 pp  [+0.25, +3.13]  p=0.017   win=71%
+  bd_shallow      +0.59 pp  [-1.48, +2.53]  p=0.24    win=56%
+sd inter-sujets 4.96 pp   MDE 1.97 pp   baseline brut 73.33 (papier 68.93)
+VERDICT: PASS — mais 0.30x le +5.05 pp publié, et le garde du script tire
+         « WRONG ORDER OF MAGNITUDE » (seuil 0.4x)
+```
+
+**Ce qui est acquis** : notre EA reproduit l'effet publié en direction et en
+significativité. C'est ce dont l'étage 2 avait besoin — une interaction avec la
+croissance n'a de sens que si chaque différence est réelle.
+
+**Ce qui est à dire dans le papier et pas à cacher derrière le PASS** : la borne haute
+de notre IC (+2.83) est **sous** +5.05. Ce n'est donc pas un intervalle large qui
+contiendrait la valeur publiée — à ce n on peut affirmer que l'effet est plus petit chez
+nous. Une partie est de la marge (baseline 73.33 vs 68.93), mais voir le point suivant
+avant de s'appuyer dessus.
+
+### Deux choses de bnci qui NE répliquent PAS à n=52
+
+1. **« L'EA paie les sujets faibles »** — Spearman(baseline, gain) = **−0.467** à n=9,
+   **+0.038 (p=0.79)** à n=52. Artefact de petit échantillon. La figure garde les deux
+   panneaux côte à côte : c'est le type d'affirmation qui arrive dans un papier si la
+   réfutation n'est pas imprimée à côté.
+2. **L'ordre par réseau s'inverse** — `bd_shallow` portait le seul IC excluant zéro à
+   n=9 (+3.98, p=0.012) et n'en porte plus (+0.59, p=0.24) ; `bd_deep4` fait l'inverse.
+   La structure par réseau lue sur 9 sujets était du bruit. **Seule la ligne poolée est
+   citable.**
+
+### Figures et page de synthèse
+
+`analysis/report_figures.py` (8 figures) + `analysis/build_report_page.py` → une page
+HTML autoportante. Les figures EA appellent le `load`/`paired_delta`/`boot_ci`
+d'`ea_replication.py`, donc elles ne peuvent pas diverger des chiffres imprimés.
 
 ### `gpu-best` est une partition **préemptible** — c'est ce qui a cassé la paire eegnet
 

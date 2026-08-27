@@ -127,7 +127,7 @@ def paired_forest(chance: pd.DataFrame):
 
 
 # ------------------------------------------------------------------ stage 1: the EA gate
-def ea_gate(delta: pd.Series, d: pd.DataFrame):
+def ea_gate(delta: pd.Series, d: pd.DataFrame, dataset: str, n_sub: int):
     """Left: the paired delta per net, with its bootstrap CI, against the paper's target.
     Right: every held-out subject's raw → aligned pair, pooled over the three nets.
 
@@ -159,19 +159,26 @@ def ea_gate(delta: pd.Series, d: pd.DataFrame):
     a0.set_yticks(y, [r[0] for r in rows], fontsize=10)
     a0.set_xlabel("accuracy of aligned − accuracy of raw, per held-out subject (pp)")
     a0.set_ylim(y[-1] - 0.7, y[0] + 0.95)
-    a0.set_title("BNCI2014-001, LOSO, n = 9 subjects\n"
+    a0.set_title(f"{dataset}, LOSO, n = {n_sub} subjects\n"
                  "bar = 95 % bootstrap CI of the mean, dots = the subjects", fontsize=10)
     a0.grid(axis="x", alpha=0.25)
     a0.set_axisbelow(True)
 
     sub = (d[d["model"].isin(MODELS)]
            .groupby(["align", "subject"]).score.mean().unstack("align") * 100)
+    # Label the subjects only when there are few enough to read. At n=52 fifty-two
+    # labels are a texture, not information, and the individual identities stop being
+    # the point once the panel is about the distribution.
+    label_subjects = len(sub) <= 12
     for s, r in sub.iterrows():
         up = r["euclidean"] >= r["none"]
         a1.plot([0, 1], [r["none"], r["euclidean"]], color="C0" if up else "C3",
-                lw=1.5, alpha=0.85, marker="o", ms=5, zorder=2)
-        a1.text(1.04, r["euclidean"], f"S{s}", fontsize=8, va="center",
-                color="C0" if up else "C3")
+                lw=1.5 if label_subjects else 0.9,
+                alpha=0.85 if label_subjects else 0.45,
+                marker="o", ms=5 if label_subjects else 3, zorder=2)
+        if label_subjects:
+            a1.text(1.04, r["euclidean"], f"S{s}", fontsize=8, va="center",
+                    color="C0" if up else "C3")
     a1.plot([0, 1], [sub["none"].mean(), sub["euclidean"].mean()], color="k", lw=3,
             marker="o", ms=8, zorder=3, label="mean")
     a1.set_xticks([0, 1], ["raw", "Euclidean\nalignment"], fontsize=10)
@@ -189,36 +196,92 @@ def ea_gate(delta: pd.Series, d: pd.DataFrame):
     return f
 
 
-def ea_where(delta: pd.Series, d: pd.DataFrame):
+def ea_where(sets: list[tuple[str, pd.Series, pd.DataFrame]]):
     """The EA gain against the raw baseline, one point per held-out subject.
 
-    The negative slope is the reason this effect must never be measured on a filtered
-    subject set: alignment pays the subjects a BCI works worst on. Dropping "bad"
-    subjects would remove precisely the ones carrying the effect.
+    This panel exists because it was WRONG the first time. On BNCI2014-001 the nine
+    subjects gave rho = -0.467 and the reading was "alignment pays the subjects a BCI
+    works worst on". At n=52 the same measurement gives rho = +0.038: the pattern was a
+    small-sample artefact. Both are drawn, with their n, rather than the second quietly
+    replacing the first -- an n=9 correlation is exactly the kind of claim that survives
+    into a paper if the refutation is not shown next to it.
     """
-    raw = (d[(d["align"] == "none") & d["model"].isin(MODELS)]
-           .groupby("subject").score.mean() * 100)
-    gain = delta.groupby(level="subject").mean() * 100
-    both = pd.concat([raw.rename("raw"), gain.rename("gain")], axis=1).dropna()
-    rho, p = stats.spearmanr(both["raw"], both["gain"])
+    f, axes = plt.subplots(1, len(sets), figsize=(6.2 * len(sets), 4.8), sharey=True)
+    axes = np.atleast_1d(axes)
+    for ax, (label, delta, d) in zip(axes, sets):
+        raw = (d[(d["align"] == "none") & d["model"].isin(MODELS)]
+               .groupby("subject").score.mean() * 100)
+        gain = delta.groupby(level="subject").mean() * 100
+        both = pd.concat([raw.rename("raw"), gain.rename("gain")], axis=1).dropna()
+        rho, p = stats.spearmanr(both["raw"], both["gain"])
 
-    f, ax = plt.subplots(figsize=(6.6, 4.8))
-    ax.axhline(0, color="0.3", lw=1)
-    ax.scatter(both["raw"], both["gain"], s=95, zorder=3,
-               color=np.where(both["gain"] > 0, "C0", "C3"), edgecolor="white",
-               linewidth=1.1)
-    for s, r in both.iterrows():
-        ax.annotate(f"S{s}", (r["raw"], r["gain"]), textcoords="offset points",
-                    xytext=(8, 4), fontsize=9, color="0.35")
-    b, a = np.polyfit(both["raw"], both["gain"], 1)
-    xs = np.linspace(both["raw"].min() - 2, both["raw"].max() + 2, 50)
-    ax.plot(xs, a + b * xs, color="0.5", lw=1.2, ls="--", zorder=1)
-    ax.set_xlabel("raw accuracy of the held-out subject (%)")
-    ax.set_ylabel("gain from alignment (pp)")
-    ax.set_title(f"Alignment pays the subjects the decoder fails on\n"
-                 f"Spearman $\\rho$ = {rho:+.3f}  (p = {p:.2f}, n = {len(both)})",
-                 fontsize=10.5)
-    ax.grid(alpha=0.25)
+        ax.axhline(0, color="0.3", lw=1)
+        ax.scatter(both["raw"], both["gain"], s=95 if len(both) <= 12 else 42, zorder=3,
+                   color=np.where(both["gain"] > 0, "C0", "C3"), edgecolor="white",
+                   linewidth=1.1)
+        if len(both) <= 12:
+            for s, r in both.iterrows():
+                ax.annotate(f"S{s}", (r["raw"], r["gain"]), textcoords="offset points",
+                            xytext=(8, 4), fontsize=9, color="0.35")
+        b, a = np.polyfit(both["raw"], both["gain"], 1)
+        xs = np.linspace(both["raw"].min() - 2, both["raw"].max() + 2, 50)
+        ax.plot(xs, a + b * xs, color="0.5", lw=1.2, ls="--", zorder=1)
+        ax.set_xlabel("raw accuracy of the held-out subject (%)")
+        ax.set_title(f"{label}   n = {len(both)}\n"
+                     f"Spearman $\\rho$ = {rho:+.3f}  (p = {p:.2f})", fontsize=10.5)
+        ax.grid(alpha=0.25)
+        ax.set_axisbelow(True)
+    axes[0].set_ylabel("gain from alignment (pp)")
+    f.suptitle("Does alignment pay the subjects the decoder fails on? "
+               "Only at n = 9.", fontsize=11)
+    f.tight_layout()
+    return f
+
+
+def ea_datasets(d_bnci: pd.Series, d_cho: pd.Series):
+    """The same gate on 9 subjects and on 52, per network and pooled.
+
+    This is the figure the campaign was run to produce. Two things are visible at once
+    that no single-dataset panel can show.
+
+    The CIs SHRINK: same estimator, same code, four times the subjects. That is the
+    whole return on moving datasets, and it is why "no effect" was never available from
+    the n=9 panel.
+
+    The per-network ORDER changes: ShallowFBCSPNet carried the clearest effect at n=9
+    (+3.98, p=0.012) and carries none at n=52 (+0.59, p=0.24), while Deep4Net does the
+    opposite. Per-network structure read off nine subjects was noise. The pooled row is
+    the estimand the published +5.05 pp refers to, and it is the only row to quote.
+    """
+    f, ax = plt.subplots(figsize=(8.6, 4.6))
+    rows = [("pooled (3 nets)", "pooled")] + [(NET_LABEL[m], m) for m in MODELS]
+    for i, (name, key) in enumerate(rows):
+        yi = len(rows) - 1 - i
+        for delta, off, c, lab in [(d_bnci, +0.17, "C1", "BNCI2014-001, n = 9"),
+                                   (d_cho, -0.17, "C0", "Cho2017, n = 52")]:
+            a = (delta.groupby(level="subject").mean().to_numpy() if key == "pooled"
+                 else delta.xs(key, level="model").to_numpy())
+            lo, hi = boot_ci(a)
+            ax.plot([lo * 100, hi * 100], [yi + off] * 2, color=c, lw=3,
+                    solid_capstyle="round", zorder=2,
+                    label=lab if i == 0 else None)
+            ax.scatter(a.mean() * 100, yi + off, s=64, color=c, zorder=3,
+                       edgecolor="white", linewidth=1.1)
+    ax.axvline(0, color="0.3", lw=1)
+    ax.axvline(PAPER["delta"] * 100, color="C2", lw=1.6, ls="--", zorder=1)
+    # Opaque backing: the n=9 intervals run straight through this label, and a legend
+    # you have to read a bar through is not a legend.
+    ax.text(PAPER["delta"] * 100 + 0.15, len(rows) - 0.55, "published\n+5.05 pp",
+            color="C2", fontsize=9, va="top",
+            bbox=dict(facecolor="white", edgecolor="none", alpha=0.85, pad=1.5))
+    ax.axhline(len(rows) - 1.5, color=(0, 0, 0, 0.18), lw=0.9)
+    ax.set_yticks(range(len(rows))[::-1], [r[0] for r in rows], fontsize=10)
+    ax.set_xlabel("aligned − raw, per held-out subject (pp), 95 % bootstrap CI")
+    ax.set_ylim(-0.7, len(rows) - 0.25)
+    ax.legend(fontsize=9, loc="lower right")
+    ax.set_title("Four times the subjects: the interval shrinks, and the "
+                 "per-network story does not survive", fontsize=11)
+    ax.grid(axis="x", alpha=0.25)
     ax.set_axisbelow(True)
     f.tight_layout()
     return f
@@ -280,20 +343,29 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ea-root", type=Path, required=True,
                     help="results tree holding the bnci2014_001 cross_subject EA cells")
+    ap.add_argument("--cho-root", type=Path, required=True,
+                    help="results tree holding the cho2017 cross_subject EA cells")
     args = ap.parse_args()
 
     levels = pd.read_csv(bench / "results_published" / "eegrow_benchmark_levels.csv")
     chance = pd.read_csv(here / "chance" / "growing_vs_fixed_chance.csv")
     h2h = pd.read_csv(here / "pareto" / "head_to_head.csv")
-    d = load(args.ea_root)
-    delta = paired_delta(d, MODELS)
+    d_b = load(args.ea_root, "bnci2014_001")
+    d_c = load(args.cho_root, "cho2017")
+    delta_b = paired_delta(d_b, MODELS)
+    delta_c = paired_delta(d_c, MODELS)
+    n_b = delta_b.index.get_level_values("subject").nunique()
+    n_c = delta_c.index.get_level_values("subject").nunique()
 
     figs = [("family_levels", family_levels(levels)),
             ("paired_forest", paired_forest(chance)),
             ("accuracy_per_param", accuracy_per_param(h2h)),
-            ("ea_gate", ea_gate(delta, d)),
-            ("ea_where", ea_where(delta, d)),
-            ("ea_power", ea_power(delta))]
+            ("ea_gate", ea_gate(delta_b, d_b, "BNCI2014-001", n_b)),
+            ("ea_gate_cho", ea_gate(delta_c, d_c, "Cho2017", n_c)),
+            ("ea_datasets", ea_datasets(delta_b, delta_c)),
+            ("ea_where", ea_where([("BNCI2014-001", delta_b, d_b),
+                                   ("Cho2017", delta_c, d_c)])),
+            ("ea_power", ea_power(delta_b))]
     for name, fig in figs:
         # Per-figure hashsalt: matplotlib derives clip-path ids from it, and two SVGs
         # inlined in the same HTML page with colliding ids clip each other.
