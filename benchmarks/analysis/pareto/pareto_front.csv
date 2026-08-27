@@ -1,0 +1,94 @@
+eval,dataset,model,family,score_mean,params_end,param_epochs,on_front
+cross_session,bnci2014_001,fix_deepeeg,fixed control,0.4133101855555555,10036.0,511836.0,True
+cross_session,bnci2014_001,grow_deep,growing,0.4219521616666666,10036.0,456004.0,True
+cross_session,bnci2014_001,bd_sccnet,braindecode,0.6242669748888888,14394.0,863640.0,True
+cross_session,bnci2014_001,grow_sccnet,growing,0.6298611096666666,14394.0,929092.5,True
+cross_session,bnci2014_004,grow_sccnet,growing,0.82187372245,7208.0,184982.0,True
+cross_session,bnci2014_004,bd_sccnet,braindecode,0.82379326775,12774.0,408768.0,True
+cross_session,bnci2014_004,grow_eegnex,growing,0.83389028745,51298.0,2047826.0,True
+cross_session,bnci2014_004,bd_eegnex,braindecode,0.84114430815,54802.0,2137278.0,True
+cross_session,bnci2015_001,fix_deepeeg,fixed control,0.7573021428571426,8274.0,397152.0,True
+cross_session,bnci2015_001,grow_sccnet,growing,0.8878896428571429,12162.0,505116.0,True
+cross_session,bnci2015_001,bd_sccnet,braindecode,0.9095835714285716,13194.0,527760.0,True
+cross_session,bnci2015_001,bd_eegnex,braindecode,0.911475,55506.0,3108336.0,True
+cross_session,lee2019_mi,bd_sccnet,braindecode,0.6686837037037037,13872.0,443904.0,True
+cross_session,zhou2016,fix_deepeeg,fixed control,0.6581108361666667,9379.0,595566.5,True
+cross_session,zhou2016,grow_sccnet,growing,0.8208682188333333,13858.5,587112.5,True
+cross_session,zhou2016,bd_sccnet,braindecode,0.8256459708333334,14117.0,635265.0,True
+cross_subject,bnci2014_001,fix_deepeeg,fixed control,0.3891589516666667,10036.0,501800.0,True
+cross_subject,bnci2014_001,grow_deep,growing,0.390972220111111,10036.0,525856.0,True
+cross_subject,bnci2014_001,bd_sccnet,braindecode,0.4398919759999999,14394.0,1021974.0,True
+cross_subject,bnci2014_001,bd_deep4,braindecode,0.4575231455555555,282879.0,25741989.0,True
+cross_subject,bnci2014_002,fix_deepeeg,fixed control,0.7603437487142858,8402.0,382291.0,True
+cross_subject,bnci2014_002,grow_deep,growing,0.7645803581428571,8402.0,363735.0,True
+cross_subject,bnci2014_002,bd_sccnet,braindecode,0.7884441997142856,13238.0,840613.0,True
+cross_subject,bnci2014_002,grow_sccnet,growing,0.7960267879999998,13238.0,731662.0,True
+cross_subject,bnci2014_002,grow_eegnex,growing,0.8012042394285714,52082.0,2837511.0,True
+cross_subject,bnci2014_002,bd_eegnex,braindecode,0.8130122845714285,55634.0,3171138.0,True
+cross_subject,bnci2014_002,bd_deep4,braindecode,0.8249999985714285,276902.0,19660042.0,True
+cross_subject,bnci2014_004,fix_deepeeg,fixed control,0.7626267156585366,7410.0,229710.0,True
+cross_subject,bnci2014_004,grow_deep,growing,0.7671032326829268,7410.0,199360.0,True
+cross_subject,bnci2014_004,grow_sccnet,growing,0.794692618097561,7714.0,229242.0,True
+cross_subject,bnci2014_004,bd_shallow,braindecode,0.7951114915609755,11442.0,560658.0,True
+cross_subject,bnci2014_004,grow_eegnex,growing,0.8130062208780487,51298.0,2406912.0,True
+cross_subject,bnci2014_004,bd_eegnex,braindecode,0.8146390536585365,54802.0,2849704.0,True
+cross_subject,bnci2015_001,fix_deepeeg,fixed control,0.7495135714285716,8274.0,376467.0,True
+cross_subject,bnci2015_001,bd_sccnet,braindecode,0.7980867857142858,13194.0,844416.0,True
+cross_subject,bnci2015_001,bd_deep4,braindecode,0.8093232142857144,275652.0,25635636.0,True
+cross_subject,cho2017,fix_deepeeg,fixed control,0.667703899423077,10642.0,361828.0,True
+cross_subject,cho2017,grow_deep,growing,0.6754858226923075,10642.0,320868.0,True
+cross_subject,cho2017,bd_sccnet,braindecode,0.7235871470384615,13516.0,567672.0,True
+cross_subject,cho2017,grow_sccnet,growing,0.7343964425,13516.0,591170.5,True
+cross_subject,cho2017,bd_deep4,braindecode,0.7443378526923077,305127.0,24105033.0,True
+cross_subject,lee2019_mi,fix_deepeeg,fixed control,0.8244222222222222,10962.0,383670.0,True
+cross_subject,lee2019_mi,bd_sccnet,braindecode,0.8405529629629631,13872.0,735216.0,True
+cross_subject,lee2019_mi,grow_sccnet,growing,0.8477496296296296,13872.0,721457.5,True
+cross_subject,lee2019_mi,grow_eegnex,growing,0.8638066666666667,55058.0,4470644.0,True
+cross_subject,lee2019_mi,bd_eegnex,braindecode,0.869692962962963,58514.0,4154494.0,True
+cross_subject,physionetmi,fix_deepeeg,fixed control,0.7667153794495413,10642.0,468248.0,True
+cross_subject,physionetmi,bd_sccnet,braindecode,0.8368735974495414,13516.0,635252.0,True
+cross_subject,physionetmi,grow_sccnet,growing,0.8432429302201836,13516.0,633397.0,True
+cross_subject,physionetmi,grow_shallow,growing,0.8613188538165139,50150.0,1965456.0,True
+cross_subject,schirrmeister2017,bd_sccnet,braindecode,0.574748856,16726.0,1237724.0,True
+cross_subject,schirrmeister2017,grow_sccnet,growing,0.5806291554285714,16726.0,1301486.5,True
+cross_subject,schirrmeister2017,bd_deep4,braindecode,0.5905343362857144,349129.0,34214642.0,True
+cross_subject,shin2017a,bd_sccnet,braindecode,0.755264367816092,15568.0,638288.0,True
+cross_subject,shin2017a,grow_eegnex,growing,0.7751724137931034,53198.0,2716604.0,True
+cross_subject,weibo2014,fix_deepeeg,fixed control,0.585689096,10834.0,595870.0,True
+cross_subject,weibo2014,grow_deep,growing,0.6065004158,10834.0,575161.0,True
+cross_subject,weibo2014,bd_sccnet,braindecode,0.7335614766,13828.0,933390.0,True
+cross_subject,weibo2014,grow_sccnet,growing,0.7467301642,13828.0,804922.5,True
+cross_subject,weibo2014,grow_eegnex,growing,0.7483103024,54930.0,3855534.0,True
+cross_subject,zhou2016,fix_deepeeg,fixed control,0.7338889843333333,9379.0,468950.0,True
+cross_subject,zhou2016,grow_deep,growing,0.7536289586666666,9379.0,480774.5,True
+cross_subject,zhou2016,grow_sccnet,growing,0.7802102068333334,13083.0,578819.0,True
+within_session,alexmi,bd_sccnet,braindecode,0.4945833325,12961.0,349947.0,True
+within_session,bnci2014_001,fix_deepeeg,fixed control,0.3974410157777778,10036.0,431548.0,True
+within_session,bnci2014_001,grow_deep,growing,0.3978013076666667,10036.0,411642.0,True
+within_session,bnci2014_001,bd_sccnet,braindecode,0.6386677392222222,14394.0,834852.0,True
+within_session,bnci2014_002,fix_deepeeg,fixed control,0.6490959808571428,8402.0,247859.0,True
+within_session,bnci2014_002,grow_deep,growing,0.6495535712857142,8402.0,249108.0,True
+within_session,bnci2014_002,grow_sccnet,growing,0.7357812502857143,11166.0,279266.0,True
+within_session,bnci2014_002,bd_sccnet,braindecode,0.8114508934285716,13238.0,529520.0,True
+within_session,bnci2014_004,grow_sccnet,growing,0.6730549176097561,6196.0,138068.0,True
+within_session,bnci2014_004,fix_deepeeg,fixed control,0.6886641273658537,7410.0,244530.0,True
+within_session,bnci2014_004,grow_deep,growing,0.6987791366829268,7410.0,254050.0,True
+within_session,bnci2014_004,grow_shallow,growing,0.7874437978536585,7792.0,261094.0,True
+within_session,bnci2014_004,bd_sccnet,braindecode,0.8218550020487804,12774.0,447090.0,True
+within_session,bnci2015_001,fix_deepeeg,fixed control,0.7012875000000002,8274.0,297864.0,True
+within_session,bnci2015_001,grow_deep,growing,0.7031,8274.0,302274.0,True
+within_session,bnci2015_001,grow_sccnet,growing,0.8514178571428571,11130.0,413202.0,True
+within_session,bnci2015_001,bd_sccnet,braindecode,0.8938392857142857,13194.0,507969.0,True
+within_session,cho2017,fix_deepeeg,fixed control,0.571327457576923,10642.0,297976.0,True
+within_session,cho2017,grow_deep,growing,0.5800057154615385,10642.0,277340.0,True
+within_session,cho2017,bd_sccnet,braindecode,0.7384611643076925,13516.0,473060.0,True
+within_session,cho2017,grow_sccnet,growing,0.7530950855384615,13516.0,485641.0,True
+within_session,lee2019_mi,bd_sccnet,braindecode,0.6996259259259259,13872.0,402288.0,True
+within_session,schirrmeister2017,bd_sccnet,braindecode,0.8347992537142855,16726.0,1003560.0,True
+within_session,schirrmeister2017,grow_sccnet,growing,0.8400051927142856,16726.0,1010359.0,True
+within_session,weibo2014,bd_sccnet,braindecode,0.7042837984,13828.0,456324.0,True
+within_session,weibo2014,grow_sccnet,growing,0.7138813806,13828.0,447419.5,True
+within_session,zhou2016,fix_deepeeg,fixed control,0.4174747668333333,9379.0,271991.0,True
+within_session,zhou2016,grow_deep,growing,0.4270099865,9379.0,271747.0,True
+within_session,zhou2016,grow_sccnet,growing,0.4760687281666667,12049.0,366432.0,True
+within_session,zhou2016,bd_sccnet,braindecode,0.7935824676666666,14117.0,691733.0,True

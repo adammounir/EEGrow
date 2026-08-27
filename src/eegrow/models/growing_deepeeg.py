@@ -51,6 +51,7 @@ class GrowingDeepEEGNet(SequentialGrowingModel):
         n_times: int,
         w1: int = 8,
         w2: int = 16,
+        w2_in: int | None = None,
         target_w2: int | None = None,
         filter_time_length: int = 25,
         filter_length_2: int = 10,
@@ -60,9 +61,24 @@ class GrowingDeepEEGNet(SequentialGrowingModel):
     ) -> None:
         super().__init__(in_features=n_chans, out_features=n_outputs, device=device)
         self.n_chans, self.n_outputs, self.n_times = n_chans, n_outputs, n_times
-        self.w1, self.w2 = w1, w2
-        target = w2 if target_w2 is None else target_w2
-        self._can_grow = target > w2
+        # What grows is the *intermediate* width of stage 2 -- conv2a's fan-out, which
+        # is conv2b's fan-in. conv2b's OUTPUT stays at w2, and so do bn2 and the
+        # classifier. A model grown from w2_in=8 to a target of 32 therefore ends up
+        # 8 -> 32 -> 8, not 8 -> 32 -> 32.
+        #
+        # w2_in exists so that geometry can also be built directly, frozen: it is the
+        # only honest fixed control for the growing arm (same architecture, same final
+        # widths, no growth). Comparing grow_deep against braindecode's Deep4Net -- 4
+        # stages, 25/50/100/200 filters -- compares architectures, not growth.
+        # Default None => w2, which is the pre-existing behaviour unchanged.
+        w2_in = w2 if w2_in is None else w2_in
+        self.w1, self.w2, self.w2_in = w1, w2, w2_in
+        target = w2_in if target_w2 is None else target_w2
+        self._can_grow = target > w2_in
+        # See GrowingShallowFBCSPNet: gromo does not enforce the target, the callback
+        # does, and it needs this attribute. Missing here, this model grew to 77 for a
+        # target of 32 in nine growth events.
+        self.target_width = target
 
         # reshape (B,C,T) -> (B,1,T,C)
         self.ensuredims = Ensure4d()
@@ -92,15 +108,17 @@ class GrowingDeepEEGNet(SequentialGrowingModel):
         # conv2a: stage start -> previous=None, allow_growing=False (chain broken).
         t2 = _conv_out(t1p, filter_length_2)
         self.conv2a = Conv2dGrowingModule(
-            in_channels=w1, out_channels=w2, kernel_size=(filter_length_2, 1),
+            in_channels=w1, out_channels=w2_in, kernel_size=(filter_length_2, 1),
             use_bias=False, post_layer_function=nn.ELU(),   # activation INSIDE the junction
             previous_module=None, allow_growing=False,
             input_size=(t1p, 1), name="conv2a", device=self.device,
         )
-        # conv2b: the growable (deep) junction.
+        # conv2b: the growable (deep) junction. Its fan-in is what grows (and with it
+        # conv2a's fan-out); its fan-out stays w2, which is what bn2 and the
+        # classifier are sized on.
         t2b = _conv_out(t2, filter_length_2)
         self.conv2b = Conv2dGrowingModule(
-            in_channels=w2, out_channels=w2, kernel_size=(filter_length_2, 1),
+            in_channels=w2_in, out_channels=w2, kernel_size=(filter_length_2, 1),
             use_bias=False, post_layer_function=nn.Identity(),
             previous_module=self.conv2a, allow_growing=self._can_grow,
             input_size=(t2, 1), target_in_channels=target,

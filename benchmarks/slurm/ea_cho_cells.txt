@@ -1,0 +1,6 @@
+bd_eegnet none 42
+bd_eegnet euclidean 42
+bd_shallow none 42
+bd_shallow euclidean 42
+bd_deep4 none 42
+bd_deep4 euclidean 42

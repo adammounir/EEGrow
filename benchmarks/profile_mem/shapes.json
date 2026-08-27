@@ -1,0 +1,74 @@
+{
+  "zhou2016": {
+    "n_chans": 14,
+    "n_times": 1251,
+    "n_outputs": 3,
+    "sfreq": 250.0
+  },
+  "alexmi": {
+    "n_chans": 16,
+    "n_times": 750,
+    "n_outputs": 3,
+    "sfreq": 250.0
+  },
+  "bnci2014_001": {
+    "n_chans": 22,
+    "n_times": 1001,
+    "n_outputs": 4,
+    "sfreq": 250.0
+  },
+  "bnci2014_002": {
+    "n_chans": 15,
+    "n_times": 1250,
+    "n_outputs": 2,
+    "sfreq": 250.0
+  },
+  "bnci2014_004": {
+    "n_chans": 3,
+    "n_times": 1126,
+    "n_outputs": 2,
+    "sfreq": 250.0
+  },
+  "bnci2015_001": {
+    "n_chans": 13,
+    "n_times": 1250,
+    "n_outputs": 2,
+    "sfreq": 250.0
+  },
+  "cho2017": {
+    "n_chans": 64,
+    "n_times": 750,
+    "n_outputs": 2,
+    "sfreq": 250.0
+  },
+  "lee2019_mi": {
+    "n_chans": 62,
+    "n_times": 1000,
+    "n_outputs": 2,
+    "sfreq": 250.0
+  },
+  "physionetmi": {
+    "n_chans": 64,
+    "n_times": 752,
+    "n_outputs": 2,
+    "sfreq": 250.0
+  },
+  "schirrmeister2017": {
+    "n_chans": 128,
+    "n_times": 1000,
+    "n_outputs": 4,
+    "sfreq": 250.0
+  },
+  "shin2017a": {
+    "n_chans": 30,
+    "n_times": 2501,
+    "n_outputs": 2,
+    "sfreq": 250.0
+  },
+  "weibo2014": {
+    "n_chans": 60,
+    "n_times": 1001,
+    "n_outputs": 2,
+    "sfreq": 250.0
+  }
+}
