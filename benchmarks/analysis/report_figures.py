@@ -31,6 +31,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.backends.backend_pdf import PdfPages
 from scipy import stats
 
 from chance_pareto_figures import accuracy_per_param, chance_geometry  # noqa: F401
@@ -77,7 +78,7 @@ def family_levels(levels: pd.DataFrame):
     ax.set_ylabel("ROC-AUC, mean over the 6 AUC datasets")
     ax.set_ylim(0.5, 0.86)
     ax.axhline(0.5, color="0.4", lw=1, ls=":")
-    ax.text(-0.42, 0.506, "chance", fontsize=7, color="0.4", ha="left")
+    ax.text(-0.34, 0.506, "chance", fontsize=7, color="0.4", ha="left")
     ax.legend(fontsize=9, loc="upper left")
     ax.set_title("Deep learning only pays once the training set is many subjects",
                  fontsize=11)
@@ -287,49 +288,113 @@ def ea_datasets(d_bnci: pd.Series, d_cho: pd.Series):
     return f
 
 
-def ea_power(delta: pd.Series):
+def mde(sd: float, k: int) -> float:
+    """Minimum detectable effect in pp, power .80, two-sided .05, paired.
+
+    t quantiles at k-1 df, NOT normal ones -- the same formula `ea_replication.py`
+    prints. At n=9 the two differ by 0.8 pp, which is a sixth of the effect being
+    tested, so a figure drawn with z would contradict the text it illustrates.
+    """
+    return (stats.t.ppf(0.975, k - 1) + stats.t.ppf(0.80, k - 1)) * sd / np.sqrt(k) * 100
+
+
+def ea_power(delta_b: pd.Series, delta_c: pd.Series):
     """Minimum detectable effect against the number of held-out subjects.
 
     The limit here is the between-SUBJECT sd, not the number of seeds: seeds are
     replication inside a subject and shrink a variance component that is already small.
     That is the whole argument for moving the gate to a 52-subject dataset rather than
     adding seeds on a 9-subject one.
-    """
-    a = delta.groupby(level="subject").mean().to_numpy()
-    sd = float(a.std(ddof=1))
 
-    # t quantiles at n-1 df, NOT normal ones -- the same formula `ea_replication.py`
-    # prints. At n=9 the two differ by 0.8 pp, which is a sixth of the effect being
-    # tested, so a figure drawn with z would contradict the text it illustrates.
-    def mde_at(k):
-        return ((stats.t.ppf(0.975, k - 1) + stats.t.ppf(0.80, k - 1))
-                * sd / np.sqrt(k)) * 100
+    The curve is the PLAN: it can only be drawn from the sd we had when we chose the
+    dataset, which is BNCI's. Cho then came in with a smaller between-subject sd
+    (4.96 vs 6.28 pp), so its realised MDE beats what the curve predicted for n=52.
+    Both are marked -- a curve drawn from one dataset's variance, with the other
+    dataset's name on a point, is the one thing a careful reader would stop on.
+    """
+    sd_b = float(delta_b.groupby(level="subject").mean().std(ddof=1))
+    sd_c = float(delta_c.groupby(level="subject").mean().std(ddof=1))
+    n_c = delta_c.index.get_level_values("subject").nunique()
 
     n = np.arange(5, 60)
-    mde = np.array([mde_at(k) for k in n])
+    curve = np.array([mde(sd_b, k) for k in n])
 
-    f, ax = plt.subplots(figsize=(7.0, 4.6))
-    ax.plot(n, mde, color="C0", lw=2.2, zorder=3)
+    f, ax = plt.subplots(figsize=(7.6, 4.9))
+    ax.plot(n, curve, color="C0", lw=2.2, zorder=3,
+            label=f"planned, at the BNCI between-subject sd of {sd_b * 100:.2f} pp")
     ax.axhline(PAPER["delta"] * 100, color="C2", lw=1.6, ls="--", zorder=2)
-    ax.text(57, PAPER["delta"] * 100 + 0.25, "target +5.05 pp", color="C2", fontsize=9,
+    ax.text(58.6, PAPER["delta"] * 100 + 0.25, "target +5.05 pp", color="C2", fontsize=9,
             ha="right")
-    ax.fill_between(n, PAPER["delta"] * 100, mde, where=mde > PAPER["delta"] * 100,
+    ax.fill_between(n, PAPER["delta"] * 100, curve, where=curve > PAPER["delta"] * 100,
                     color="C3", alpha=0.10, zorder=1)
-    for xi, lab, c in [(9, "BNCI2014-001\nn = 9", "C3"), (52, "Cho2017\nn = 52", "C0")]:
-        yi = mde_at(xi)
-        ax.scatter([xi], [yi], s=80, color=c, zorder=4, edgecolor="white", linewidth=1.1)
-        ax.annotate(f"{lab}\nMDE {yi:.2f} pp", (xi, yi), textcoords="offset points",
-                    xytext=(10, 12), fontsize=9, color=c)
+
+    y9 = mde(sd_b, 9)
+    ax.scatter([9], [y9], s=80, color="C3", zorder=4, edgecolor="white", linewidth=1.1)
+    ax.annotate(f"BNCI2014-001, n = 9\nMDE {y9:.2f} pp  >  target", (9, y9),
+                textcoords="offset points", xytext=(10, 10), fontsize=9, color="C3")
+
+    # Predicted vs realised at Cho's n: the point of the panel is that moving datasets
+    # bought MORE than the plan promised, so both numbers are printed, not just one.
+    y_pred, y_real = mde(sd_b, n_c), mde(sd_c, n_c)
+    ax.scatter([n_c], [y_pred], s=70, facecolors="none", edgecolors="C0", zorder=4,
+               linewidth=1.6)
+    ax.scatter([n_c], [y_real], s=80, color="C0", zorder=4, edgecolor="white",
+               linewidth=1.1, label=f"measured on Cho2017 (sd {sd_c * 100:.2f} pp)")
+    ax.annotate("", xy=(n_c, y_real), xytext=(n_c, y_pred), zorder=4,
+                arrowprops=dict(arrowstyle="->", color="C0", lw=1.3))
+    # Up and to the left: below the point is the x axis and to the right is the frame,
+    # so the only empty quadrant is the one above the curve's tail.
+    ax.annotate(f"Cho2017, n = {n_c}\npredicted {y_pred:.2f} pp\nmeasured {y_real:.2f} pp",
+                (n_c, y_real), textcoords="offset points", xytext=(-16, 38), fontsize=9,
+                color="C0", ha="right", va="bottom",
+                arrowprops=dict(arrowstyle="-", color="C0", lw=0.9, alpha=0.55))
+
+    ax.legend(fontsize=8.5, loc="upper right")
     ax.set_xlabel("held-out subjects")
     ax.set_ylabel("minimum detectable effect, power .80 (pp)")
-    ax.set_title(f"What the design can resolve, at the measured between-subject "
-                 f"sd of {sd * 100:.2f} pp\n"
+    ax.set_title("What the design can resolve\n"
                  "red: the region where the target is smaller than the noise floor",
                  fontsize=10.5)
     ax.grid(alpha=0.25)
     ax.set_axisbelow(True)
     ax.set_xlim(5, 59)
     f.tight_layout()
+    return f
+
+
+FIG_ONE_LINER = {
+    "family_levels": "Which family wins, and in which data regime",
+    "paired_forest": "growing − fixed per cell, hollow where an arm is at chance",
+    "accuracy_per_param": "The same contrast on accuracy AND size",
+    "ea_gate": "Stage 1 on BNCI2014-001, n = 9: underpowered, not negative",
+    "ea_gate_cho": "Stage 1 on Cho2017, n = 52: the gate passes, +1.51 pp",
+    "ea_datasets": "Both datasets side by side: the CIs shrink, the per-net order does not survive",
+    "ea_where": "Does alignment pay the weak subjects? Only at n = 9",
+    "ea_power": "What the design can resolve, planned and realised",
+}
+
+
+def _cover(names: list[str]):
+    """Contents page, so the PDF opens on what it contains rather than on a bar chart."""
+    f = plt.figure(figsize=(8.27, 11.69))          # A4 portrait
+    f.text(0.09, 0.90, "Growing networks for EEG decoding", fontsize=21, weight="bold")
+    f.text(0.09, 0.866, "The v5 grid corrected for chance, and the Euclidean Alignment "
+           "gate", fontsize=12.5, color="0.35")
+    f.text(0.09, 0.845, "Adam Mounir — Inria TAU / Yneuro — 27 August 2026",
+           fontsize=10, color="0.5")
+    f.add_artist(plt.Line2D([0.09, 0.91], [0.825, 0.825], color="0.75", lw=1))
+    y = 0.775
+    for i, n in enumerate(names, 1):
+        f.text(0.09, y, f"{i}.", fontsize=11, color="0.55")
+        f.text(0.135, y, FIG_ONE_LINER.get(n, n), fontsize=11.5)
+        f.text(0.135, y - 0.020, n, fontsize=8.5, color="0.55", family="monospace")
+        y -= 0.052
+    f.text(0.09, 0.10,
+           "Every figure is drawn by benchmarks/analysis/report_figures.py, which calls\n"
+           "the load / paired_delta / boot_ci of ea_replication.py — the analysis script\n"
+           "that prints the numbers — so a figure cannot disagree with the text it\n"
+           "illustrates. Confidence intervals are 95 % bootstrap over held-out subjects.",
+           fontsize=9, color="0.4", linespacing=1.7)
     return f
 
 
@@ -365,17 +430,29 @@ def main() -> None:
             ("ea_datasets", ea_datasets(delta_b, delta_c)),
             ("ea_where", ea_where([("BNCI2014-001", delta_b, d_b),
                                    ("Cho2017", delta_c, d_c)])),
-            ("ea_power", ea_power(delta_b))]
-    for name, fig in figs:
-        # Per-figure hashsalt: matplotlib derives clip-path ids from it, and two SVGs
-        # inlined in the same HTML page with colliding ids clip each other.
-        plt.rcParams["svg.hashsalt"] = name
-        for ext in ("svg", "png"):
-            p = out / f"{name}.{ext}"
-            fig.savefig(p, dpi=150, bbox_inches="tight",
-                        facecolor="white" if ext == "png" else "none")
-            print(f"wrote {p}")
-        plt.close(fig)
+            ("ea_power", ea_power(delta_b, delta_c))]
+    # One PDF holding the same figures, for the readers who want a file rather than a
+    # page. Written from the SAME Figure objects as the svg/png, so a stale PDF is not
+    # a failure mode that can exist.
+    pdf_path = out / "report_figures.pdf"
+    with PdfPages(pdf_path) as pdf:
+        pdf.savefig(_cover([n for n, _ in figs]))
+        for name, fig in figs:
+            # Per-figure hashsalt: matplotlib derives clip-path ids from it, and two
+            # SVGs inlined in the same HTML page with colliding ids clip each other.
+            plt.rcParams["svg.hashsalt"] = name
+            for ext in ("svg", "png"):
+                p = out / f"{name}.{ext}"
+                fig.savefig(p, dpi=150, bbox_inches="tight",
+                            facecolor="white" if ext == "png" else "none")
+                print(f"wrote {p}")
+            pdf.savefig(fig, bbox_inches="tight", facecolor="white")
+            plt.close(fig)
+        pdf.infodict().update(Title="Growing networks for EEG decoding — figures",
+                              Author="Adam Mounir",
+                              Subject="v5 grid corrected for chance, and the Euclidean "
+                                      "Alignment gate on BNCI2014-001 and Cho2017")
+    print(f"wrote {pdf_path}")
 
 
 if __name__ == "__main__":
