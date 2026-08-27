@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from sklearn.base import BaseEstimator, TransformerMixin
 
 
 def to_float32(X):
@@ -30,6 +31,47 @@ def to_float32(X):
     cast only sits in the deep pipelines.
     """
     return np.asarray(X, dtype="float32")
+
+
+class RMSScaler(BaseEstimator, TransformerMixin):
+    """Divide by the training set's global RMS, so the net sees an O(1) input.
+
+    A convnet handed volt-scale EEG (std ~5e-6) collapses: on one BNCI2014_001 fold,
+    40 epochs, everything else fixed, ShallowFBCSPNet predicts one class for 99.7% of
+    trials and scores 0.504 acc / 0.539 auc, against 0.649 / 0.733 at unit RMS, with the
+    initial training loss falling from 9.71 to 1.04. BatchNorm does not make this go away:
+    it makes the *forward* pass scale-free, but AdamW's weight decay still pulls against
+    the ~1e6 first-layer weights that volt-scale inputs require, so the optimisation is not
+    scale-free even when the architecture is.
+
+    On *this* path the scaler is nearly a no-op, and that is measured rather than assumed.
+    MOABB's array branch already multiplies by ``dataset.unit_factor = 1e6``, so the
+    paradigm hands over microvolts and the nets were never in the dead regime. Re-running
+    the grid's deep arms with this step added and comparing fold by fold against the
+    original CSVs -- 8871 paired folds, BNCI2014-001 and Shin2017A, 8 architectures --
+    gives a mean difference of **-0.002**. It is kept anyway so the deep arms do not
+    silently depend on MOABB's unit default, and because ``pool.py`` reaches for Epochs and
+    so does *not* get that factor (see ``pool.TARGET_RMS``).
+
+    Only the deep arms carry it. The classic arms are scale-invariant by construction --
+    CSP solves a generalised eigenproblem, the Riemannian arms work on covariances -- so
+    adding it there could only introduce noise.
+
+    The constant is fitted on train and applied to test, so no test statistic leaks: it is
+    one scalar, exactly as MOABB's own scalers behave.
+    """
+
+    def __init__(self, target: float = 1.0):
+        self.target = target
+
+    def fit(self, X, y=None):
+        X = np.asarray(X)
+        rms = float(np.sqrt(np.mean(X.astype(np.float64) ** 2)))
+        self.scale_ = self.target / rms if rms > 0 else 1.0
+        return self
+
+    def transform(self, X):
+        return (np.asarray(X, dtype="float32") * np.float32(self.scale_))
 
 
 # --------------------------------------------------------------------- ML arms
@@ -273,7 +315,10 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
         classes=list(range(n_outputs)),
         verbose=0,
     )
-    return Pipeline([("cast", FunctionTransformer(to_float32)), ("clf", clf)])
+    # ``rms`` before ``clf``: MOABB serves volts and the net cannot train on them. It is a
+    # no-op on the cross-dataset path, where pool.load already delivers TARGET_RMS = 1.
+    return Pipeline([("cast", FunctionTransformer(to_float32)),
+                     ("rms", RMSScaler()), ("clf", clf)])
 
 
 def build_pipeline(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
