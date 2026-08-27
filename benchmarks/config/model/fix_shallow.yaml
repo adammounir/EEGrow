@@ -1,0 +1,25 @@
+# Fixed-width control for `grow_shallow` -- the SAME class, built directly at the
+# geometry growth ends on, with no growth.
+#
+# Why this exists. `grow_shallow` was paired against `bd_shallow` (braindecode's
+# ShallowFBCSPNet at 40/40). The two are width-matched, but they are not the same code:
+# any difference between our re-implementation and braindecode's -- initialisation
+# above all -- lands inside the growth delta. Measured: braindecode's stock Xavier init
+# on the final classifier starts bd_shallow 0.34 nats above ln(k), against +0.08 for our
+# nets. This arm removes that term: same class, same file, same init path, same
+# callbacks; only `_can_grow` differs.
+#
+# Geometry. Growth widens `n_filters_time` (conv_time's fan-out = conv_spat's fan-in);
+# `n_filters_spat` is untouched. `grow_shallow` (8 -> 40) therefore ends at 40/40, and
+# `n_filters_time: 40` with no target builds exactly that: `_can_grow` is False,
+# `_growable_layers` is empty and the growth callback is a no-op. Verified by shape
+# diff -- the only params that depend on the knob are conv_time.weight/bias and
+# conv_spat.weight, all inside the junction.
+kind: growing
+arch: GrowingShallowFBCSPNet
+label: fix_shallow
+needs_sfreq: false
+grow_every: 5      # irrelevant (frozen), kept so the config shape matches the arm
+module_kwargs:
+  n_filters_time: 40
+  n_filters_spat: 40

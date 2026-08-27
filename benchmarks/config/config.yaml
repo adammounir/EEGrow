@@ -1,0 +1,131 @@
+# Root config. A run picks one of each group (dataset/model/eval) via defaults or CLI.
+# Override anything on the CLI, e.g.  train.max_epochs=2  model=grow_sccnet  eval=cross_subject
+defaults:
+  - dataset: bnci2014_001
+  - model: grow_sccnet
+  - eval: cross_subject
+  - _self_
+
+seed: 42
+
+# Band-pass of the MOABB paradigm (motor-imagery default 8-32 Hz).
+paradigm:
+  fmin: 8
+  fmax: 32
+
+# Shared deep-learning training knobs (ignored by the ML arms). Global so a smoke
+# test is just `train.max_epochs=2`.
+train:
+  lr: 6.25e-4
+  max_epochs: 200
+  batch_size: 64
+  # Which epoch's model gets scored (`selection_monitor`) and what ends the fit
+  # (`stop_monitor`). Both were implicitly `valid_acc` before, and both were wrong for
+  # the same reason: on internal validation splits this small (46 trials on
+  # bnci2014_001, 3 on shin2017a) accuracy moves in steps of 1/n_valid, which is 300x
+  # coarser than skorch's improvement threshold -- so the tolerance never fires and the
+  # run ends when a quantised metric fails to beat whichever early epoch got lucky.
+  # Worse, nothing restored the best model at all: `EarlyStopping.load_best` defaults
+  # to False and `EEGClassifier` ships no `Checkpoint`, so every score this benchmark
+  # published came from the model `patience` epochs PAST its own best -- measured at
+  # exactly 20, std 0.0, on all 140 490 folds of v5.
+  #
+  # `*_loss` => lower is better, anything else => higher is better.
+  # `stop_monitor` is settled; `selection_monitor` is not -- see pipelines.py for the
+  # A/B that has to run on held-out accuracy before the campaign commits to it.
+  selection_monitor: valid_loss
+  stop_monitor: valid_loss
+  # Epochs without improvement on `stop_monitor` before the fit ends. null => the
+  # historical max(15, max_epochs//10) = 20. Set it >= max_epochs to disable early
+  # stopping outright, which is the only way to measure what a net would have reached
+  # if simply left to train -- on `bd_deep4` the difference is not academic, its
+  # validation loss bottoms at epoch 4 and patience 20 ends the fit at epoch 24 while
+  # the train loss is still descending.
+  patience: null
+  # Learning-rate schedule: null (constant, what the whole v5 grid ran) or `cosine`.
+  # KEEP IT null. The knob exists because it was a live hypothesis and it was tested;
+  # the test says the schedule HURTS. On the 2x2 budget/selection square (bnci2014_001
+  # within_session, 36 paired units) cosine scores 0.4276 against 0.4818 for the
+  # constant lr once both are given the full budget.
+  #
+  # Two hypotheses died on the way there, both worth keeping so they are not re-run.
+  # (1) Gradient steps per epoch: Spearman(batches/epoch, final train loss) = 0.095.
+  # (2) "bd_deep4 is the only net that cannot fit its own training data" -- median
+  # final train loss 0.24 against 0.009 for `fix_deepeeg`, which read as instability
+  # and motivated annealing. That was an artefact of `patience` above, not a property
+  # of the net: at full budget the same net reaches 0.1366 against 1.1874 at the early
+  # stop. There was no capacity problem to anneal away.
+  #
+  # T_max is `max_epochs`, i.e. the schedule is written for the full budget, so a
+  # cosine arm that stops early has spent only the flat top and decayed by ~20% --
+  # which is why the two arms were indistinguishable (+0.0018) at patience 20 and only
+  # separated once `patience >= max_epochs` let the cosine actually anneal (lr_final
+  # 0.0000). Read `lr_final` on the fit record before concluding a schedule did
+  # nothing.
+  lr_schedule: null
+  # AdamW's denominator is `sqrt(v_hat_i) + eps`, so `eps` silently caps the step of
+  # any coordinate whose second moment falls below it -- the hypothesis for why the
+  # deep arms sit at chance on the small datasets. Torch's default, written down so it
+  # can be swept (`train.optimizer_eps=1e-6`). Do NOT raise it on the hypothesis alone:
+  # the `adam_eps_frac` column on every fit record measures the fraction of
+  # coordinates where it actually bites, and that measurement decides.
+  optimizer_eps: 1e-8
+
+# MOABB does its own per-fold parallelism off; the sweep parallelises across jobs.
+n_jobs: 1
+overwrite: true
+suffix: eegrow
+
+# On-disk cache of the preprocessed epochs (MOABB `cache_config`). Every model and
+# every seed on a dataset derives the *same* epochs from the raw files -- 70 identical
+# filter+resample+epoch passes on a 14-model, 5-seed grid. Caching them makes the
+# first job pay and the other 69 read. Off by default so a one-off run does not
+# silently populate a shared directory; the campaign scripts turn it on.
+cache:
+  enabled: false
+  # null => MNE_DATA. Point it at a shared path so the whole fleet hits one cache.
+  path: null
+
+# `profile_cell.py` only. Kept here so the profiler reuses the production config
+# tree verbatim rather than a parallel copy that could drift from it.
+profile:
+  cache: ${cache.enabled}
+  n_subjects: null      # truncate the subject list to bound a profiling run
+  # Same anchor as the hydra dirs below, and for the same reason: the sbatch
+  # scripts cd into benchmarks/, so the cwd form writes to benchmarks/benchmarks/.
+  out_dir: ${oc.env:EEGROW_BENCH_ROOT,${hydra:runtime.cwd}/benchmarks}/profile
+
+# Where per-job CSV/joblib land. null data_dir => MNE default ~/mne_data (local);
+# on the cluster set data_dir to the shared cache (see config/dataset notes).
+# null => benchmarks/results, located from the runner's own file (see
+# utils.default_results_root). It used to be ${hydra:runtime.cwd}/benchmarks/results,
+# which makes the destination depend on where the process was launched from -- and
+# under slurm the sbatch script does not reliably control that. Set it explicitly to
+# write elsewhere.
+results_dir: null
+data_dir: null
+
+hydra:
+  run:
+    # The SLURM id is part of the name, not decoration. With a bare timestamp to the
+    # second, two array tasks of the same job start in the same second, resolve to the
+    # *same* directory and clobber each other's .hydra -- the run record of one of them
+    # simply disappears. That is not hypothetical: it destroyed the provenance of
+    # several cells of the production grid, after which the regime guard fell back to
+    # an older superseded launch and reported its sampling rate as fact.
+    # The sweep dir below never had the problem: its subdir is the override string, so
+    # it is unique per cell by construction.
+    #
+    # EEGROW_BENCH_ROOT, not ${hydra:runtime.cwd}/benchmarks. The cwd form is the same
+    # trap that sent an arm of the grid to benchmarks/benchmarks/results (see
+    # utils.default_results_root): any script that cd's into benchmarks/ before running
+    # -- which the packed runner and every sbatch here do -- resolves it one level too
+    # deep. `results/` was anchored to the source file; the hydra records were not, so
+    # the run records still landed somewhere no analysis looks. Losing those records is
+    # precisely what cost this campaign its provenance, so they get an absolute anchor.
+    dir: ${oc.env:EEGROW_BENCH_ROOT,${hydra:runtime.cwd}/benchmarks}/outputs/${now:%Y-%m-%d_%H-%M-%S}_${oc.env:SLURM_JOB_ID,local}
+  sweep:
+    dir: ${oc.env:EEGROW_BENCH_ROOT,${hydra:runtime.cwd}/benchmarks}/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${hydra.job.override_dirname}
+  job:
+    chdir: false

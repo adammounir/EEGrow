@@ -1,0 +1,4 @@
+# CSP + RBF SVM.
+kind: ml
+name: csp_svm
+label: csp_svm

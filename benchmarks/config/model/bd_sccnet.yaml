@@ -1,0 +1,6 @@
+# braindecode reference: SCCNet (needs sfreq) at its standard width.
+kind: bd
+arch: SCCNet
+label: bd_sccnet
+needs_sfreq: true
+module_kwargs: {}

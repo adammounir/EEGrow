@@ -1,0 +1,3 @@
+# Per subject, per session: stratified k-fold (personal-calibration regime).
+name: within_session
+n_splits: 5

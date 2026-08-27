@@ -1,0 +1,4 @@
+# Leave-one-subject-out: train on N-1 subjects, test on the held-out one.
+# The generalisation/transfer regime -- where a growable net (auto-sized capacity on a
+# large, heterogeneous pooled training set) is expected to help most.
+name: cross_subject

@@ -1,0 +1,4 @@
+# Riemannian: covariances -> tangent space -> logistic regression.
+kind: ml
+name: ts_lr
+label: ts_lr

@@ -1,0 +1,12 @@
+# Zhou2016: 4 subj, 3 sess, 3-class MI (left/right hand, feet), 14 ch, 250 Hz.
+# Small/noisy -- a candidate where growth may help.
+name: zhou2016
+moabb_class: Zhou2016
+paradigm: MotorImagery
+subjects: null   # null => all subjects
+# Sampling grid unified at 250 Hz across the whole benchmark. This is the regime
+# the production grid actually ran in (it was passed as dataset.resample=250 on the
+# CLI); pinning it here so retries and reruns cannot silently fall back to the native
+# rate -- a grow/bd pair split across two rates measures preprocessing, not growth.
+resample: 250.0
+kwargs: {}

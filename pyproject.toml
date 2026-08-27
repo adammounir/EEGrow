@@ -22,6 +22,16 @@ dependencies = [
 [project.optional-dependencies]
 examples = ["matplotlib"]
 test = ["pytest>=7"]
+benchmark = [
+    "moabb>=1.0",
+    "pyriemann",
+    "scikit-learn",
+    "pandas",
+    "joblib",
+    "hydra-core>=1.3",
+    "hydra-submitit-launcher",
+    "hydra-joblib-launcher",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

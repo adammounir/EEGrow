@@ -1,0 +1,12 @@
+# Schirrmeister2017 (High-Gamma): 14 subj, 4-class MI (right/left hand, feet, rest),
+# 128 ch, 500 Hz. Large/high-rate; `resample` may be worth it for the deep arms.
+name: schirrmeister2017
+moabb_class: Schirrmeister2017
+paradigm: MotorImagery
+subjects: null   # null => all subjects
+# Sampling grid unified at 250 Hz across the whole benchmark. This is the regime
+# the production grid actually ran in (it was passed as dataset.resample=250 on the
+# CLI); pinning it here so retries and reruns cannot silently fall back to the native
+# rate -- a grow/bd pair split across two rates measures preprocessing, not growth.
+resample: 250.0
+kwargs: {}

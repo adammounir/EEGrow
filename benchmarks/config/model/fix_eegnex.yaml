@@ -1,0 +1,24 @@
+# Fixed-width control for `grow_eegnex` -- the SAME class, built directly at the
+# geometry growth ends on, with no growth. See fix_shallow.yaml for why the braindecode
+# reference is not a sufficient control on its own.
+#
+# Geometry, and the trap. In EEGNeX `filter_1` sizes TWO places: the growable junction
+# (conv1 fan-out = conv2 fan-in) and the fixed tail conv `block_5 (filter_2 -> filter_1)`
+# whose output is flattened into the classifier. Growth only widens the junction. So
+# `grow_eegnex` (filter_1=2, target 8) ends at junction 8 / tail 2, with a 70-feature
+# classifier -- NOT at the braindecode reference geometry (filter_1=8: tail 8, 280
+# features). A naive `filter_1: 8` control would build a different, larger network.
+#
+# `filter_1_in` decouples the two knobs (the same role `w2_in` plays for the deep arm),
+# so `filter_1: 2, filter_1_in: 8` reproduces the end-of-growth geometry exactly,
+# frozen: `_can_grow` is False and the growth callback is a no-op. Verified by state_dict
+# shape diff against a grown `grow_eegnex`.
+kind: growing
+arch: GrowingEEGNeX
+label: fix_eegnex
+needs_sfreq: false
+grow_every: 5      # irrelevant (frozen), kept so the config shape matches the arm
+module_kwargs:
+  filter_1: 2
+  filter_1_in: 8
+  filter_2: 32

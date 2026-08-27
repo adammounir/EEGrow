@@ -14,6 +14,35 @@ dist/
 # données / sorties (jamais versionnées)
 data/
 results/
+# sorties Hydra du benchmark
+benchmarks/outputs/
+benchmarks/multirun/
+outputs/
+multirun/
+# résultats du smoke de validation : jetables par construction (CELL_TIMEOUT=7200,
+# grow_every=1), et remplacés par la campagne. Ce sont des sorties, pas des sources.
+benchmarks/results_smoke/
+# analyses régénérées : les .ipynb (outputs embarqués), leur export HTML et les figures
+# sont produits par benchmarks/analysis/build_*.py à partir des CSV. Les versionner
+# fige dans un historique additif -- où le ruleset interdit le force-push -- des
+# figures calculées sur une grille dont le plafond de croissance n'était pas branché.
+# Ce qui est versionné est ce qui les régénère : build_*.py et growth_io.py.
+# Les motifs ci-dessous étaient ancrés sur `benchmarks/analysis/` lui-même, donc ils ne
+# couvraient pas les rapports rangés dans un sous-répertoire (`explore/`, `explore_v5/`,
+# `v5/`) : 21 Mo de notebooks, HTML et PNG y sont restés « untracked » alors que la
+# politique du dessus les exclut. `**/` les rattrape.
+benchmarks/analysis/**/*.ipynb
+benchmarks/analysis/**/*.html
+benchmarks/analysis/**/*.tex
+benchmarks/analysis/**/*.pdf
+benchmarks/analysis/**/figures/
+# Les réductions par époque de la campagne v5 : 22 Mo, régénérables sur Margaret par
+# `analysis/export_v5_tidy.py` (versionné, lui). Les trois agrégats au niveau du score
+# sont versionnés, eux, parce qu'ils tiennent en 0,8 Mo et suffisent à refaire l'analyse
+# sans le cluster -- même règle que `results_published/`.
+benchmarks/results_v5_published/eegrow_v5_curves*.csv.gz
+benchmarks/results_v5_published/eegrow_v5_fold_summary.csv.gz
+benchmarks/results_v5_published/eegrow_v5_budget.csv.gz
 *.pt
 *.npy
 *.npz
