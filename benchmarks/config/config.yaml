@@ -4,6 +4,7 @@ defaults:
   - dataset: bnci2014_001
   - model: grow_sccnet
   - eval: cross_subject
+  - align: none
   - _self_
 
 seed: 42
@@ -31,8 +32,22 @@ train:
   # exactly 20, std 0.0, on all 140 490 folds of v5.
   #
   # `*_loss` => lower is better, anything else => higher is better.
-  # `stop_monitor` is settled; `selection_monitor` is not -- see pipelines.py for the
-  # A/B that has to run on held-out accuracy before the campaign commits to it.
+  # Both are settled now, and NOT the same way. The A/B ran (bnci2014_001
+  # within_session, 36 paired units, budget x selection square):
+  #
+  #                     sel=valid_loss   sel=valid_acc
+  #     patience  20        0.3501           0.3390
+  #     patience 200        0.4074           0.4818
+  #
+  # `stop_monitor: valid_loss` is right -- the loss is continuous, so patience actually
+  # fires on it. `selection_monitor` must be `valid_acc`: the two full-budget cells have
+  # bit-identical trajectories and differ only in which epoch is handed back, and the
+  # loss hands back epoch 5 where the accuracy peak is at epoch 158.
+  #
+  # THE VALUE BELOW IS THEREFORE NOT THE RECOMMENDATION. It stays `valid_loss` only
+  # because flipping the shipped default would re-date every run in
+  # `results_v5_published/`. Anything new passes `train.selection_monitor=valid_acc`
+  # explicitly on the command line, as the EA replication sbatches do.
   selection_monitor: valid_loss
   stop_monitor: valid_loss
   # Epochs without improvement on `stop_monitor` before the fit ends. null => the
@@ -40,7 +55,8 @@ train:
   # stopping outright, which is the only way to measure what a net would have reached
   # if simply left to train -- on `bd_deep4` the difference is not academic, its
   # validation loss bottoms at epoch 4 and patience 20 ends the fit at epoch 24 while
-  # the train loss is still descending.
+  # the train loss is still descending. Same caveat as `selection_monitor` above: `null`
+  # is the historical value, not the advice -- new work passes `train.patience=200`.
   patience: null
   # Learning-rate schedule: null (constant, what the whole v5 grid ran) or `cosine`.
   # KEEP IT null. The knob exists because it was a live hypothesis and it was tested;

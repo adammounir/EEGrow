@@ -1,0 +1,13 @@
+# braindecode reference: EEGNet v4 at its standard width (F1=8, D=2, F2=16).
+#
+# `arch: EEGNet`, not `EEGNetv4`: braindecode 1.7.0 renamed the class and the old name
+# is gone from `braindecode.models`, so a config carried over from an older tree fails
+# at getattr rather than silently building something else.
+#
+# Added for the Euclidean-alignment replication, which needs the paper's three nets
+# (EEGNet / ShallowNet / DeepNet) and only had the last two.
+kind: bd
+arch: EEGNet
+label: bd_eegnet
+needs_sfreq: false
+module_kwargs: {}

@@ -1,0 +1,5 @@
+# No trial alignment: the raw arm of the alignment ablation, and the default so that
+# every result produced before alignment existed stays reproducible bit-for-bit.
+# `tag: null` keeps the output filename at `<model>__seed<N>.csv`.
+name: none
+tag: null
