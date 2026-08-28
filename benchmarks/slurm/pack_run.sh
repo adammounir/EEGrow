@@ -60,11 +60,25 @@
 #   cells of the first packed campaign.
 set -uo pipefail
 
-ROOT=/scratch/amounir/eegrow
+# THE CHECKOUT IS NOT A CONSTANT ANY MORE (2026-08-28).
+#
+# This was `ROOT=/scratch/amounir/eegrow`, i.e. the August tree, and that tree is not a
+# safe thing to hard-code: it carries the drop_last fix (3cefa3a) but NOT the s=0
+# abstention (5337c56), so a growing arm run there still applies a zero-amplitude
+# update, still adds permanently dead neurons, and still counts them in
+# `growable_width` -- the parameter axis the whole efficiency claim is written on. A
+# fixed ROOT means a campaign launched to remove that bug quietly reproduces it, with
+# well-formed CSVs and no warning. Same failure shape as config.yaml's protocol
+# defaults, and it is why the guard below asserts what actually got imported.
+ROOT="${ROOT:-/scratch/amounir/eegrow}"
 cd "$ROOT/benchmarks"
 source /scratch/amounir/miniforge3/etc/profile.d/conda.sh
 conda activate bench
-export PYTHONPATH="$ROOT/benchmarks"
+# `$ROOT/src` FIRST, and it is not redundant with the conda env. The `bench` env holds
+# `__editable__.eegrow-0.1.0.pth`, which points at /scratch/amounir/eegrow/src -- so a
+# job in any other checkout imports the AUGUST package unless PYTHONPATH pre-empts it.
+# PYTHONPATH is consulted before the .pth-added paths, which is the whole mechanism.
+export PYTHONPATH="$ROOT/src:$ROOT/benchmarks"
 export EEGROW_BENCH_ROOT="$ROOT/benchmarks"
 export MNE_DATA=/scratch/amounir/mne_data
 module load cuda/13.1 2>/dev/null || true
@@ -118,6 +132,43 @@ if [ -z "${EEGROW_CUDA_FRACTION:-}" ]; then
   exit 2
 fi
 export EEGROW_CUDA_FRACTION
+
+# THE TRAINING PROTOCOL IS DECLARED, NOT DEFAULTED.
+#
+# `benchmarks/config/config.yaml` ships `selection_monitor: valid_loss` and
+# `patience: null` (= 20) DELIBERATELY -- flipping the defaults would re-date every
+# score in results_v5_published/, which is still the reference frame for the archived
+# figures. The consequence is that the corrected protocol is not what you get by not
+# thinking about it. A grid submitted without
+#
+#     train.patience=200 train.selection_monitor=valid_acc
+#
+# reproduces the undertrained protocol exactly: no warning, well-formed CSVs, and up to
+# +0.13 of accuracy missing on bd_deep4 -- a larger error than the drop_last and s=0
+# bugs combined. The two knobs INTERACT (+0.0854, p=1.1e-07 on a 36-unit paired square),
+# so passing one alone is not a partial fix, it is a third wrong protocol.
+#
+# Hence: no default and a shape check, the same stance as K and EEGROW_CUDA_FRACTION
+# below. An unset PROTOCOL is a launch that never happened; a PROTOCOL missing either
+# key is a launch that would have to be thrown away, and finding that out here costs
+# one job instead of a campaign. Set it to the literal string "shipped" to run the
+# config defaults on purpose (a v5 replication).
+PROTOCOL="${PROTOCOL:?}"
+if [ "$PROTOCOL" = "shipped" ]; then
+  PROTOCOL=""
+  echo "PACK protocol=SHIPPED DEFAULTS (patience 20 / valid_loss) -- v5 replication only"
+else
+  for key in train.patience train.selection_monitor; do
+    case "$PROTOCOL" in
+      *"$key="*) ;;
+      *) echo "PACK FATAL: PROTOCOL does not set $key. The corrected protocol is" >&2
+         echo "  'train.patience=200 train.selection_monitor=valid_acc' and the two" >&2
+         echo "  knobs interact, so neither counts on its own. Pass 'shipped' to run" >&2
+         echo "  the config defaults deliberately." >&2
+         exit 2;;
+    esac
+  done
+fi
 
 GRID="${GRID:?set GRID to a TSV of eval<TAB>dataset<TAB>model<TAB>seed}"
 CACHE="${CACHE:-/scratch/amounir/moabb_cache}"
@@ -238,7 +289,31 @@ if [ -n "${SLURM_JOB_ID:-}" ]; then
   echo "PACK allocation time left: ${LEFT:-unknown} (needs to exceed CELL_TIMEOUT=$((CELL_TIMEOUT / 3600))h)"
 fi
 echo "PACK results_dir=$RESULTS_DIR cache=$CACHE start=$(date -Is)"
+echo "PACK root=$ROOT protocol='${PROTOCOL:-<shipped defaults>}'"
 nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader || true
+
+# PROVENANCE, ASSERTED RATHER THAN ARRANGED. PYTHONPATH is set above to pre-empt the
+# env's editable .pth, but "should win" is not a measurement -- and the failure it
+# guards against is invisible: the wrong checkout produces the same CSV shape, on the
+# same datasets, with the s=0 bug back. One import costs a second; a campaign run from
+# the August tree costs the campaign.
+python - "$ROOT" <<'PY' || exit 5
+import inspect
+import sys
+
+import eegrow
+from eegrow.training import loop
+
+root = sys.argv[1].rstrip("/") + "/"
+if not eegrow.__file__.startswith(root):
+    sys.exit(f"PACK FATAL: ROOT is {root} but eegrow imports from {eegrow.__file__}")
+# Path identity is necessary and not sufficient: what makes a tree usable is the s=0
+# abstention, so check for the behaviour rather than for the directory it should be in.
+if "best_s == 0.0" not in inspect.getsource(loop.grow_step):
+    sys.exit(f"PACK FATAL: {loop.__file__} predates 5337c56 -- grow_step still applies "
+             "a zero-amplitude update and adds permanently dead neurons.")
+print(f"guard ok  eegrow={eegrow.__file__}  s=0 abstention present")
+PY
 
 # REFUSE TO START ON AN INCOMPLETE CACHE.
 #
@@ -404,11 +479,16 @@ while true; do
       # they ignore the added one, since pipelines.py reads grow_every only when
       # kind == "growing". Do not use it to change a campaign's science.
       # shellcheck disable=SC2086
+      # $PROTOCOL before $EXTRA and both unquoted on purpose: each is a list of Hydra
+      # overrides, and quoting would hand the whole string over as one malformed
+      # override. $PROTOCOL is the campaign's training protocol, validated above and
+      # echoed in the banner; $EXTRA is for validation runs and must not carry science.
+      # shellcheck disable=SC2086
       CUDA_VISIBLE_DEVICES=$gpu timeout "$CELL_TIMEOUT" python run_moabb_hydra.py \
         eval="$EV" dataset="$DS" model="$M" seed="$SEED" \
         cache.enabled=true cache.path="$CACHE" \
         results_dir="$RESULTS_DIR" \
-        overwrite=true suffix="${SUFFIX}_${M}_s${SEED}" ${EXTRA:-} \
+        overwrite=true suffix="${SUFFIX}_${M}_s${SEED}" ${PROTOCOL} ${EXTRA:-} \
         > "$LOGS/${EV}__${DS}__${M}__s${SEED}.log" 2>&1
       # Release the claim if nothing was written, so the next sweep retries this
       # cell instead of recording it as done. The owner file has to go first --
