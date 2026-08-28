@@ -1,5 +1,496 @@
 # Jobs en cours
 
+## 28/08 — audit des deux bugs bloquants : **déjà corrigés**, un troisième piège reste
+
+Les deux bugs qui bloquaient le relancement de la grille principale étaient corrigés
+depuis plusieurs jours ; les notes qui les disaient ouverts étaient périmées.
+
+| bug | commit | date | test de régression |
+|---|---|---|---|
+| `drop_last=True` → 0 batch d'entraînement | `3cefa3a` | 23/08 | `test_callback_skips_growth_on_empty_iterator` |
+| line search à s=0 → neurones morts | `5337c56` | 25/08 | `test_grow_step_abstains_instead_of_adding_dead_neurons` |
+
+Les deux tests passent (28/08, 2 passed / 3.33 s).
+
+**Déploiement vérifié fichier par fichier.** `/scratch/amounir/eegrow_budget` (le checkout
+H100 destiné à la grille réduite) comparé à HEAD local : 48 fichiers `.py`, hashes
+identiques sauf `benchmarks/pipelines.py` et `src/eegrow/training/callbacks.py`, dont le
+diff est **purement documentaire** — AST identiques une fois les docstrings retirées. Il
+manque seulement 4 utilitaires de lancement (`benchmarks/slurm/{estimate_eta,make_grid,
+make_ml_grid,plan_campaign}.py`), à déployer par `scp` avant de construire la grille.
+`eegrow_xds` a les deux correctifs. `/scratch/amounir/eegrow` (arbre d'août) a `drop_last`
+mais **pas** l'abstention s=0 — une raison de plus de n'y apparier aucune cellule.
+
+**Le vrai risque restant n'est pas un bug, c'est un défaut de configuration.**
+`config.yaml` livre encore `selection_monitor: valid_loss` et `patience: null` (=20),
+volontairement, pour ne pas re-dater `results_v5_published/`. Le protocole corrigé doit
+donc être passé **explicitement** :
+
+```
+train.patience=200 train.selection_monitor=valid_acc
+```
+
+Une grille soumise sans ces deux overrides refait le protocole sous-entraîné, sans le
+moindre avertissement et avec des CSV bien formés — jusqu'à **+0.13** d'accuracy sur
+`bd_deep4`, soit davantage que les deux bugs réunis. Le commentaire de `config.yaml` qui
+présentait encore la question comme ouverte a été corrigé pour dire l'inverse.
+
+## 28/08 — `lodo` (505184) : 18/18, le transfert zéro-shot marche
+
+18 cellules en ~1 h de GPU au total. Unité d'analyse = le sujet (3 seeds moyennés dedans),
+IC bootstrap 10 000 tirages, Holm sur les 6 cellules.
+
+**Le zéro-shot bat largement le hasard.** Aucune cellule ne s'en approche.
+
+| modèle | align | acc | Δ vs 0.5 | IC 95 % | sujets > 0.5 | p (Holm) |
+|---|---|---|---|---|---|---|
+| bd_shallow | euclidean | 66.73 | **+16.73** | [+13.95, +19.63] | 51/52 | <0.001 |
+| bd_shallow | none | 63.90 | +13.90 | [+11.17, +16.81] | 52/52 | <0.001 |
+| bd_shallow | scale | 64.12 | +14.12 | [+11.47, +16.94] | 51/52 | <0.001 |
+| grow_shallow | euclidean | 66.45 | **+16.45** | [+13.66, +19.31] | 50/52 | <0.001 |
+| grow_shallow | none | 64.76 | +14.76 | [+12.01, +17.65] | 52/52 | <0.001 |
+| grow_shallow | scale | 63.32 | +13.32 | [+10.62, +16.28] | 52/52 | <0.001 |
+
+**Ne jamais voir la cible coûte 1.4 à 2.7 pp**, pas plus (`lodo − within`, apparié sujet) :
+bd euclidean −1.39 [−2.59, −0.15] (p=0.061, MDE 1.79) ; bd none −2.33 (p=0.008) ;
+bd scale −2.24 (p=0.012) ; grow euclidean −2.42 [−3.37, −1.46] (p<0.001, MDE 1.41) ;
+grow none −1.42 (p=0.061) ; grow scale −2.73 (p=0.001).
+
+**Le blanchiment paie dans les deux bras** (`euclidean − scale`, le seul contraste qui
+isole la décorrélation spatiale, `scale` ayant déjà normalisé l'amplitude) : within bd
++1.77 [+0.61, +2.97], within grow +2.83 [+1.57, +4.13], lodo bd +2.62 [+1.55, +3.67],
+lodo grow +3.13 [+2.07, +4.21] — les quatre survivent à Holm.
+
+**Il paie-t-il *plus* en zéro-shot ? Pas de façon détectable.** L'interaction vaut +0.85 pp
+[−0.53, +2.19] (bd) et +0.31 [−1.02, +1.66] (grow), **MDE ≈ 1.9 pp**. Les moyennes
+suggéraient le contraire (2.83 → 3.13 d'écart apparent) ; le test apparié ne le confirme
+pas. À ne pas écrire comme un effet. Ce design ne peut rien dire sous ~1.9 pp.
+
+À noter pour la table de provenance : la colonne `pool_datasets` des CSV `lodo` liste le
+tier entier (cho2017 compris) alors que `training_sets` retire bien le dataset cible et
+qu'une `RuntimeError` garde contre la fuite. C'est l'étiquette qui est fausse, pas les
+données. À corriger avant publication.
+
+Script : `benchmarks/analyse_lodo.py` (sur le cluster).
+
+## Tableau de bord — 28/08, 4 arrays en vol sur cho2017
+
+Tout tourne sur le **même arbre** (`/scratch/amounir/eegrow_xds`), le **même protocole**
+(post-`RestoreBestModel`) et la **même carte** (`gpu:turing`, `margpu021` exclu). C'est ce
+qui autorise à apparier n'importe laquelle de ces cellules avec n'importe quelle autre.
+
+| job | bloc | cellules | walltime | fin estimée |
+|---|---|---|---|---|
+| **504709** | `pooled`/`core`, les 12 cellules bd + grow `euclidean` | 12 | 10 h | ce soir |
+| **505009** | `pooled`/`core`, les 6 cellules grow non-`euclidean` (rattrapage walltime) | 6 | 24 h | 30/08 midi |
+| **505184** | `lodo`/`core`, 2 modèles × 3 alignements × 3 seeds | 18 | 6 h | ce soir |
+| **505185** | `pooled` `euclidean`, tiers `core+interp` et `core+lowrank` | 12 | 10 h | demain |
+
+Le bloc `within` (18 cellules, 3 alignements × 2 modèles × 3 seeds) est **déjà complet** au
+nouveau protocole. Donc dès que `pooled` tombe, le carré `arm × align × model` se calcule
+sans rien relancer.
+
+Moniteur unique : `bjq7bfde6` (échec de cellule, complétion de chaque bloc, fin des quatre).
+
+### Pourquoi `lodo` (505184) coûte presque rien
+
+`cross_dataset.py` : le jeu d'entraînement du bras zéro-shot ne dépend pas du fold, donc
+`if arm == "lodo": groups = [[...tous les sujets...]]` — **1 fit** scoré sur les 52 sujets,
+contre 52 fits pour une cellule `pooled`. Soit ~1.5 % du coût, sur un pool plus petit en
+prime (26 430 essais, cho2017 entièrement retiré). Les 18 cellules ≈ 1 GPU-h au total.
+
+Ce que ce bras répond et qu'aucun autre ne répond : dans `pooled`, la cible est dans le jeu
+d'entraînement, donc un modèle qui ignorerait complètement les autres datasets scorerait
+déjà bien. `lodo` mesure si les 8 autres datasets portent une information **transférable**
+vers cho2017. Question de fond du pooling, sans réponse jusqu'ici.
+
+## ⚠️ La grille cross-dataset d'août est obsolète (27/08, après 504342)
+
+**504342 TERMINÉ 18/18, rc=0, aucun `PREFLIGHT_FAIL`.** Le bloc `within` de cho2017 est
+complet. Il devait retirer le type de carte comme décalage systématique ; il a trouvé
+beaucoup plus gros.
+
+Le replicat `within/euclidean` **ne réplique pas** la cellule d'août :
+
+| modèle | août | 27/08 | écart | IC 95 % | p | sujets |
+|---|---|---|---|---|---|---|
+| bd_shallow | 66.11 | 68.12 | **+2.01 pp** | [+1.13, +2.83] | 3e-6 | 42/52 |
+| grow_shallow | 66.56 | 68.87 | **+2.31 pp** | [+1.57, +3.05] | 1e-8 | 39/52 |
+
+r = 0.97 entre replicats : décalage uniforme, pas du bruit. Même cache pool, même cible,
+`n_train_trials` et `n_test` identiques au fold près.
+
+**Ce n'est pas la carte GPU, c'est le protocole d'entraînement.** Commit `0efbdb5` (25/08),
+`RestoreBestModel` : `EEGClassifier` n'embarque aucun `Checkpoint` et le `EarlyStopping` de
+skorch a `load_best=False`, donc **tout score publié par ce benchmark venait du modèle 20
+époques après son propre optimum** (`epochs - epoch_of_best` = 20, std 0.0 sur les 140 490
+folds de v5). S'y ajoutent `5ac8b24` (budget explicite) et `5337c56` (abstention à s=0).
+Preuve que ce n'est pas un budget plus long : `fit_seconds` de bd_shallow est inchangé
+(29.87 → 29.62 s) pour +2.01 pp. grow_shallow, lui, double (30.5 → 57.6 s).
+
+### Ce que ça invalide
+
+Tous les chiffres de tête de la section « Résultats déjà en main » plus bas — gate
++2.19 pp, pooling seul +1.79/+1.74, blanchiment net +1.72, interaction +1.29 — sont
+**internement cohérents mais mesurés avec un protocole depuis prouvé défectueux**. Ils ne
+peuvent pas aller dans le papier tels quels.
+
+Recalculés en appariant l'ancien `pooled` au nouveau `within`, le gate tombe à +0.18 pp
+(p = 0.70, 21/52) et le pooling à −0.22 pp (p = 0.66). **Ces chiffres-là ne sont pas un
+résultat non plus** : ils mélangent deux arbres. Règle : ne jamais apparier une cellule de
+`/scratch/amounir/eegrow` (août) avec une de `eegrow_xds` — l'écart de protocole vaut ~2 pp,
+soit le double des effets recherchés.
+
+### Ce qui reste valide
+
+Tout ce qui se calcule **entièrement dans le bloc `within` du 27/08** :
+
+| contraste | Δ | IC 95 % | p | sujets |
+|---|---|---|---|---|
+| EA seul @ within/fixe | +1.89 pp | [+0.56, +3.26] | 0.0094 | 33/52 |
+| croissance seule @ within/EA | +0.75 pp | [+0.17, +1.34] | 0.0165 | 32/52 |
+
+### Test de falsification du mécanisme « amplitude » — **le mécanisme est réfuté**
+
+Prédiction : `within` n'a qu'un dataset donc un seul amplificateur, l'interaction
+croissance × alignement doit **disparaître**. Elle ne disparaît pas — elle change de base :
+
+| bras | base | Δ | IC 95 % | p | holm | MDE |
+|---|---|---|---|---|---|---|
+| pooled (août) | none | +1.29 | [+0.39, +2.19] | 0.0074 | 0.037 | 1.32 |
+| pooled (août) | scale | +0.17 | [−0.64, +1.00] | 0.68 | 0.89 | 1.21 |
+| within (27/08) | none | +0.80 | [−0.07, +1.71] | 0.084 | 0.25 | 1.30 |
+| within (27/08) | scale | **+1.06** | [+0.32, +1.81] | 0.0082 | **0.037** | 1.10 |
+
+Le motif s'inverse : significatif contre `none` et nul contre `scale` sur le pool,
+l'inverse sur `within`. La comparaison directe pooled − within vaut +0.49 pp (p = 0.44,
+MDE 1.80) — non concluante, et de toute façon cross-arbre. **La prémisse même du mécanisme
+(« nul contre `scale` ») est un candidat artefact de l'ancien protocole** : il faut la
+re-mesurer sur `pooled` au nouveau protocole avant d'écrire quoi que ce soit là-dessus.
+
+Scripts : `scratchpad/within_cho/falsif.py` et `replicat.py`.
+
+### Conséquence sur le package B (504685, en cours)
+
+Ses cellules `core+extrap` sont au **nouveau** protocole, sa baseline `core` du 12/08 à
+l'**ancien**. Le contraste tel qu'apparié mesurerait ~2 pp de protocole pour ~1 pp d'effet
+cherché. Le job n'est pas perdu : il devient interprétable dès qu'une baseline `core`
+même-protocole existe.
+
+### Re-mesure lancée : job **504709** (18 cellules `pooled`)
+
+Soumis le 27/08 après go d'Adam. `benchmarks/slurm/xds_pooled_cho.sbatch`, array `0-17%4`,
+`gpu:turing:1`, `--exclude=margpu021`, walltime 10 h, logs
+`/scratch/amounir/logs/xds_pooled_cho_504709_*.log`.
+`{bd,grow}_shallow` × `{euclidean, none, scale}` × 3 seeds, `--arm pooled --pool-tier core`.
+
+**Ordre choisi : `euclidean` d'abord** (cellules 0-5) — ce sont les 6 qui débloquent la
+baseline du package B et le bras de référence du gate.
+
+**Coût réel ~63 GPU-h, pas 8-16.** L'estimation initiale était calquée sur le bloc `within`
+(10 320 essais) ; `pooled` en entraîne 36 952. Mesuré depuis 504685 : 3.19 min/fold sur
+43 472 essais → 2.71 min/fold sur `core` → **2.35 h/cellule bd**, et grow coûte 1.94× un bd
+(57.6 s contre 29.6 s par fit) → **~4.6 h/cellule grow**.
+
+**Pourquoi turing alors que pascal est libre.** turing est plein (23/23 GPU), pascal a
+19 GPU au repos — pascal finirait en une nuit, turing prendra des jours. On reste sur
+turing : les deux blocs auxquels ces cellules seront appariées (le bloc `within` du 27/08
+et les `core+extrap` de 504685) tournent tous les deux sur `gpu:turing`. Passer sur pascal
+réintroduirait le type de carte comme décalage systématique dans le chiffre principal,
+soit exactement ce que 504278 avait pour but de retirer. Le coût est du temps d'attente,
+pas un coût scientifique.
+
+Moniteur `b6v38lbqb` (persistant) : échec de cellule, fin des 6 cellules `euclidean`, fin
+de 504685, fin de 504709.
+
+### 28/08 07:35 — état et **alerte walltime**
+
+| cellules | contenu | état |
+|---|---|---|
+| 0-5 | `euclidean`, bd+grow, 3 seeds | **COMPLETED**, 2 h 00 – 3 h 43 |
+| 6-8 | `none`, bd, 3 seeds | RUNNING, fold ~50/52, fin ~07:47-08:15 |
+| 9 | `none`, grow, seed 0 | RUNNING, fold 15/52 après 4 h 36 |
+| 10-17 | `none` grow ×2, `scale` bd ×3 + grow ×3 | PENDING (`JobArrayTaskLimit`) |
+
+**Le coût par cellule dépend de l'alignement, ce que l'estimation n'avait pas prévu.**
+Mesuré sur les timestamps de fold (régime établi, hors chargement du pool) :
+
+| bras | min/fold | durée cellule |
+|---|---|---|
+| bd `euclidean` | 2.3 | 2 h 00 |
+| grow `euclidean` | 3.8 – 4.3 | 3 h 19 – 3 h 43 |
+| bd `none` | 7.45 | ~6 h 25 |
+| grow `none` | **19.4** | **~16 h 50** |
+
+Sans blanchiment le modèle ne cesse pas de progresser, l'early stopping ne déclenche
+jamais et le budget complet est consommé — et la croissance ajoute de la capacité à
+chaque époque. **Conséquence : les 6 cellules grow non-`euclidean` (9, 10, 11, 15, 16, 17)
+dépassent le walltime de 10 h et seront tuées vers le fold 32.** `cross_dataset.py`
+n'écrit son CSV qu'à la fin d'une cellule (aucun `*none*.csv` sur disque) : une cellule
+tuée ne rend rien. `scontrol update TimeLimit` est refusé (Access/permission denied), la
+partition `tau` autorise 7 jours.
+
+Les 9 cellules bd et les 3 grow `euclidean` ne sont pas concernées.
+
+### 28/08 07:45 — rattrapage : job **505009**
+
+Après go d'Adam : `scancel 504709_{9,10,11,15,16,17}`, puis resoumission des 6 cellules
+`grow_shallow` × `{none, scale}` × 3 seeds dans un array séparé,
+`benchmarks/slurm/xds_pooled_cho_grow.sbatch`, `array=0-5%3`, **`--time=24:00:00`**,
+`gpu:turing:1`, `--exclude=margpu021`, logs
+`/scratch/amounir/logs/xds_pool_cho_grow_%A_%a.log`.
+Mapping : `i/3` → `{none, scale}`, `i%3` → seed. Vérifié, 6 combinaisons uniques.
+
+L'annulation a libéré un GPU immédiatement — 504709_12 (bd/scale seed 0) a démarré dans la
+seconde, et 505009_0/1/2 (grow/none) tournent déjà. Fin attendue : les bd/scale ~6 h 25,
+les grow ~16 h 50 par vague, 2 vagues à `%3` → **504709 complet ce soir, 505009 vers le
+30/08**.
+
+Périmètre final de la grille `pooled` cho2017 : 9 cellules bd (504709: 0-2, 6-8, 12-14) +
+3 grow `euclidean` (504709: 3-5) + 6 grow non-`euclidean` (505009) = 18.
+
+## Package B — contrôle négatif interpolation (27/08) : job **504685**, cible changée
+
+Le package B **avait déjà tourné les 11-12/08** sur `bnci2014_001` (6 cellules
+`core+extrap`, 6 `core+lowrank`, 6 `core+interp`, contre 6 `core`), toutes post-correctif
+volts `004b8be` (11/08 15:58 ; les CSV invalidés s'arrêtent à 16:02, ceux-ci commencent à
+20:03). Elles étaient sur disque sans avoir jamais été analysées.
+
+Réanalyse à l'unité correcte (le sujet, seeds moyennées dedans, n = 9, Holm sur 6
+contrastes, bootstrap B=20000) — **les six contrastes sont nuls** :
+
+| modèle | contraste | Δ (pp) | IC 95 % | Holm | MDE | sujets |
+|---|---|---|---|---|---|---|
+| bd_shallow | extrap − core | −1.31 | [−2.71, −0.05] | 0.65 | 2.32 | 1/9 |
+| bd_shallow | lowrank − core | −0.86 | [−2.70, +0.81] | 1.00 | 3.08 | 4/9 |
+| bd_shallow | interp − core | −0.95 | [−2.58, +0.54] | 1.00 | 2.72 | 5/9 |
+| grow_shallow | extrap − core | +0.21 | [−0.90, +1.43] | 1.00 | 2.04 | 4/9 |
+| grow_shallow | lowrank − core | −0.32 | [−1.81, +1.13] | 1.00 | 2.56 | 5/9 |
+| grow_shallow | interp − core | +0.12 | [−0.99, +1.26] | 1.00 | 1.92 | 3/9 |
+
+**Ce n'est pas un résultat, c'est une absence de puissance.** `bnci2014_001` n'a que
+9 sujets, l'écart-type inter-sujet du contraste vaut ~2.1 pp, donc le MDE plancher est de
+~2.2 pp. Un contrôle négatif incapable de descendre sous 2.2 pp ne peut pas qualifier une
+grille dont les effets visés valent ~1 pp. Pour un MDE de 1 pp : **n = 40 sujets**.
+
+Piège de lecture identifié : `core+extrap` ajoute aussi +6520 essais (+17.6 %) et
++9 sujets, donc un nul peut vouloir dire « le bruit coûte ce que les données rapportent ».
+Le contraste propre est `extrap − interp` (les deux ajoutent un dataset étranger) : mesuré
+à −0.36 pp (bd) et +0.09 pp (grow), MDE 2.04 / 1.13 pp — non concluant lui aussi.
+
+**Job 504685 relance donc le package B sur `cho2017` (52 sujets, MDE ≈ 0.86 pp).**
+6 cellules, `pooled` / `euclidean` / `core+extrap`, ~16 GPU-h, PENDING (504342 occupe les
+GPU). Baseline appariée = les cellules `cho2017__pooled__euclidean__core__seed{0,1,2}`
+du 12/08 sous `/scratch/amounir/eegrow/` : **aucun commit ne touche `cross_dataset.py`,
+`pool.py` ni `montage.py` entre `d1d16dd` (12/08) et `029dd9b`** (l'état de l'arbre
+`eegrow_xds`), donc le code est identique et l'appariement par sujet tient. C'est pour ça
+que le job part de `eegrow_xds` et non de `eegrow_interp`, dont l'arbre porte l'axe
+field-interpolation non commité.
+
+Analyse prête : `scratchpad/pkgB/analyse.py` et `analyse2.py`.
+
+### Résultat (28/08) — la grille **est** sensible au contenu du pool
+
+Appariement enfin propre : `core+extrap` = 504685, `core` = cellules 0-5 de 504709, **même
+arbre `eegrow_xds`, même protocole post-`RestoreBestModel`, même carte `gpu:turing`**.
+Intégrité vérifiée : 52 sujets × 3 seeds × 2 modèles × 2 tiers ; `core` = 36 949.7 essais /
+247 sujets, `core+extrap` = 43 469.7 / 256. Script `scratchpad/pkgB_cho/analyse_cho.py`.
+
+| modèle | `core` | `core+extrap` | Δ (pp) | IC 95 % | p (Wilcoxon) | Holm | MDE | sujets |
+|---|---|---|---|---|---|---|---|---|
+| bd_shallow | 68.88 | 69.67 | **+0.78** | [+0.35, +1.21] | 0.0006 | **0.0020** | 0.64 | 34/52 |
+| grow_shallow | 69.43 | 69.64 | +0.21 | [−0.36, +0.76] | 0.38 | 0.48 | 0.82 | 28/52 |
+
+**Ce que ça qualifie.** Le contrôle avait un seul but : montrer que la grille réagit au
+contenu du pool. Elle réagit — sur le pire cas constructible (BNCI2014_004, 3 électrodes
+enregistrées, 19 des 22 canaux inventés, le pire à 10.1 cm de toute mesure), à n = 52 avec
+un MDE de 0.64 pp, l'effet ressort à p = 0.0006. Un nul d'interpolation mesuré sur cette
+grille sera donc interprétable.
+
+**Le signe est positif, et c'est le point intéressant.** Ajouter un dataset massivement
+extrapolé **aide** le modèle fixe (+0.78 pp) au lieu de le dégrader. À `bnci2014_001` le
+même contraste valait −1.31 pp (n = 9, non concluant) : la direction s'inverse une fois la
+puissance suffisante. Lecture la plus simple : +17.6 % d'essais et +9 sujets rapportent
+plus que le bruit d'interpolation ne coûte. Le contraste qui sépare les deux
+(`extrap − interp`, à volume égal) **n'est pas encore mesuré sur cho2017** — c'est le
+portage du tier `interp`, 6 cellules, en attente du go d'Adam.
+
+La croissance, elle, ne bouge pas (+0.21, MDE 0.82) : elle absorbe déjà les données
+supplémentaires autrement. À noter, pas à conclure — le nul est sous le MDE.
+
+### 28/08 — pourquoi `core+interp` tel quel **ne** donnerait **pas** le contraste propre
+
+Comptage des essais réellement en cache, par dataset ajouté à `core` (36 950 essais / 247 sujets) :
+
+| tier ajouté | dataset | sujets | essais | Δ volume |
+|---|---|---|---|---|
+| `interp` | Shin2017A (rang plein, atteignable seulement par interpolation) | 29 | 1 740 | **+4.7 %** |
+| `lowrank` | Zhou2016 (bien supporté, mais rang 14) | 4 | 1 199 | **+3.2 %** |
+| `extrap` | BNCI2014_004 (19 des 22 canaux inventés) | 9 | 6 520 | **+17.6 %** |
+
+Les trois tiers n'ajoutent donc **pas le même volume** : `extrap` en apporte 3.7× plus que
+`interp`. Comme le +0.78 pp du package B est déjà explicable par le seul volume, le
+contraste `extrap − interp` pris seul **resterait confondu** — il mesurerait surtout
+« 6 520 essais valent plus que 1 740 ».
+
+**Ce qui rend quand même les deux tiers manquants utiles — job 505185, lancé le 28/08.**
+Deux lectures deviennent possibles, aucune ne l'était avec seulement `core` et
+`core+extrap` :
+
+1. **`interp` vs `lowrank` est quasi apparié en volume** (1 740 contre 1 199 essais,
+   +4.7 % contre +3.2 %) et diffère surtout par le **rang** des données ajoutées : Shin2017A
+   est de rang plein, Zhou2016 de rang 14 sur 22. C'est donc un contraste sur la qualité de
+   l'interpolation, pas sur le volume.
+2. Avec quatre points (0, +1 199, +1 740, +6 520 essais) on obtient une **courbe
+   volume-réponse**. La qualité d'interpolation se lit alors comme le **résidu** : `extrap`
+   tombe-t-il sous la tendance que ses 6 520 essais prédisent ? Avec deux points, cette
+   question n'a pas de réponse.
+
+**Ce que 505185 ne fait pas.** Il ne remplace pas le chiffre causal. Pour celui-là il reste
+deux designs, à trancher :
+
+1. **Tiers appariés en volume** : plafonner chaque dataset ajouté à ~1 200 essais
+   (sous-échantillonnage déterministe par seed). Demande une option `--pool-cap` dans
+   `pool.py`. Simple, mais l'appariement reste au niveau du volume, pas du contenu.
+2. **Dégradation contrôlée** (le design causal, recommandé) : prendre **un** dataset `core`
+   qui possède nativement les 22 canaux cibles, en garder 3 électrodes et interpoler les 19
+   autres, puis comparer le pooling de la version vraie contre la version interpolée. Essais
+   identiques, sujets identiques, seule l'interpolation change — **zéro confusion de volume
+   par construction**. Demande une variante de build dans `pool.py`.
+
+## Axe interpolation : field interpolation ajouté (27/08) — **pas encore lancé**
+
+Le pool était construit avec les **splines sphériques**, c'est-à-dire la *baseline* du
+papier de Mellot/Chevallier (arXiv:2403.15415), pas sa *méthode*. Corrigé sur la branche
+`feat/cross-dataset-montage`, commit `8be3cb9` (local, **pas encore poussé sur la PR #5**) :
+
+- `interpolate_to_montage(..., method="spline"|"field")`
+- l'estimateur est une **clé de cache** (`<root>/<dataset>__field/`), vérifiée par sujet
+  dans `pool.load()` : sinon un run FI relirait des arrays splines et le contraste
+  reviendrait à zéro en ayant l'air propre
+- les sujets qui ne reconstruisent rien (les ~250 du tier `core`) sont réutilisés tels
+  quels — leur projection est une permutation, prouvé par test
+- `--interp-method` sur `pool.py build` et `cross_dataset.py`
+- 106 tests passent (98 avant)
+
+**Job 504577 — TERMINÉ (rc=0), verdict : on garde les splines.** 20 sujets, vérité terrain
+sur 13 électrodes. Au niveau sujet (n=20) :
+
+| régime | Δ corr (FI − splines) | IC 95 % | p |
+|---|---|---|---|
+| interpolé (11 électrodes) | +0.0053 | [−0.0045, +0.0161] | 0.34 |
+| extrapolé (C5, C6) | −0.1077 | [−0.128, −0.093] | 6e-10, 0/20 sujets |
+
+C5/C6 sont les seules électrodes à `empty_sectors > 0`. Les splines sont indifférentes à
+la découpe (0.8554 vs 0.8595), donc c'est une faiblesse de FI seul, pas des électrodes.
+**Conséquence : pas de rebuild du pool, l'axe interpolation n'est plus bloquant.**
+
+Deux corrections apportées au script après coup (commit `c3857dc`) :
+- le `rho` gain-vs-écart était calculé sur 260 paires pour 13 valeurs d'écart distinctes
+  (n gonflé ×20, signe instable). Unité = l'électrode, MDE affiché : la claim du papier
+  est **non testée** ici (écarts 3.29–4.44 cm seulement), pas réfutée.
+- le contraste `field − spline` **en décodage est structurellement nul** avec un modèle ML :
+  CSP et le tangent space sont invariants par changement de base inversible des canaux, ce
+  qui est exactement ce qui sépare deux interpolations linéaires des mêmes sources.
+  Vérifié hors saturation (0.9667 / 0.9167, écart 0.0000). Le script le refuse désormais.
+  Le contraste `reconstruit − enregistré` reste valide : **+0.0052, p = 0.70** — la
+  reconstruction ne coûte rien en décodage, ce qui rend l'ablation `core` vs `core+interp`
+  interprétable.
+
+## Incident GPU fantôme margpu021 — 504278 partiel, retry **504342** (27/08)
+
+Sur les 18 cellules de 504278, **8 tournent normalement** (cellules 0-4, 6-8, sur margpu020
+et margpu022) et **10 ont échoué en 9-14 s** : cellules 5 et 9→17, toutes sur **margpu021**.
+
+Cause : le nœud annonce `Gres=gpu:turing:3` mais un des trois slots n'expose aucun device.
+Log : `nvidia-smi → "No devices were found"`, puis
+`RuntimeError: CUDA_VISIBLE_DEVICES='0' but torch.cuda.is_available() is False`.
+Le garde-fou de `benchmarks/utils.py:pick_device` a refusé le repli CPU — **aucune cellule
+n'a été entraînée sur CPU en silence**, donc rien n'est contaminé. Mais l'échec en 9 s
+libère le slot instantanément, et Slurm y a fait passer toute la file d'attente : d'où la
+cascade qui a tué `grow_shallow` en entier (9-17) alors que `bd_shallow` est presque intact.
+
+Retry : **504342**, `--array=5,9-17`, `--exclude=margpu021`, même `gpu:turing` (homogénéité
+de carte avec les 8 survivantes). Script `benchmarks/slurm/xds_within_retry.sbatch`, logs
+`/scratch/amounir/logs/xds_within_retry_504342_*.log`. Ajout d'un préflight `torch.cuda`
+avant tout accès aux données, suivi d'un `sleep 120` en cas d'échec : si un autre nœud a la
+même panne, il ne peut plus consommer qu'une ou deux cellules au lieu de l'array entier.
+
+## Décision d'analyse (Adam, 27/08)
+
+La comparaison de référence reste **`grow_X` vs `bd_X`** (modèles braindecode), pas
+`grow_X` vs `fix_X`. Les contrôles `fix_*` de 500952 restent sur disque mais ne sont pas
+le contraste principal des figures.
+
+## Bloc `within` cross-dataset Cho2017 — SLURM **504278** — **EN COURS** (27/08)
+
+Soumis le 27/08/2026 ~15h40. Array `0-17`, partition `tau`, `gpu:turing:1`, 3 h/cellule.
+Checkout **`/scratch/amounir/eegrow_xds`** (branche `feat/cross-dataset-montage`, PR #5),
+cache pool `/scratch/amounir/pool_cache` (290 sujets, manifeste validé).
+Script : `benchmarks/slurm/xds_within.sbatch`. Logs : `/scratch/amounir/logs/xds_within_504278_*.log`.
+Sorties : `/scratch/amounir/eegrow_xds/benchmarks/results_cross_dataset/cho2017/`.
+
+18 cellules = `{bd_shallow, grow_shallow}` × `{none, scale, euclidean}` × seeds `{0,1,2}`,
+`--target cho2017 --arm within --pool-tier core`. Coût attendu ~8 GPU-h (mesuré 0.44 h/cellule
+sur la grille d'août).
+
+### Pourquoi 18 et pas les 12 manquantes
+
+`within/euclidean` existe déjà (grille d'août, `/scratch/amounir/eegrow/benchmarks/results_cross_dataset/`)
+mais sur une carte non enregistrée. Or c'est le bras de référence du gate. Le re-lancer ici
+coûte 2.6 GPU-h et retire le type de carte comme décalage systématique possible dans le
+chiffre principal. Les anciennes cellules restent sur disque comme réplicat indépendant.
+Même raison pour `gpu:turing` explicite plutôt que « ce qui est libre » : laisser Slurm mixer
+pascal et ampere réintroduirait exactement ce que le re-run enlève.
+
+### Ce que ça débloque
+
+1. La baseline nue (`within/none`), donc un gate « tout allumé contre rien » sans note de bas de page.
+2. La décomposition en effets principaux additifs (pooling / alignement / croissance).
+3. **Le test de falsification de l'hypothèse d'amplitude.** L'interaction croissance × alignement
+   mesurée sur `pooled` (+1.29 pp contre `none`, holm 0.037) est **nulle contre `scale`**
+   (+0.17 pp, p=0.68) : elle porte sur la normalisation d'amplitude, pas sur le blanchiment.
+   Mécanisme proposé : la line search de `grow_step` compare des magnitudes de gradient de part
+   et d'autre d'une jonction, donc dans un pool où un dataset domine en amplitude c'est le gain
+   de l'amplificateur qui décide *où* la capacité est allouée. Prédiction : l'interaction doit
+   **disparaître** sur `within` (un seul dataset, un seul amplificateur). Si elle survit, le
+   mécanisme est faux.
+
+### Résultats déjà en main sur le pool (grille d'août, n=52, Holm sur 8 contrastes)
+
+| contraste | Δ | IC95 bootstrap | p_holm |
+|---|---|---|---|
+| gate tout-allumé (grow+pooled+EA − fixe+within+EA) | +2.19 pp | [+1.29, +3.13] | 0.0002 |
+| pooling seul, fixe | +1.79 pp | [+0.96, +2.65] | 0.0010 |
+| pooling seul, growing | +1.74 pp | [+0.90, +2.64] | 0.0020 |
+| blanchiment net du rescaling, growing | +1.72 pp | [+0.49, +3.09] | 0.049 |
+| blanchiment net du rescaling, fixe | +1.55 pp | [+0.33, +2.91] | 0.073 |
+| interaction croissance × alignement | +1.29 pp | [+0.40, +2.18] | 0.037 |
+| croissance seule @ pooled/EA | +0.40 pp | [−0.13, +0.92] | 0.29 |
+
+Le +1.72 pp de blanchiment net est à comparer au **+1.51 pp** du gate EA mono-dataset :
+deux protocoles, deux estimateurs indépendants, même amplitude.
+
+**Attention à la lecture du gate** : le bras de référence est `within/euclidean`, donc la
+baseline a déjà l'EA. Le +2.19 pp est « pooling + croissance par-dessus l'EA », pas « tout
+contre rien ». C'est ce que 504278 corrige.
+
+### Suites conditionnées (NON lancées)
+
+- **B — contrôle négatif d'interpolation**, `core+extrap` vs `core`, 6 cellules ≈ 21 GPU-h.
+  Une grille incapable de distinguer `core+extrap` de `core` est insensible au contenu du pool,
+  et alors aucun résultat d'interpolation n'est interprétable, y compris positif.
+- **C — le vrai contraste d'interpolation**, `core+lowrank`, 12 cellules ≈ 43 GPU-h.
+  À ne lancer que si B passe.
+
+**Bloqueur sur B et C** : notre interpolation est en splines sphériques (Perrin 1989), or
+Mellot, Collas, Chevallier, Engemann, Gramfort (arXiv:2403.15415) montrent que le *field
+interpolation* (modèle direct de Maxwell, inversion par minimum-norm, ré-application aux
+positions cibles) bat les splines sur **4 datasets sur 6**, avec un écart qui croît quand le
+recouvrement de canaux diminue — soit exactement le régime `lowrank`/`extrap`. MNE expose les
+deux par `interpolate_bads(method=dict(eeg="MNE"|"spline"))`. L'axe méthode doit exister avant
+que B et C vaillent la peine.
+
 ## Contrôles fixes manquants — SLURM **500952** — **TERMINÉ 24/24** (26/08)
 
 Soumis le 26/08/2026 ~07h50. Array `0-23%3`, `gpu-best`, `gpu:hopper:1` (même carte que

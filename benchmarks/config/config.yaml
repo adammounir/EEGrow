@@ -31,8 +31,27 @@ train:
   # exactly 20, std 0.0, on all 140 490 folds of v5.
   #
   # `*_loss` => lower is better, anything else => higher is better.
-  # `stop_monitor` is settled; `selection_monitor` is not -- see pipelines.py for the
-  # A/B that has to run on held-out accuracy before the campaign commits to it.
+  #
+  # BOTH ARE SETTLED SINCE, and the values below are the LOSING ones. The A/B ran
+  # (`exp_deep4_budget.py`, 36 paired units, then SLURM 500573 over all 9 arms) and the
+  # 2x2 square reads::
+  #
+  #                       sel=valid_loss   sel=valid_acc
+  #     patience  20          0.3501           0.3390
+  #     patience 200          0.4074           0.4818
+  #
+  # The two knobs interact (+0.0854, p=1.1e-07), so neither can be set alone: the
+  # corrected protocol is `patience=200` AND `selection_monitor=valid_acc` together.
+  # The defaults stay wrong on purpose -- flipping them re-dates every score in
+  # `results_v5_published/`, which is still the reference frame for the archived
+  # figures. So the corrected protocol is passed explicitly at launch::
+  #
+  #     train.patience=200 train.selection_monitor=valid_acc
+  #
+  # A grid submitted without those two overrides silently reproduces the undertrained
+  # protocol -- no warning, well-formed CSVs -- and is worth up to +0.13 of accuracy on
+  # `bd_deep4`. Check the `srun` line before submitting. Do NOT read these defaults as
+  # the recommendation; they are the opposite.
   selection_monitor: valid_loss
   stop_monitor: valid_loss
   # Epochs without improvement on `stop_monitor` before the fit ends. null => the
