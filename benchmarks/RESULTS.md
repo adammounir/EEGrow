@@ -1,5 +1,27 @@
 # MOABB grid results — classical ML vs braindecode vs growing
 
+> ## ⚠ INVALIDATED — do not cite, do not plot, do not reuse a number from this file
+>
+> Everything below reads the v4 grid (`results_published/`, finished 2026-08-10), which
+> predates the three defects found between 23 and 25 August and ran the shipped training
+> protocol. Concretely, in this document:
+>
+> * **section 2 is the worst affected.** `grow_eegnex` losing 25 cells of 27 is a
+>   *geometry* artefact, not a result: `filter_1` sizes the growable junction **and**
+>   the fixed tail, so the two arms were never width-matched (70 classifier inputs
+>   against 280). Against the correct frozen twin the −0.0322 here becomes
+>   **−0.0098, ns**.
+> * `grow_deep` vs `bd_deep4` is not a growth contrast at all — they are different
+>   networks (4 stages 25/50/100/200 against 2 stages). Against its own control the
+>   delta is **+0.0008, p=1**.
+> * every deep score is the model `patience` epochs *past* its own best, on arms
+>   undertrained by a factor 5.5 in epochs; on `bd_deep4` that alone is worth **+0.13**.
+> * the `within_session` rows for `shin2017a`, `physionetmi` and `alexmi` come from
+>   networks that never took a single gradient step.
+>
+> Kept unedited, because it is the record of what was believed and it names the claims
+> the corrected campaign has to revisit. See **`CAMPAIGNS.md`** for what is still usable.
+
 Grid finished 2026-08-10. This document is the reading of the results; the numbers
 themselves are in `results_published/`, and everything below follows from them via
 `aggregate_published.py`.

@@ -42,7 +42,13 @@ benchmarks/analysis/**/figures/
 # sans le cluster -- même règle que `results_published/`.
 benchmarks/results_v5_published/eegrow_v5_curves*.csv.gz
 benchmarks/results_v5_published/eegrow_v5_fold_summary.csv.gz
-benchmarks/results_v5_published/eegrow_v5_budget.csv.gz
+# `eegrow_v5_budget.csv.gz` est sorti de cette liste le 28/08, et pas pour sa taille
+# (827 Ko) : il a changé de rôle. Les *scores* de v5 sont invalidés (voir CAMPAIGNS.md),
+# mais sa colonne `epochs` est la mesure sur laquelle repose tout le dimensionnement de
+# la grille finale -- le facteur de budget par protocole (x6.06 within, x5.58
+# cross_session, x3.28 cross_subject), donc les 817 GPU-h, donc le CELL_TIMEOUT et le
+# mur d'allocation. Le régénérer suppose Margaret et des runs qu'on ne refera pas ;
+# s'il disparaît, le plan de campagne devient une affirmation invérifiable.
 *.pt
 *.npy
 *.npz
