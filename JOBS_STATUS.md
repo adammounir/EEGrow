@@ -1,5 +1,101 @@
 # Jobs en cours
 
+## 29/08 (suite) — cellule perdue relancée ; le stamp sujet est branché
+
+| job | état |
+|---|---|
+| `507767_10` tiers (relance) | PENDING — `grow_shallow`, `euclidean`, seed 1, `core+lowrank` |
+| `505009` pooled grow | 3 RUNNING (9 h 52 / 11 h 38 / 11 h 41) |
+
+Relancé avec `--exclude=margpu021,margpu028`. margpu021 est le nœud défectueux connu ;
+margpu028 est exclu **pour rendre la relance informative**, pas parce qu'il est suspect
+(il fait tourner `505009_4` depuis 11 h sans incident). Si la cellule repasse ailleurs on
+n'apprend rien sur 028, mais on a la cellule ; si elle échoue encore, le défaut est dans
+la cellule et non dans la carte. Une seule occurrence ne permet pas de trancher autrement.
+
+### Stamp sujet — fait, testé, commité (`e9dc622`)
+
+Chaque record de fit porte désormais `subject` / `session` / `cv_ind`. C'était la 8ᵉ
+figure demandée par Stella et la **seule** qui ne se rattrape pas après coup : une colonne
+absente de 396 cellules coûte les 817 GPU-h une deuxième fois.
+
+Un piège évité, qui vaut d'être écrit : le hook évident,
+`BaseEvaluation._maybe_save_model_cv`, reçoit bien le sujet — mais il n'est appelé que
+depuis `_process_legacy`. En instrumentant le compteur sur une `WithinSessionEvaluation`
+complète : **0 appel**. MOABB 1.5.0 passe par `_process_parallel` → `_build_task_list` →
+`_evaluate_fold`. Un override là aurait produit 396 fichiers vides et aucune erreur.
+D'où les deux gardes qui font échouer la cellule à sa première seconde plutôt qu'à sa
+dernière (pas de splitter, ou `n_jobs != 1`). Vérifié : rien dans `slurm/` ne surcharge
+`n_jobs`, `config.yaml` le fixe à 1.
+
+Testé sur les trois protocoles contre le vrai flot MOABB (sujets complets, équilibrés
+entre folds, distincts par record) et sur les cinq bras profonds de la grille finale
+(listes de callbacks préservées élément par élément, recorder retrouvé dans chacune).
+
+## 29/08 — tiers et lodo terminés, 1 cellule perdue sur 79 ; pooled encore en vol
+
+| job | état | détail |
+|---|---|---|
+| `505184` lodo | **18/18 COMPLETED** | terminé |
+| `505185` tiers | **11/12 COMPLETED, 1 FAILED** | l'index 10 (`grow_shallow`, `euclidean`, seed 1, `core+lowrank`) est mort |
+| `505009` pooled grow | 3 tâches RUNNING (9 h 35 / 11 h 20 / 11 h 23) | dernier bloc |
+
+68 CSV sur disque pour cho2017 : `core` 51, `core+interp` 6, `core+extrap` 6,
+**`core+lowrank` 5 sur 6** — le trou est exactement la cellule perdue. La réponse-volume
+à quatre points est bloquée dessus.
+
+**Ce qui a tué la cellule**, et pourquoi ce n'est pas ce que la stack trace raconte :
+
+```
+torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+  callbacks.py:201 in on_grad_computed  ->  p.grad.detach().norm(2)
+```
+
+Les erreurs CUDA sont rapportées de façon asynchrone : le callback `GradientNorm` est le
+premier endroit qui *synchronise* (`.item()`), donc c'est là que la faute remonte, pas là
+où elle naît. margpu028 est sain (`mixed`, `gpu:turing:2`, et `505009_4` y tourne depuis
+11 h). Une occurrence sur 79 cellules.
+
+**Les 10 autres échecs des logs `xds_*` ne sont pas le même problème** et ne sont pas
+nouveaux : tous viennent du job `504278`, tous sur **margpu021**, tous avec
+
+```
+RuntimeError: CUDA_VISIBLE_DEVICES='0' but torch.cuda.is_available() is False:
+              the pinned device does not exist. Refusing to fall back to CPU.
+```
+
+C'est le défaut connu de margpu021 (il annonce `gpu:turing:3`, `nvidia-smi` n'en voit
+aucun). Le garde a refusé de basculer sur CPU — comportement correct : un échec bruyant
+plutôt qu'une cellule CPU silencieuse qui aurait l'air normale. margpu021 est déjà dans
+l'`--exclude` de `final_grid.sbatch`.
+
+**Conséquence pour la grille finale : aucune.** Les arrays `xds_*` sont indexés, donc un
+index mort est perdu sec. `pack_run.sh` ne l'est pas — il relâche la revendication quand
+aucun CSV n'a été écrit (`[ -s "$OUT" ] || rmdir "$CLAIM"`, l. 344) et la cellule est
+re-revendiquée au balayage suivant. Une faute CUDA transitoire y coûte une re-exécution,
+pas une cellule.
+
+## 28/08 fin d'aprem — point cross-dataset cho2017 : 60 CSV, 2 jobs restants
+
+`504709` (pooled bd) est **terminé** — les 6 cellules `pooled core` de `bd_shallow`
+(none / scale / euclidean × 3 graines) sont sur disque. 60 CSV = **20 cellules complètes
+× 3 graines**, aucune cellule partielle.
+
+| job | cellules | état | reste |
+|---|---|---|---|
+| `505009` pooled grow | `grow_shallow pooled core`, aligns `none` (tâches 0-2) puis `scale` (3-5) | 0/1/2 RUNNING 7 h 36 (walltime 24 h), 3-5 PENDING | bras `none` ≈ 17 h/cellule → ~9 h ; puis `scale` ≈ 3 h 30 |
+| `505185` tiers | `core+lowrank`, `bd_shallow` (6-8) puis `grow_shallow` (9-11) | 6/7/8 RUNNING 39 min–1 h 04 (walltime 10 h), 9-11 PENDING | bd ≈ 2 h ; puis grow ≈ 3 h 30 |
+
+`core+interp` (tâches 0-5 de `505185`) est **complet**, 6 cellules. `core+extrap` complet
+(package B). Il manque donc, pour fermer l'étage 2 : `pooled none/scale` du bras growing
+et le tier `core+lowrank`. **ETA global ≈ 13 h** — tout devrait être sur disque demain
+matin 29/08.
+
+Analyses débloquées à ce moment-là : `scratchpad/within_cho/falsif.py` au nouveau
+protocole (gate + effets principaux + interaction croissance × alignement), puis la
+réponse-volume à quatre points (core / +lowrank / +interp / +extrap) et le contraste de
+rang `interp` vs `lowrank` à volume quasi apparié, n=52, apparié sujet, IC bootstrap + Holm.
+
 ## 28/08 — audit des deux bugs bloquants : **déjà corrigés**, un troisième piège reste
 
 Les deux bugs qui bloquaient le relancement de la grille principale étaient corrigés
