@@ -1,5 +1,59 @@
 # Jobs en cours
 
+## 29/08 (soir) — les 4 arrays cho2017 sont terminées ; le gate est re-mesuré
+
+| job | état |
+|---|---|
+| `504709` + `505009` pooled | **18/18** — bloc complet |
+| `505184` lodo | 18/18 |
+| `505185` tiers | 11/12 (index 10 mort) |
+| `507767_10` relance | PENDING |
+
+### Décomposition du gate, protocole corrigé, un seul arbre (n=52 sujets)
+
+36 cellules `core`, toutes dans `eegrow_xds`, 27/08 14h22 → 29/08 16h03, `gpu:turing`.
+Aucun appariement cross-arbre. Scripts `scratchpad/within_cho/{falsif,decompo}.py`.
+
+| contraste | Δ | IC 95 % | p | holm | MDE |
+|---|---|---|---|---|---|
+| **GATE** grow+pooled+EA − bd+within+rien | **+3.20 pp** | [+1.72, +4.73] | 0.0001 | 0.0009 | 2.21 |
+| EA seule (bd, within) | +1.89 | [+0.55, +3.25] | 0.0094 | 0.057 | 2.00 |
+| croissance (within, EA) | +0.75 | [+0.17, +1.33] | 0.0165 | 0.082 | 0.87 |
+| pooling seul (bd, EA) | +0.76 | [−0.09, +1.65] | 0.095 | 0.21 | 1.28 |
+| croissance @ pooled/EA | +0.55 | [+0.04, +1.04] | 0.036 | 0.15 | 0.73 |
+| rescaling seul — **contrôle négatif** | +0.12 | [−0.57, +0.84] | 0.75 | 0.75 | 1.05 |
+
+**Ce qui change par rapport aux chiffres d'août.** Le pooling passe de **+1.79 → +0.76 pp**
+et ne survit plus à Holm : l'essentiel du +1.79 était l'écart de protocole, pas le pooling.
+L'ancien gate (baseline déjà alignée) passe de +2.19 → **+1.32 pp**. L'EA, elle, est stable
+à +1.89. Le vrai gate « tout contre rien » vaut +3.20 pp et n'avait jamais été mesuré.
+
+Le **contrôle négatif passe** : `scale` ne fait rien (+0.12 pp, p=0.75). Le gain de l'EA est
+donc bien du blanchiment, pas de la normalisation d'amplitude.
+
+### L'EA profite-t-elle plus au modèle qui croît ? (interaction)
+
+| bras / base | Δ | IC 95 % | p | holm | MDE |
+|---|---|---|---|---|---|
+| within, base `scale` | **+1.06** | [+0.32, +1.81] | 0.0082 | **0.041** | 1.10 |
+| within, base `none` | +0.80 | [−0.07, +1.68] | 0.084 | 0.20 | 1.30 |
+| pooled, base `scale` | +0.75 | [+0.12, +1.40] | 0.027 | 0.11 | 0.94 |
+| pooled, base `none` | +0.72 | [−0.01, +1.48] | 0.066 | 0.20 | 1.09 |
+| **pooled − within** | −0.08 | [−1.22, +1.04] | 0.89 | 0.89 | 1.66 |
+
+Les quatre estimations sont **du même signe et de la même taille** (+0.7 à +1.1 pp), mais
+l'effet (~0.8) est sous le MDE (~1.0–1.3) : cohérent, pas encore établi. Une seule survit à
+Holm. À traiter comme un signal à confirmer, pas comme un résultat.
+
+**Le mécanisme « amplitude » est réfuté pour de bon.** Prédiction : l'interaction devait
+disparaître sur `within` (un seul dataset, un seul amplificateur). Elle est **identique**
+(différence −0.08 pp, p=0.89). Réserve honnête : MDE 1.66 pp > l'interaction elle-même, donc
+on exclut la disparition, pas une atténuation partielle. Le motif d'août (significatif contre
+`none`, nul contre `scale`) ne réplique pas non plus — c'était un artefact de protocole.
+
+**Conséquence de design** : l'interaction ne dépend pas du pooling. On n'a donc pas besoin de
+pooler pour capter la synergie EA × croissance.
+
 ## 29/08 (suite) — cellule perdue relancée ; le stamp sujet est branché
 
 | job | état |
