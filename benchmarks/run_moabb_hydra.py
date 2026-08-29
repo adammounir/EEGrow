@@ -38,6 +38,7 @@ from omegaconf import DictConfig, OmegaConf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipelines import build_pipeline  # noqa: E402
+from subject_stamp import stamped  # noqa: E402
 from utils import (  # noqa: E402
     cache_config,
     cap_cuda_fraction,
@@ -53,8 +54,14 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(message)s")
 
 
-def _make_evaluation(cfg, paradigm, dataset, hdf5_path):
-    """Build the MOABB evaluation object named by ``cfg.eval.name``."""
+def _make_evaluation(cfg, paradigm, dataset, hdf5_path, stamp=False):
+    """Build the MOABB evaluation object named by ``cfg.eval.name``.
+
+    ``stamp`` wraps the class so every fit record names its held-out subject (see
+    ``subject_stamp.py``): MOABB owns the subject loop, so that identity is not
+    reachable from a skorch callback and has to be injected on the evaluation side.
+    Off for the ML arms, which write no fit records to stamp.
+    """
     from moabb import evaluations as mev
 
     common = dict(
@@ -69,13 +76,15 @@ def _make_evaluation(cfg, paradigm, dataset, hdf5_path):
     cc = cache_config(cfg.get("cache"))
     if cc:
         common["cache_config"] = cc
+    wrap = stamped if stamp else (lambda c: c)
     name = cfg.eval.name
     if name == "within_session":
-        return mev.WithinSessionEvaluation(n_splits=int(cfg.eval.n_splits), **common)
+        return wrap(mev.WithinSessionEvaluation)(
+            n_splits=int(cfg.eval.n_splits), **common)
     if name == "cross_session":
-        return mev.CrossSessionEvaluation(**common)
+        return wrap(mev.CrossSessionEvaluation)(**common)
     if name == "cross_subject":
-        return mev.CrossSubjectEvaluation(**common)
+        return wrap(mev.CrossSubjectEvaluation)(**common)
     raise ValueError(f"unknown eval.name: {name!r}")
 
 
@@ -174,7 +183,8 @@ def main(cfg: DictConfig) -> pd.DataFrame:
     logger.info("pipeline ready (device=%s)", device)
 
     # ---- evaluate ----------------------------------------------------------
-    evaluation = _make_evaluation(cfg, paradigm, dataset, out_dir)
+    evaluation = _make_evaluation(cfg, paradigm, dataset, out_dir,
+                                  stamp=record_path is not None)
     results = evaluation.process({label: pipeline})
 
     results["eval"] = cfg.eval.name
