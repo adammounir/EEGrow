@@ -214,6 +214,21 @@ class GromoGrowth(Callback):
         record("grow_n_kept", result["n_candidates"])
         record("grow_first_order_improvement", result["first_order_improvement"])
         record("grow_eig_sum", result["eigenvalues_extension_sum"])
+        # The quantities the step is *decided* on, and the only ones that cannot be
+        # recovered afterwards from anything on disk. `grow_losses` is the held-out
+        # loss at every point of `loop.SCALING_GRID`, keyed by the factor, so a reader
+        # sees why `grow_s` won rather than only that it did -- an abstention because
+        # the whole curve was flat and one because it was steeply worse are different
+        # failures with different fixes. The two spectra bracket the selection rule:
+        # `grow_eig_proposed` is what gromo offered, `grow_eig_kept` what the relative
+        # floor and the width cap left, so the sum alone stops being ambiguous between
+        # one dominant direction and a flat tail. `grow_param_update_decrease`
+        # separates the gain from the weights already there from the new neurons'.
+        record("grow_select_loss", result["select_loss"])
+        record("grow_losses", result["losses"])
+        record("grow_eig_proposed", result["eig_proposed"])
+        record("grow_eig_kept", result["eig_kept"])
+        record("grow_param_update_decrease", result["parameter_update_decrease"])
 
     def _split_holdout(self, batches):
         """Split ``batches`` into (stats, line-search) loaders per ``holdout_frac``.

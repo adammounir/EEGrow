@@ -86,6 +86,47 @@ def test_recorder_writes_one_line_per_fit(tmp_path):
         assert max(widths) <= rec["target_width"]
 
 
+def test_growth_epochs_record_the_decision_not_only_its_outcome(tmp_path):
+    """A growth epoch must carry the evidence for the choice it made.
+
+    ``grow_s`` alone says which scaling factor won, never why. The line search over
+    ``loop.SCALING_GRID`` and the singular spectrum are computed inside ``grow_step``
+    and destroyed by ``apply_change``/``delete_update`` on the very next line, so a
+    campaign that does not write them here cannot recover them at any price -- which
+    for the final grid is 817 GPU-hours. This test is the guard on that.
+    """
+    from eegrow.training.loop import SCALING_GRID
+
+    path = tmp_path / "fits.jsonl"
+    x, y = _xy()
+    _clf(_model(), path).fit(x, y)
+    rec = json.loads(path.read_text().strip())
+
+    grown = [h for h in rec["history"] if "grow_s" in h]
+    assert grown, "no growth epoch in a fit with grow_every=2 and max_epochs=6"
+    for h in grown:
+        # The line search, keyed by scaling factor. JSON has no float keys, so the
+        # grid comes back stringified -- that is the storage format, not a loss.
+        losses = h["grow_losses"]
+        assert set(losses) == {str(float(s)) for s in SCALING_GRID}, losses
+        best = min(losses, key=losses.get)
+        assert float(best) == h["grow_s"], f"s={h['grow_s']} does not minimise {losses}"
+        assert h["grow_select_loss"] == losses[best]
+
+        # Both spectra, bracketing the selection rule. `eigenvalues_extension` is set
+        # by `compute_optimal_updates`, so unlike `first_order_improvement` it is
+        # always available and a None here is a real regression.
+        proposed, kept = h["grow_eig_proposed"], h["grow_eig_kept"]
+        assert isinstance(proposed, list) and proposed, proposed
+        assert isinstance(kept, list) and kept, kept
+        assert len(kept) <= len(proposed), "selection cannot add candidates"
+        assert h["grow_n_proposed"] == len(proposed)
+        assert h["grow_n_kept"] == len(kept)
+        # Descending singular values: the "keep the first k" cut in
+        # `_n_candidates_to_keep` is only "keep the best k" if this holds.
+        assert proposed == sorted(proposed, reverse=True), proposed
+
+
 def test_recorder_on_a_frozen_model_records_a_constant_width(tmp_path):
     """A fixed arm gets a record too -- constant width is what makes it comparable."""
     path = tmp_path / "fits.jsonl"

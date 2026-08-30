@@ -216,6 +216,13 @@ def grow_step(model, train_loader, device, *, val_loader=None,
     layer = model._growable_layers[0]
     proposed = getattr(layer, "eigenvalues_extension", None)
     n_proposed = int(proposed.shape[0]) if proposed is not None else None
+    # Snapshot the spectrum BEFORE the relative floor and the width cap trim it. The
+    # sum alone cannot say whether a step was one dominant direction or a flat tail of
+    # equivalent ones, which is the question the selection rule turns on -- and
+    # `sub_select_optimal_added_parameters` below replaces the attribute, so this is
+    # the only moment the untrimmed values exist. Bounded by the target width (<= 40
+    # on every arm of the grid), so the record stays small.
+    eig_proposed = _spectrum(proposed)
     keep = _n_candidates_to_keep(layer, min_singular_ratio, max_added)
     if keep is not None:
         # Candidates come out of the SVD in descending singular-value order, so
@@ -259,8 +266,26 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         # work; `n_proposed == n_candidates == max_added` means the target is the
         # binding constraint. Distinguishing those two is the whole point of logging it.
         "n_proposed": n_proposed,
+        # The untrimmed singular values, next to `n_proposed` they came from.
+        "eig_proposed": eig_proposed,
         **diag,
     }
+
+
+def _spectrum(values, ndigits: int = 8) -> list | None:
+    """A tensor of singular values as a plain list of rounded floats.
+
+    Rounded because these end up in a JSONL line: full float repr triples the size of
+    a growth epoch's record for digits no analysis reads. Guarded like every other
+    diagnostic -- a spectrum that cannot be read is a ``None`` in a log line, never a
+    dead fit.
+    """
+    if values is None:
+        return None
+    try:
+        return [round(float(v), ndigits) for v in values.detach().flatten().cpu()]
+    except Exception:  # noqa: BLE001 -- diagnostics never break a fit
+        return None
 
 
 def _n_candidates_to_keep(layer, min_singular_ratio: float,
@@ -319,10 +344,12 @@ def _update_diagnostics(layer) -> dict:
     than no diagnostic, so the failure mode is a ``None`` in a log line.
     """
     out = {"first_order_improvement": None, "parameter_update_decrease": None,
-           "eigenvalues_extension_sum": None, "n_candidates": None}
+           "eigenvalues_extension_sum": None, "n_candidates": None,
+           "eig_kept": None}
     for key, get in (
         ("eigenvalues_extension_sum", lambda: float(layer.eigenvalues_extension.sum())),
         ("n_candidates", lambda: int(layer.eigenvalues_extension.shape[0])),
+        ("eig_kept", lambda: _spectrum(layer.eigenvalues_extension)),
         ("parameter_update_decrease",
          lambda: float(layer.parameter_update_decrease)),
         ("first_order_improvement", lambda: float(layer.first_order_improvement)),
