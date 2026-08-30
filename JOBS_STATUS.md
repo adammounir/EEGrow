@@ -1,5 +1,61 @@
 # Jobs en cours
 
+## 30/08 — audit pré-lancement de la grille finale : PRÊT, rien n'est lancé
+
+Aucun job en file (`squeue` vide). Rien n'a été soumis, poussé ni déployé.
+
+### Ce que l'audit a trouvé (3 bloquants, tous corrigés)
+
+| # | trouvé | conséquence si non corrigé | commit |
+|---|---|---|---|
+| 1 | `plan_campaign.py` lisait 4 colonnes, la grille en émet 6 | crash — puis, si le parseur avait été tolérant, la colonne `align` sautait à la ré-écriture des passes et **chaque cellule alignée aurait tourné en brut en écrasant sa jumelle** : 1044 CSV bien formés, aucune erreur | `10b8b54` |
+| 2 | 216 cellules (**tout le bras `fix_*`**) exclues en silence, faute de mesure mémoire | l'ablation qui isole l'apport de la croissance absente d'une campagne qui se déclare complète | `10b8b54` |
+| 3 | `/scratch/amounir/eegrow_budget` n'est pas un dépôt git | `eegrow_sha=None` sur **chaque ligne** de la campagne finale — exactement l'intraçabilité qui a coûté 1170 cellules v5 | `4ef76ee` |
+
+Corrections associées : `fix_X` emprunte la mesure de `grow_X` (même géométrie terminale,
+vérifiée champ par champ : 40/40, 22/22, 32/32 — borne supérieure, donc sûre) ;
+`plan_campaign` refuse désormais d'écrire `submit.sh` tant qu'une cellule n'est pas placée ;
+`pack_run.sh` refuse de démarrer si l'arbre ne sait pas nommer son commit.
+
+### Vérifié, mesuré
+
+| point | résultat |
+|---|---|
+| cache epochs (12 datasets, 250 Hz) | **501 entrées, 0 manquante, 0 mensonge** |
+| clé de cache MOABB brut vs aligné | **identique** (`5d65788e…`) → le bras EA est un cache hit, coût ×1.00 |
+| placement | **1044 / 1044** cellules, 10 passes |
+| colonnes des TSV de passe | 6 ; 558 `none` + 486 `euclidean` ; 0 stem dupliqué |
+| coût | 1089 GPU-h ; passe la plus lente sur 1 allocation 38.3 h |
+| **pire cellule** | **98.1 h** (`cross_subject/lee2019_mi/grow_deep`) → makespan ≈ 4.1 j |
+| `CELL_TIMEOUT` | 144 h (47 % de marge), sous le mur de 7 j |
+| nœuds turing utilisables | margpu[017-020,022,028] = **20 GPU** ; 021 (5.4 Go libres, GPU fantôme) et 023 (drained) exclus |
+| baselines ML | **déjà faites** : 498/498 cellules dans `results_v5`, 12 datasets, 3 protocoles, ligne de provenance complète |
+| dérive de config depuis les ML (19/08) | **aucune** → les lignes ML s'apparient avec la grille finale |
+| disque | 45 T / 50 T (90 %), 5.2 T libres |
+
+Les cellules ML portent `csp_lda__seed0.csv` et non `ml_csp_lda__…` (`ml_v5.sbatch`
+retire le préfixe) : c'est ce qui m'avait fait conclure à tort qu'elles manquaient.
+
+### Séquence de lancement (attend le go d'Adam)
+
+```
+python benchmarks/slurm/final_grid.py --out benchmarks/slurm/final_grid.tsv
+bash   benchmarks/slurm/deploy_final.sh
+python benchmarks/slurm/plan_campaign.py --grid /scratch/amounir/final_grid.tsv \
+    --outdir /scratch/amounir/passes_final --root /scratch/amounir/eegrow_budget \
+    --tag final --gres-type turing --wrapper benchmarks/slurm/final_grid.sbatch
+bash   /scratch/amounir/passes_final/submit.sh
+```
+
+`--gres-type turing` n'est pas optionnel : sans lui `plan_campaign` émet `gpu:N`, qui
+écrase l'en-tête, et une différence appariée grow_X − bd_X peut alors enjamber deux
+classes de cartes.
+
+### Reste ouvert (décision d'Adam)
+
+EA aussi sur `cross_subject` : +733 GPU-h, makespan inchangé (toujours borné par la
+même cellule de 98.1 h). Un seul flag dans `final_grid.py`.
+
 ## 29/08 (soir) — les 4 arrays cho2017 sont terminées ; le gate est re-mesuré
 
 | job | état |
