@@ -519,9 +519,24 @@ def main() -> int:
         # floor of 4 for the loader; asking for the header's 24 on a 1-GPU pass would
         # queue behind a node that has cores free but not that many.
         gres = f"gpu:{args.gres_type}:{g_use}" if args.gres_type else f"gpu:{g_use}"
+        # G IS EXPORTED, NOT LEFT TO SLURM. pack_run.sh reads `G=${G:-$SLURM_GPUS_ON_NODE}`,
+        # and under `--exclusive` SLURM hands over the WHOLE node -- so SLURM_GPUS_ON_NODE
+        # is the node's physical card count, never the `--gres` count asked for above. The
+        # 2026-08-30 launch showed it: a `--gres=gpu:turing:3` pass reported `G=4` on
+        # margpu019, while margpu[018,022] have 3 cards and margpu028 has 2.
+        #
+        # On the GPU-bound passes that extra card is merely free capacity. On the passes
+        # this planner deliberately SHRANK to fit host RAM it is fatal, because G is
+        # precisely the decision being discarded: tenants are G*K, so g1k9 on a 4-card
+        # node runs 36 tenants of 11.5 GiB (414 GiB) and g1k3 runs 12 of 26.4 GiB
+        # (325 GiB), against 187 GiB of real memory. `--mem` cannot stop it -- it is not
+        # enforced here (the turing nodes report AllocMem=0), so the arbiter is the kernel
+        # OOM killer, which uses SIGKILL, which no trap catches. That is the incident that
+        # cost v5 85 cells, and solving for G is worth nothing if the answer is dropped
+        # between this line and the runner.
         line = (f"sbatch{SMOKE_SBATCH if args.smoke else ''} --gres={gres} "
                 f"--cpus-per-task={min(args.max_cpus, max(4, g_use * k))} "
-                f"--export=ALL,GRID={tsv},K={k},EEGROW_CUDA_FRACTION={cap:.3f}"
+                f"--export=ALL,GRID={tsv},G={g_use},K={k},EEGROW_CUDA_FRACTION={cap:.3f}"
                 f"{SMOKE_ENV if args.smoke else campaign_env(args.tag)} "
                 f"{args.wrapper}")
         # See REPLICAS. One allocation unless the pass is long enough to risk its wall;
