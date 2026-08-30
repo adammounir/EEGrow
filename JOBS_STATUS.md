@@ -1,6 +1,6 @@
 # Jobs en cours
 
-## 30/08 — LA GRILLE FINALE EST LANCÉE : jobs 509136–509147
+## 30/08 — LA GRILLE FINALE EST LANCÉE : jobs 509136–509145, 509152, 509153
 
 **1116 cellules, 1740 GPU-h, 12 allocations, sortie dans `results_final`.** Commit
 déployé et estampillé sur chaque ligne de résultat : `58c6bee`. Makespan attendu
@@ -23,8 +23,41 @@ ssh margaret02 'squeue -u $USER -o "%.8i %.4t %.9M %R"
 | jobs | 5 R (margpu018,019,020,022,028) + 7 PD (Priority) |
 | gardes de provenance | **5/5 passés** — `sha=58c6beebc12e`, abstention s=0 présente |
 | cache | `cache prêt pour la clé de la campagne`, 12 datasets |
-| cellules réclamées | 134 |
+| cellules réclamées | 267 après 25 min, logs de 87–111 Ko (entraînement actif) |
+| RAM mesurée sur nœud | 142 / **187** Go (margpu019, 40 locataires) |
 | erreurs | aucune |
+
+### Un 4e bloquant, trouvé APRÈS la soumission — jobs 509146/509147 repris
+
+`pack_run.sh` fait `G="${G:-${SLURM_GPUS_ON_NODE:-1}}"` et `plan_campaign` n'exportait
+pas `G`. Sous `--exclusive`, SLURM accorde le **nœud entier** : `SLURM_GPUS_ON_NODE` est
+le nombre de cartes *physiques*, jamais le `--gres` demandé. Mesuré : une passe
+`--gres=gpu:turing:3` a démarré en `G=4` sur margpu019 ; margpu[018,022] ont 3 cartes,
+margpu028 en a 2 — le nombre de locataires dépendait donc du nœud tiré au sort.
+
+Sur les passes bornées par le GPU c'est de la capacité gratuite. Sur les passes que le
+planificateur avait **délibérément rétrécies** pour tenir la RAM, `G` *est* la décision
+qu'on jetait, puisque les locataires sont `G×K` :
+
+| passe | G planifié | si G=4 | RAM demandée | contre |
+|---|---|---|---|---|
+| `g1k9` lee2019_mi | 1 | 36 locataires | 36 × 11.5 = **414 Go** | 187 Go |
+| `g1k3` schirrmeister2017 | 1 | 12 locataires | 12 × 26.4 = **325 Go** | 187 Go |
+| `g2k6` cho2017 | 2 | 24 locataires | 202 Go | sauvée : margpu028 n'a que 2 cartes |
+
+`--mem` ne l'arrête pas — il n'est pas appliqué ici (`AllocMem=0`), donc l'arbitre est
+l'OOM killer du noyau, qui envoie SIGKILL, qu'aucun trap n'attrape : l'incident qui a
+coûté 85 cellules à v5.
+
+Les deux passes condamnées étaient **PENDING**, donc rien de perdu : `scancel` (0 CSV,
+0 claim orphelin) puis re-soumission avec `G=1` explicite → **509152, 509153**. Les
+passes qui tournaient déjà tiennent même à G=4 (pire cas `g3k1` : 4 × 26.4 = 108 Go
+contre 187) — je ne les ai pas touchées. Corrigé dans `plan_campaign.py` (`30bda87`) ;
+le `submit.sh` du cluster est patché sur place (`submit.sh.orig-nog` conservé) pour
+qu'une relance reparte juste. **Non redéployé** : les jobs en cours lisent `pack_run.sh`
+depuis le disque et le réécrire sous eux est un risque gratuit.
+
+**Allocations finales : 509136–509145 + 509152 + 509153.**
 
 **Reprise après interruption** : les allocations coopèrent par le répertoire de claims
 atomique (`/scratch/amounir/eegrow_claims_final`) et une cellule est « faite » quand
