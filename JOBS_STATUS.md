@@ -1,5 +1,64 @@
 # Jobs en cours
 
+## 30/08 (22 h) — 5e BLOQUANT EN VOL : 13 cellules `grow_shallow` tuées par le PLAFOND VRAM
+
+**À décider avant la fin de la campagne. Rien n'a été relancé.**
+
+322/1116 CSV écrits, 0 corruption, mais **13 cellules ont échoué en `torch.OutOfMemoryError`**,
+toutes `grow_shallow`, toutes `within_session`, sur bnci2014_001 / bnci2014_002 / bnci2015_001.
+
+Ce n'est pas une contention réelle. Le log dit :
+
+```
+GPU 0 has a total capacity of 10.58 GiB of which 9.28 GiB is free.
+this process has 1.29 GiB memory in use. 1.28 GiB allowed
+```
+
+**9.28 Gio libres sur la carte** et le processus est refusé à 1.28 Gio : le plafond est
+`EEGROW_CUDA_FRACTION`, que `plan_campaign` dérive de `profile_grid_memory.py`. Or ce
+profilage mesure le réseau **avant croissance**. Les bras `grow_*` s'élargissent en cours
+d'entraînement, donc l'empreinte dépasse un plafond calibré à l'initialisation. Le pic est
+atteint dans `gromo/modules/conv2d_growing_module.py:1019` (`compute_s_update`, einsum de la
+statistique S — elle scale en `(C·k)²`, donc elle grandit avec le réseau).
+
+**Preuve que c'est la croissance et pas le dataset** : `bnci2014_002 grow_shallow easubject`
+— seed1 **réussit**, seed0 et seed2 **OOM**. Même config, même passe, même fraction ; seule
+la trajectoire de croissance diffère.
+
+**Pourquoi ça compte pour le papier, et pas seulement pour le cluster.** Les cellules tuées
+sont celles qui ont le plus grandi. Les laisser tomber ne coûte pas 1 % de cellules au
+hasard : ça biaise l'échantillon survivant vers les cellules qui ont le **moins** grandi —
+un biais de survivant sur l'axe exact de la revendication (efficacité paramétrique). Un
+résultat obtenu comme ça est ininterprétable dans la bonne direction.
+
+**Récupérable.** `pack_run.sh` relâche le claim en cas d'échec et rejoue la cellule jusqu'à
+`MAX_SWEEPS=3`, puis la reporte MISSING (les commentaires du script décrivent exactement ce
+scénario, l. 126-136). Donc ces 13 cellules vont brûler 2 balayages de plus **au même
+plafond**, échouer pareil, et finir MISSING. Aucun CSV corrompu n'est écrit.
+
+Exposition (cellules `grow_*` par passe, fraction) :
+
+| passe | fraction | plafond | `grow_*` |
+|---|---|---|---|
+| `g3k10` | 0.084 | 0.89 Gio | **210** |
+| `g3k9` / `g1k9` | 0.094 | 0.99 Gio | 22 / 28 |
+| `g3k8` | 0.106 | 1.12 Gio | 16 |
+| `g3k7` | 0.121 | 1.28 Gio | 14 |
+| `g3k6` / `g2k6` | 0.141 | 1.49 Gio | 14 / 16 |
+| `g1k3` | 0.283 | 2.99 Gio | 16 |
+| `g3k2` | 0.425 | 4.50 Gio | 14 |
+| `g3k1` | 1.000 | 10.58 Gio | 46 |
+
+156 cellules `grow_*` sont déjà passées proprement, donc le plafond suffit pour la majorité :
+c'est la queue de distribution des trajectoires de croissance qui déborde.
+
+**Option recommandée (non lancée, attend le go d'Adam) :** ne rien perturber — la campagne
+tourne et le système de claims rend un rattrapage idempotent — et préparer une **passe de
+rattrapage `fraction=1.000`** qui relit le même `CLAIMS`/`RESULTS_DIR` et ne prend que les
+cellules sans CSV. Elle ne coûte rien sur le chemin critique (les manquantes sont
+`within_session`, le protocole bon marché) et supprime le biais de survivant. Le correctif
+de fond, pour la suite, est de profiler le pic **après** croissance et non à l'init.
+
 ## 30/08 — LA GRILLE FINALE EST LANCÉE : jobs 509136–509145, 509152, 509153
 
 **1116 cellules, 1740 GPU-h, 12 allocations, sortie dans `results_final`.** Commit
