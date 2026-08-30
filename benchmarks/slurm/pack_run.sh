@@ -83,6 +83,12 @@ conda activate bench
 # PYTHONPATH is consulted before the .pth-added paths, which is the whole mechanism.
 export PYTHONPATH="$ROOT/src:$ROOT/benchmarks"
 export EEGROW_BENCH_ROOT="$ROOT/benchmarks"
+# The commit this tree was deployed from, stamped by deploy_final.sh because the
+# checkout is a copy and `git rev-parse` cannot answer inside it. Exported here rather
+# than read per cell so all K co-tenants of a node agree, and so it lands in the log.
+if [ -z "${EEGROW_SHA:-}" ] && [ -r "$ROOT/.eegrow_sha" ]; then
+  export EEGROW_SHA="$(tr -d '[:space:]' < "$ROOT/.eegrow_sha")"
+fi
 export MNE_DATA=/scratch/amounir/mne_data
 module load cuda/13.1 2>/dev/null || true
 
@@ -327,7 +333,23 @@ if not eegrow.__file__.startswith(root):
 if "best_s == 0.0" not in inspect.getsource(loop.grow_step):
     sys.exit(f"PACK FATAL: {loop.__file__} predates 5337c56 -- grow_step still applies "
              "a zero-amplitude update and adds permanently dead neurons.")
-print(f"guard ok  eegrow={eegrow.__file__}  s=0 abstention present")
+# AND THE TREE HAS TO BE ABLE TO NAME ITSELF. Every result row carries `eegrow_sha`,
+# and the cluster checkout is a COPY rather than a clone, so `git rev-parse` fails there
+# and the column silently becomes None -- on every row of the campaign. That is the
+# untraceability provenance() was written to prevent (1170 v5 cells lost it), about to
+# happen to the run that matters most. Hence a gate: deploy_final.sh writes the stamp,
+# and a tree that was hand-copied without it stops here rather than producing a
+# complete grid that nobody can date afterwards.
+sys.path.insert(0, root + "benchmarks")
+from utils import tree_sha  # noqa: E402
+
+sha = tree_sha()
+if not sha:
+    sys.exit("PACK FATAL: this tree cannot name its own commit (not a git checkout, and "
+             "EEGROW_SHA is unset), so every result row would carry eegrow_sha=None.\n"
+             "  fix: deploy with benchmarks/slurm/deploy_final.sh, or export "
+             "EEGROW_SHA=<sha> before submitting.")
+print(f"guard ok  eegrow={eegrow.__file__}  s=0 abstention present  sha={sha[:12]}")
 PY
 
 # REFUSE TO START ON AN INCOMPLETE CACHE.

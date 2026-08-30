@@ -150,6 +150,13 @@ def provenance() -> dict:
 
     Everything here is best-effort: a missing git binary or an unimportable package
     must never fail a benchmark cell, so each lookup degrades to ``None``.
+
+    ``EEGROW_SHA`` exists because the *deployed* tree is not always a repository. The
+    cluster checkout is a copy, not a clone, so ``git rev-parse`` there fails and the
+    commit silently becomes ``None`` -- on every row of the campaign, which is the
+    untraceability this function was written to prevent, reproduced in the run that
+    matters most. The deployer stamps the sha it copied; ``pack_run.sh`` refuses to
+    start when neither source can name the tree.
     """
     import subprocess
 
@@ -159,13 +166,38 @@ def provenance() -> dict:
             info[f"v_{mod}"] = __import__(mod).__version__
         except Exception:
             info[f"v_{mod}"] = None
+    info["eegrow_sha"] = tree_sha()
+    return info
+
+
+def tree_sha() -> str | None:
+    """Commit this tree came from: ``EEGROW_SHA`` if stamped, else ``git``, else None.
+
+    The env wins over git on purpose. A copied tree can sit *inside* an unrelated
+    repository, in which case git answers confidently with the wrong commit -- worse
+    than answering nothing, because a wrong sha is not distinguishable from a right one
+    after the fact. An explicit stamp is a statement about what was deployed.
+    """
+    import subprocess
+
+    stamped = os.environ.get("EEGROW_SHA", "").strip()
+    if stamped:
+        return stamped
+    here = Path(__file__).resolve().parent
     try:
-        info["eegrow_sha"] = subprocess.run(
-            ["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"],
+        sha = subprocess.run(
+            ["git", "-C", str(here), "rev-parse", "HEAD"],
             capture_output=True, text=True, timeout=5, check=True).stdout.strip()
     except Exception:
-        info["eegrow_sha"] = None
-    return info
+        return None
+    # Refuse a sha that belongs to a repository this tree is merely sitting inside.
+    try:
+        top = subprocess.run(
+            ["git", "-C", str(here), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=5, check=True).stdout.strip()
+    except Exception:
+        return sha
+    return sha if (here.parent == Path(top) or here == Path(top)) else None
 
 
 def align_tag(align_cfg) -> str:
