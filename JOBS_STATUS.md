@@ -1,10 +1,37 @@
 # Jobs en cours
 
-## 30/08 — audit pré-lancement de la grille finale : PRÊT, rien n'est lancé
+## 30/08 — LA GRILLE FINALE EST LANCÉE : jobs 509136–509147
 
-Aucun job en file (`squeue` vide). Rien n'a été soumis, poussé ni déployé.
+**1116 cellules, 1740 GPU-h, 12 allocations, sortie dans `results_final`.** Commit
+déployé et estampillé sur chaque ligne de résultat : `58c6bee`. Makespan attendu
+**4–5 jours**, borné par une seule cellule (`cross_subject/lee2019_mi/grow_deep`, 98.1 h).
 
-### Ce que l'audit a trouvé (3 bloquants, tous corrigés)
+Décision d'Adam : **EA sur les trois paradigmes**, pas seulement les deux protocoles bon
+marché. +72 cellules (`cross_subject × euclidean`), +733 GPU-h, makespan inchangé — la
+cellule alignée tourne à côté de sa jumelle brute, pas après elle.
+
+### Où en est la campagne
+
+```
+ssh margaret02 'squeue -u $USER -o "%.8i %.4t %.9M %R"
+  find /scratch/amounir/results_final -name "*.csv" | wc -l   # sur 1116
+  grep -hi "FATAL\|Traceback" /scratch/amounir/logs/final_*.log | head'
+```
+
+| au lancement | |
+|---|---|
+| jobs | 5 R (margpu018,019,020,022,028) + 7 PD (Priority) |
+| gardes de provenance | **5/5 passés** — `sha=58c6beebc12e`, abstention s=0 présente |
+| cache | `cache prêt pour la clé de la campagne`, 12 datasets |
+| cellules réclamées | 134 |
+| erreurs | aucune |
+
+**Reprise après interruption** : les allocations coopèrent par le répertoire de claims
+atomique (`/scratch/amounir/eegrow_claims_final`) et une cellule est « faite » quand
+`<stem>.csv` existe — donc re-soumettre `/scratch/amounir/passes_final/submit.sh` reprend
+où la campagne s'est arrêtée, elle ne recommence pas.
+
+### Ce que l'audit avait trouvé avant de lancer (3 bloquants, tous corrigés)
 
 | # | trouvé | conséquence si non corrigé | commit |
 |---|---|---|---|
@@ -23,9 +50,10 @@ vérifiée champ par champ : 40/40, 22/22, 32/32 — borne supérieure, donc sû
 |---|---|
 | cache epochs (12 datasets, 250 Hz) | **501 entrées, 0 manquante, 0 mensonge** |
 | clé de cache MOABB brut vs aligné | **identique** (`5d65788e…`) → le bras EA est un cache hit, coût ×1.00 |
-| placement | **1044 / 1044** cellules, 10 passes |
-| colonnes des TSV de passe | 6 ; 558 `none` + 486 `euclidean` ; 0 stem dupliqué |
-| coût | 1089 GPU-h ; passe la plus lente sur 1 allocation 38.3 h |
+| placement (grille finale, EA partout) | **1116 / 1116** cellules, 10 passes, exit 0 |
+| colonnes des TSV de passe | 6 ; 558 `none` + 558 `euclidean` ; 0 stem dupliqué ; ré-union des passes **identique** à la grille source |
+| coût | 1740 GPU-h ; 92.3 node-fulls de travail sérialisé |
+| déploiement | 60 fichiers suivis, **sha identique des deux côtés** |
 | **pire cellule** | **98.1 h** (`cross_subject/lee2019_mi/grow_deep`) → makespan ≈ 4.1 j |
 | `CELL_TIMEOUT` | 144 h (47 % de marge), sous le mur de 7 j |
 | nœuds turing utilisables | margpu[017-020,022,028] = **20 GPU** ; 021 (5.4 Go libres, GPU fantôme) et 023 (drained) exclus |
@@ -36,25 +64,32 @@ vérifiée champ par champ : 40/40, 22/22, 32/32 — borne supérieure, donc sû
 Les cellules ML portent `csp_lda__seed0.csv` et non `ml_csp_lda__…` (`ml_v5.sbatch`
 retire le préfixe) : c'est ce qui m'avait fait conclure à tort qu'elles manquaient.
 
-### Séquence de lancement (attend le go d'Adam)
+### Séquence exécutée le 30/08
 
 ```
-python benchmarks/slurm/final_grid.py --out benchmarks/slurm/final_grid.tsv
+python benchmarks/slurm/final_grid.py \
+    --align-evals within_session cross_session cross_subject \
+    --out benchmarks/slurm/final_grid.tsv
 bash   benchmarks/slurm/deploy_final.sh
-python benchmarks/slurm/plan_campaign.py --grid /scratch/amounir/final_grid.tsv \
+# les deux commandes suivantes SUR le cluster (conda activate bench) :
+python benchmarks/slurm/plan_campaign.py \
+    --grid /scratch/amounir/eegrow_budget/benchmarks/slurm/final_grid.tsv \
     --outdir /scratch/amounir/passes_final --root /scratch/amounir/eegrow_budget \
     --tag final --gres-type turing --wrapper benchmarks/slurm/final_grid.sbatch
 bash   /scratch/amounir/passes_final/submit.sh
 ```
 
-`--gres-type turing` n'est pas optionnel : sans lui `plan_campaign` émet `gpu:N`, qui
-écrase l'en-tête, et une différence appariée grow_X − bd_X peut alors enjamber deux
-classes de cartes.
+Deux pièges de cette séquence, tous deux silencieux :
 
-### Reste ouvert (décision d'Adam)
+- `--align-evals` **doit** être passé à la génération. Le défaut du script n'allume
+  l'aligné que sur les deux protocoles bon marché ; regénérer la grille sans le flag
+  retire 72 cellules `cross_subject` sans rien signaler.
+- `--gres-type turing` n'est pas optionnel : sans lui `plan_campaign` émet `gpu:N`, qui
+  écrase l'en-tête du wrapper, et une différence appariée grow_X − bd_X peut alors
+  enjamber deux classes de cartes.
 
-EA aussi sur `cross_subject` : +733 GPU-h, makespan inchangé (toujours borné par la
-même cellule de 98.1 h). Un seul flag dans `final_grid.py`.
+`plan_campaign` doit tourner **sur le cluster**, pas en local : les chemins `GRID=` qu'il
+écrit dans `submit.sh` sont ceux de la machine où il s'exécute.
 
 ## 29/08 (soir) — les 4 arrays cho2017 sont terminées ; le gate est re-mesuré
 
