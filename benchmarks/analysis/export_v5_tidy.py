@@ -46,24 +46,63 @@ import pandas as pd  # noqa: E402
 # The dataset every other eegrow figure uses, so per-fold trajectories stay comparable
 # with the rest of the report.
 SHOWCASE = "bnci2014_001"
+# What ``fold_summary`` reduces: the three curves that define the selected epoch.
 CURVE_COLS = ["train_loss", "valid_loss", "valid_acc"]
-KEY = ["eval", "dataset", "model", "seed"]
+# What ``curves_mean`` averages. Wider than CURVE_COLS on purpose: these are the
+# columns the *mechanism* figures read -- why growth helps, not just whether it does --
+# and they are recorded per epoch inside the fit, so a reduction that drops them cannot
+# be redone off-cluster. `grow_s` is the scaling factor the line search picked,
+# `grow_first_order_improvement` the gain it expected, `grow_eig_sum` the spectrum it
+# kept; together they are the only evidence a growth step was a decision rather than a
+# scheduled event. Averaged over folds like the losses, and NaN on epochs where no
+# growth happened, which is what makes a growth event visible in the mean.
+MEAN_COLS = CURVE_COLS + [
+    "grad_norm", "grad_norm_max", "lr", "grow_s", "grow_applied",
+    "grow_n_proposed", "grow_n_kept", "grow_first_order_improvement",
+    "grow_eig_sum", "grow_select_loss", "grow_param_update_decrease",
+    "adam_atten_mean", "adam_atten_p05", "adam_eps_frac",
+]
+KEY = ["eval", "dataset", "model", "align_tag", "seed"]
 
 
 def curves_mean(curves: pd.DataFrame) -> pd.DataFrame:
     """Fold-mean of every curve per (cell, seed, epoch), with the surviving fold count."""
-    g = curves.groupby(KEY + ["epoch"], as_index=False)
-    agg = {f"{c}_{s}": (c, s) for c in CURVE_COLS for s in ("mean", "std")}
+    keys = [k for k in KEY if k in curves.columns]
+    g = curves.groupby(keys + ["epoch"], as_index=False)
+    # Intersected with what is present: a campaign predating a diagnostic simply has
+    # fewer columns, and an exporter that raised on that could not read v5 at all.
+    cols = [c for c in MEAN_COLS if c in curves.columns]
+    agg = {f"{c}_{s}": (c, s) for c in cols for s in ("mean", "std")}
     agg["n_folds"] = ("fit", "nunique")
     agg["width_mean"] = ("width", "mean")
     agg["n_params_mean"] = ("n_params", "mean")
     return g.agg(**agg)
 
 
+def growth_events(curves: pd.DataFrame) -> pd.DataFrame:
+    """Every epoch on which a growth step was actually applied, all datasets.
+
+    The cut that makes this affordable: growth epochs are *rare* (a fold grows a
+    handful of times in 200 epochs), so keeping them in full across twelve datasets
+    costs a fraction of what keeping every epoch of one dataset costs -- and it is the
+    only file from which "what did growth decide, and was it the same decision
+    everywhere" can be answered. Without it that question is a statement about
+    bnci2014_001, which is what the showcase already was.
+
+    The two spectra (``grow_eig_proposed``, ``grow_eig_kept``) are dropped here and
+    kept only in the showcase: they are per-epoch *lists*, so they dominate the file
+    size, and a figure that draws a spectrum draws one cell's.
+    """
+    if "grow_applied" not in curves.columns:
+        return pd.DataFrame()
+    ev = curves[curves.grow_applied.fillna(0).astype(bool)]
+    return ev.drop(columns=["grow_eig_proposed", "grow_eig_kept"], errors="ignore")
+
+
 def fold_summary(curves: pd.DataFrame) -> pd.DataFrame:
     """One row per fold: where its best epoch was and what the losses were there."""
     c = curves.sort_values("epoch")
-    keys = KEY + ["fit"]
+    keys = [k for k in KEY if k in curves.columns] + ["fit"]
     # idxmax on valid_acc gives the *selected* epoch -- the same criterion skorch's
     # EarlyStopping monitors, so the row it points at is the model that gets used.
     best = c.loc[c.groupby(keys).valid_acc.idxmax()]
@@ -109,6 +148,7 @@ def main() -> None:
         "eegrow_v5_curves_showcase.csv.gz": curves[curves.dataset == SHOWCASE],
         "eegrow_v5_curves_mean.csv.gz": curves_mean(curves),
         "eegrow_v5_fold_summary.csv.gz": fold_summary(curves),
+        "eegrow_v5_growth_events.csv.gz": growth_events(curves),
         "eegrow_v5_provenance.csv": provenance(root),
     }
     for name, frame in files.items():

@@ -29,11 +29,25 @@ import pandas as pd
 GLOB = "*/*/*__fits.jsonl"
 
 
+def _split_stem(stem: str) -> tuple[str, str, str]:
+    """``<model>[__<align tag>]__seed<N>`` -> ``(model, align_tag, seed)``.
+
+    The alignment arm added a middle field (``utils.cell_stem``), and reading it back
+    as part of the model name is not a cosmetic error: every pairing in the analysis
+    matches ``grow_X`` against ``bd_X`` by string, so ``grow_shallow__easubject``
+    silently has no partner and drops out of the comparison it was run for. No model
+    label contains ``__``, which is what makes the middle field unambiguous.
+    """
+    head, _, seed = stem.partition("__seed")
+    model, _, tag = head.partition("__")
+    return model, tag, seed
+
+
 def _records(root: Path):
     for path in sorted(Path(root).glob(GLOB)):
         ev, ds = path.parts[-3], path.parts[-2]
         stem = path.name[: -len("__fits.jsonl")]
-        model, _, seed = stem.partition("__seed")
+        model, align_tag, seed = _split_stem(stem)
         index = 0
         with path.open() as fh:
             for lineno, line in enumerate(fh, 1):
@@ -50,6 +64,9 @@ def _records(root: Path):
                 # what the callback was told, and a mismatch means a stale file.
                 rec["eval"], rec["dataset"] = ev, ds
                 rec["model"], rec["seed"] = model, int(seed) if seed else None
+                # "" for the raw arm, so a campaign that predates alignment reads back
+                # with the same value it would have been given had the column existed.
+                rec["align_tag"] = align_tag
                 # And the LINE ORDER is authoritative for the fold, not the `fit`
                 # counter inside the record. MOABB clones the pipeline per fold, so
                 # the callback is cloned too and its counter restarts at 0 every
@@ -63,13 +80,24 @@ def _records(root: Path):
                 yield rec
 
 
+# The coordinates of a cell. ``align_tag`` is part of the identity, not a label: the
+# raw and aligned arms are the same (eval, dataset, model, seed) point, so a groupby
+# that omits it averages the two arms of the ablation into one number.
+CELL = ("eval", "dataset", "model", "align_tag", "seed")
+# Written by subject_stamp when the evaluation was wrapped; absent on older campaigns.
+STAMP = ("subject", "session", "cv_ind")
+
+
 def load(root) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return ``(fits, curves)`` for every cell under ``root``."""
     fit_rows, curve_rows = [], []
     for rec in _records(root):
         history = rec.pop("history", []) or []
         fit_rows.append(rec)
-        key = {k: rec[k] for k in ("eval", "dataset", "model", "seed", "fit")}
+        key = {k: rec[k] for k in CELL + ("fit",)}
+        # Carried onto every epoch row so a per-subject curve figure needs no join at
+        # all on a stamped campaign. Silently absent otherwise -- see attach_subjects.
+        key.update({k: rec[k] for k in STAMP if k in rec})
         for point in history:
             curve_rows.append({**key, **point})
 
@@ -153,11 +181,30 @@ def attach_subjects(curves: pd.DataFrame, scores: pd.DataFrame,
     its 297 k parameters overfit the 46-trial internal split, which makes ``valid_acc``
     a weak proxy for the test score rather than the join a weak join.
 
-    This returns an *inferred* label, not a recorded one. The fix is one line in the
-    callback's ``meta``; until those cells are re-run, a per-subject claim should say
-    it rests on this join.
+    This returns an *inferred* label, not a recorded one, and only for campaigns that
+    have no recorded one. Since ``subject_stamp`` was wired in, the evaluation names the
+    held-out subject on every fit record, so ``load`` already carries a real
+    ``subject``/``session`` on the epoch rows; this function then returns them
+    untouched. Read ``subject_inferred`` to know which of the two you are looking at --
+    a figure that mixes a recorded label with a guessed one and says neither is how a
+    per-subject claim gets made on the wrong subject.
     """
-    keys = ["eval", "dataset", "model", "seed"]
+    # A stamped campaign needs no join, and doing one anyway would *overwrite* recorded
+    # identities with guessed ones. Partial coverage is the interesting case: a tree
+    # holding both old and re-run cells. Only the unstamped rows go through the join.
+    if "subject" in curves.columns:
+        stamped = curves[curves.subject.notna()].copy()
+        stamped["subject_inferred"] = False
+        rest = curves[curves.subject.isna()]
+        if rest.empty:
+            return stamped
+        joined = attach_subjects(rest.drop(columns=["subject", "session"],
+                                           errors="ignore"),
+                                 scores, n_splits=n_splits)
+        return pd.concat([stamped, joined], ignore_index=True)
+
+    keys = [k for k in ("eval", "dataset", "model", "align_tag", "seed")
+            if k in curves.columns and k in scores.columns]
     out = []
     for key, rows in scores.groupby(keys, sort=False):
         mask = pd.Series(True, index=curves.index)
@@ -174,6 +221,7 @@ def attach_subjects(curves: pd.DataFrame, scores: pd.DataFrame,
         cell = cell.copy()
         cell["subject"] = [block.get(f, (None, None))[0] for f in cell.fit]
         cell["session"] = [block.get(f, (None, None))[1] for f in cell.fit]
+        cell["subject_inferred"] = True
         out.append(cell)
     return pd.concat(out, ignore_index=True)
 
@@ -186,8 +234,9 @@ def parameter_epochs(curves: pd.DataFrame) -> pd.DataFrame:
     axis, and it is the quantity the efficiency claim is about. A fixed arm's budget
     is just ``n_params x epochs``, which falls out of the same sum.
     """
+    keys = [k for k in CELL + ("fit",) if k in curves.columns]
     out = (curves.sort_values("epoch")
-           .groupby(["eval", "dataset", "model", "seed", "fit"], as_index=False)
+           .groupby(keys, as_index=False)
            .agg(param_epochs=("n_params", "sum"),
                 epochs=("epoch", "max"),
                 params_end=("n_params", "last"),
