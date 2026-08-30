@@ -17,11 +17,20 @@
 #
 # Submit through the generated script, never by hand:
 #     python benchmarks/slurm/final_grid.py --out benchmarks/slurm/final_grid.tsv
+#     bash benchmarks/slurm/deploy_final.sh          # ships HEAD + stamps .eegrow_sha
 #     python benchmarks/slurm/plan_campaign.py \
 #         --grid /scratch/amounir/final_grid.tsv --outdir /scratch/amounir/passes_final \
-#         --root /scratch/amounir/eegrow_budget --tag final \
+#         --root /scratch/amounir/eegrow_budget --tag final --gres-type turing \
 #         --wrapper benchmarks/slurm/final_grid.sbatch
 #     bash /scratch/amounir/passes_final/submit.sh
+#
+# --gres-type turing is NOT optional, and it is the easiest line to leave out because
+# the campaign runs perfectly well without it. plan_campaign emits `--gres=gpu:N` when
+# it is absent, which overrides this file's `gpu:turing:3` and lets SLURM answer with
+# whatever card class is free. Every headline number is a subject-paired grow_X minus
+# bd_X; a pair split across two card classes has a hardware difference inside the
+# difference, and no amount of later analysis can take it back out. See the gres block
+# further down for why pascal nodes are excluded outright rather than merely unasked.
 #
 # ---------------------------------------------------------------------------
 # ROOT: the budget checkout, NOT /scratch/amounir/eegrow.

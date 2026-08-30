@@ -69,6 +69,7 @@ import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
+from typing import NamedTuple
 
 HERE = Path(__file__).resolve().parent
 BENCH = HERE.parent
@@ -258,9 +259,80 @@ def _ml_models() -> set[str]:
     return out
 
 
+# WHERE A FIXED CONTROL GETS ITS MEMORY NUMBER.
+#
+# The profiling campaign measured the six base arms; the three fixed controls were added
+# afterwards and have no measurement of their own. The planner's response to a missing
+# measurement is to EXCLUDE the cell, which for these would have dropped all 216 of them
+# -- the entire ablation the paper's central claim rests on -- out of a run that still
+# reported itself complete.
+#
+# Re-profiling is one option and borrowing is the other, and borrowing is sound here
+# because fix_X is not merely similar to grow_X, it is grow_X held at its terminal
+# geometry from epoch 0. Checked field by field against the model YAMLs:
+#
+#     fix_shallow  n_filters_time=40      grow_shallow  target_n_filters_time=40
+#     fix_sccnet   n_spatial_filters=22   grow_sccnet   target_n_spatial_filters=22
+#     fix_deepeeg  w2_in=32               grow_deep     target_w2=32
+#
+# grow_X's peak is reached AT that width and carries the growth machinery (the extension
+# tensors, the line search's forward passes) on top of it. So the borrowed number is an
+# upper bound, and on memory an upper bound is the safe direction: it can only lower K,
+# i.e. cost throughput, never cause an OOM.
+BORROW_GPU_FROM = {"fix_shallow": "grow_shallow",
+                   "fix_sccnet": "grow_sccnet",
+                   "fix_deepeeg": "grow_deep"}
+
+
+class Cell(NamedTuple):
+    """A grid cell with the two measurements that decide which pass it lands in.
+
+    Named rather than positional: it went from four fields to nine when the alignment
+    arm arrived, and the consequence of reading one index wrong here is not a crash but
+    a pass file whose cells describe a different experiment than the one planned.
+    """
+
+    eval: str
+    dataset: str
+    model: str
+    align: str
+    seed: str
+    stem: str
+    reserved: float   # peak GPU MiB, measured
+    rss: float        # peak host MiB, measured
+    bound: str        # which of the two put the cell in this pass
+
+
+def _parse_cell(line: str) -> tuple[str, str, str, str, str, str]:
+    """One grid row -> ``(eval, dataset, model, align, seed, stem)``.
+
+    Two layouts, and the difference is not cosmetic. Since the alignment arm exists the
+    generator emits six fields, the last being the output stem that ``pack_run.sh``
+    tests to decide a cell is done. This planner rewrites each pass as its own TSV, so
+    a parser that read only the first four would DROP the alignment column -- and
+    pack_run's own legacy fallback would then fill it back in as ``none``. The result is
+    a complete, well-formed campaign in which every aligned cell silently ran raw and
+    overwrote its raw twin. Failure with no error message and no missing file, which is
+    why the shapes are distinguished here rather than assumed.
+
+    The four-field layout stays readable so the older point files (ml_*.txt, the pilot
+    grids) still plan.
+    """
+    parts = line.rstrip("\n").split("\t")
+    if len(parts) >= 6:
+        ev, ds, m, align, seed, stem = parts[:6]
+        return ev, ds, m, align, seed, stem
+    if len(parts) == 4:
+        ev, ds, m, seed = parts
+        return ev, ds, m, "none", seed, f"{m}__seed{seed}"
+    raise ValueError(f"grid row has {len(parts)} fields, expected 4 or 6: {line!r}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--grid", required=True, help="TSV: eval<TAB>dataset<TAB>model<TAB>seed")
+    ap.add_argument("--grid", required=True,
+                    help="TSV: eval/dataset/model/align/seed/stem (or the legacy "
+                         "eval/dataset/model/seed)")
     ap.add_argument("--outdir", required=True)
     ap.add_argument("--gpu-json", default=str(PROFILE / "grid_memory.json"))
     ap.add_argument("--ram-json", default=str(PROFILE / "host_ram.json"))
@@ -280,6 +352,9 @@ def main() -> int:
     # what already happened at G=3 K=10 (30 processes, 24 cores) and is harmless with
     # OMP_NUM_THREADS=1 -- the work is GPU- and I/O-bound, not core-bound.
     ap.add_argument("--max-cpus", type=int, default=24)
+    ap.add_argument("--allow-unmeasured", action="store_true",
+                    help="write submit.sh even though some cells have no memory "
+                         "measurement and will be missing from the campaign")
     ap.add_argument("--smoke", action="store_true",
                     help="emit one node-full of the heaviest cells per pass instead "
                          "of the whole pass; validates the derived ceilings under "
@@ -315,24 +390,31 @@ def main() -> int:
     card_usable = args.card_mib * (1 - HEADROOM)
     mem_usable = args.mem_mib * (1 - HEADROOM)
 
-    rows = [l.split("\t") for l in
+    rows = [_parse_cell(l) for l in
             Path(args.grid).read_text().splitlines() if l.strip()]
 
     passes: dict[tuple[int, int], list] = defaultdict(list)
     impossible: list[tuple] = []
     unmeasured: list[tuple] = []
+    borrowed: set[tuple[str, str]] = set()
 
-    for ev, ds, m, seed in rows:
+    for ev, ds, m, align, seed, stem in rows:
         # --- device bound -------------------------------------------------------
         if m in ml:
             reserved, k_gpu = 0.0, args.max_k
         else:
             g = gpu.get((m, ds))
             if g is None or g.get("error") or not g.get("peak_reserved_mib"):
-                unmeasured.append((ev, ds, m, seed,
-                                   "no GPU measurement" if g is None
-                                   else (g.get("error") or "no peak")))
-                continue
+                donor = BORROW_GPU_FROM.get(m)
+                d = gpu.get((donor, ds)) if donor else None
+                if d and not d.get("error") and d.get("peak_reserved_mib"):
+                    g = d
+                    borrowed.add((m, ds))
+                else:
+                    unmeasured.append((ev, ds, m, seed,
+                                       "no GPU measurement" if g is None
+                                       else (g.get("error") or "no peak")))
+                    continue
             reserved = g["peak_reserved_mib"]
             # max(1, ...): a cell that PRODUCED a measurement ran alone on this exact
             # card without OOM -- that is what producing the number means. So K=1 is
@@ -381,7 +463,8 @@ def main() -> int:
             impossible.append((ev, ds, m, seed,
                                f"ram {rss:.0f}>{mem_usable:.0f} MiB for one tenant"))
             continue
-        passes[(g_use, k)].append((ev, ds, m, seed, reserved, rss, bound))
+        passes[(g_use, k)].append(
+            Cell(ev, ds, m, align, seed, stem, reserved, rss, bound))
 
     # ------------------------------------------------------------------ report
     print(f"grid={args.grid}  cells={len(rows)}")
@@ -401,8 +484,8 @@ def main() -> int:
         # Computed on the FULL pass, before any smoke subsetting: the ceiling under
         # test has to be the one the real run will use, or the smoke run validates a
         # configuration that never executes.
-        worst_gpu = max(c[4] for c in cells)
-        worst_rss = max(c[5] for c in cells)
+        worst_gpu = max(c.reserved for c in cells)
+        worst_rss = max(c.rss for c in cells)
         # Node-fulls: how many times this pass has to fill an allocation end to end.
         # This, not the cell count, is what the campaign's wall-clock is made of.
         fulls = len(cells) / (g_use * k)
@@ -411,7 +494,7 @@ def main() -> int:
             # Exactly one node-full (G x K), heaviest first. Fewer would never put K
             # tenants on one card at once, which is the only thing this run is for;
             # more would just be the campaign.
-            cells = sorted(cells, key=lambda c: -(c[4] + c[5]))[:g_use * k]
+            cells = sorted(cells, key=lambda c: -(c.reserved + c.rss))[:g_use * k]
         # Fraction of the WHOLE card, which is what cap_cuda_fraction applies via
         # torch.cuda.set_per_process_memory_fraction.
         cap, forced = ceiling_fraction(k, worst_gpu, args.card_mib)
@@ -420,10 +503,14 @@ def main() -> int:
         # What the pass actually demands of the node's --mem, so the number can be
         # checked against the request instead of trusted.
         node_gib = g_use * k * worst_rss / 1024
-        bounds = {c[6] for c in cells}
-        dss = sorted({c[1] for c in cells})
+        bounds = {c.bound for c in cells}
+        dss = sorted({c.dataset for c in cells})
         tsv = outdir / f"grid_g{g_use}k{k}.tsv"
-        tsv.write_text("".join(f"{c[0]}\t{c[1]}\t{c[2]}\t{c[3]}\n" for c in cells))
+        # Six fields, the same shape the generator emitted. Writing four here would drop
+        # the alignment arm and pack_run.sh would refill it as `none` -- see _parse_cell.
+        tsv.write_text("".join(
+            f"{c.eval}\t{c.dataset}\t{c.model}\t{c.align}\t{c.seed}\t{c.stem}\n"
+            for c in cells))
         print(f"G={g_use} K={k:<4d} {len(cells):6d} {worst_gpu:10.0f} {worst_rss:10.0f} "
               f"{cap:6.3f} {cap * args.card_mib:8.0f} {node_gib:9.1f} {fulls:6.1f}  "
               f"{'/'.join(sorted(bounds)):7s} {','.join(dss)[:36]}")
@@ -468,8 +555,30 @@ def main() -> int:
         (outdir / "unmeasured.tsv").write_text(
             "".join(f"{a}\t{b}\t{c}\t{d}\t{e}\n" for a, b, c, d, e in unmeasured))
 
+    if borrowed:
+        print(f"\nGPU measurement borrowed for {len(borrowed)} (model, dataset) pairs "
+              "-- upper bounds, see BORROW_GPU_FROM:")
+        for m, ds in sorted(borrowed):
+            print(f"  {m:14s} x {ds:19s} <- {BORROW_GPU_FROM[m]}")
+
     placed = sum(len(v) for v in passes.values())
     print(f"\nplaced {placed}/{len(rows)} cells in {len(passes)} passes")
+
+    # AN INCOMPLETE PLAN IS NOT A PLAN. Excluding unmeasured cells and reporting it in
+    # the middle of a long printout is how 216 cells -- the whole fixed-control arm, on
+    # which the paper's central claim rests -- were dropped from a campaign that then ran
+    # to completion and looked finished. The exclusion is a legitimate operation; doing
+    # it while still writing submit.sh is not, because the next step after this script
+    # is `bash submit.sh` and nobody re-reads a screen of output that ended in success.
+    if unmeasured and not args.allow_unmeasured:
+        print(f"\nREFUSING to write submit.sh: {len(unmeasured)} of {len(rows)} cells "
+              "have no memory measurement and would be silently missing from the "
+              f"campaign.\n  see {outdir / 'unmeasured.tsv'}\n"
+              "  fix: profile them (benchmarks/slurm/profile_grid_memory.sbatch), add "
+              "them to BORROW_GPU_FROM if a measured arm has the same geometry, or pass "
+              "--allow-unmeasured to plan the grid without them ON PURPOSE.")
+        return 1
+
     script = outdir / "submit.sh"
     script.write_text("#!/bin/bash\n# Generated by plan_campaign.py -- do not edit.\n"
                       f"# root={args.root}  tag={args.tag}  wrapper={args.wrapper}\n"
