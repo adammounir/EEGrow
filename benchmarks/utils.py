@@ -168,6 +168,35 @@ def provenance() -> dict:
     return info
 
 
+def align_tag(align_cfg) -> str:
+    """Filename marker for an alignment arm, ``""`` when raw.
+
+    The raw and aligned arms of the ablation are the *same* (eval, dataset, model,
+    seed) point, so without a marker the second one silently overwrites the first.
+    Empty for ``align=none`` so every result produced before alignment existed keeps
+    its name and stays reproducible.
+    """
+    get = align_cfg.get if hasattr(align_cfg, "get") else dict(align_cfg).get
+    tag = get("tag")
+    if not tag:
+        return ""
+    level = get("level")
+    return f"{tag}{level}" if level else str(tag)
+
+
+def cell_stem(model: str, tag: str, seed) -> str:
+    """Basename of a cell's outputs, minus the extension.
+
+    THE one definition. Two independent consumers have to agree on it exactly: the
+    runner writes ``<stem>.csv`` and ``<stem>__fits.jsonl``, and ``pack_run.sh`` tests
+    for ``<stem>.csv`` to decide whether a cell is already done. If they ever disagree,
+    the packer re-runs the whole campaign on top of itself without a single error
+    message -- so the grid generators emit this stem into the TSV rather than
+    reimplementing the rule in shell.
+    """
+    return f"{model}__{tag}__seed{seed}" if tag else f"{model}__seed{seed}"
+
+
 def results_path(results_dir, eval_name: str, dataset: str) -> Path:
     """``<results_dir>/<eval>/<dataset>/`` (created); one folder per (eval, dataset)."""
     root = default_results_root() if results_dir in (None, "", "None", "null") \

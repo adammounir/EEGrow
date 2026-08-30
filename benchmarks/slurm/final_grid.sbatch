@@ -48,14 +48,23 @@ export ROOT=/scratch/amounir/eegrow_budget
 # assumes it.
 export PROTOCOL="train.patience=200 train.selection_monitor=valid_acc"
 #
-# CELL_TIMEOUT: 5 days. The ceiling exists to stop a hung cell from holding a slot
-# forever, so it belongs just above the worst HONEST cell, not near the median. The
-# worst cell of this grid is lee2019_mi cross_subject bd_deep4 at ~74 h projected
-# (23.6 h measured in v5 x 3.28, the cross_subject budget factor), and the projection
-# is a LOWER bound on the growing arms -- more epochs means more growth steps and each
-# step widens the net. 120 h leaves 62 % of margin on that and still fits under the
-# 7-day partition wall with 48 h to spare for the sweep that follows.
-export CELL_TIMEOUT=432000
+# CELL_TIMEOUT: 6 days. The ceiling exists to stop a hung cell from holding a slot
+# forever, so it belongs just above the worst HONEST cell, not near the median.
+#
+# It was 120 h against a projected worst cell of 74 h. Both numbers moved, and the
+# margin moved the wrong way. That 74 h came from a budget factor averaged over a whole
+# eval, which is only defensible while every arm of that eval stops at the same point;
+# the grid is no longer homogeneous (the fixed controls are back), so final_grid.py
+# projects per (eval, model) now. Under that factor the worst cell is lee2019_mi
+# cross_subject grow_deep at 98.1 h -- and it is a GROWING arm, i.e. exactly the case
+# the projection under-estimates, because more epochs means more growth steps and each
+# step widens the net. 120 h would have left 22 % of margin on a number known to be a
+# lower bound, which is how a four-day cell gets killed at hour 120 and returns nothing.
+#
+# 144 h leaves 47 % and still fits under the 7-day wall with 24 h for the sweep that
+# follows. (fix_deepeeg on that same cell projects at 112.9 h, which is one more reason
+# the fixed controls are restricted to the two cheap protocols.)
+export CELL_TIMEOUT=518400
 #
 # gpu:turing:3, not gpu:3. Not for memory -- these nets are 30k-283k parameters -- but
 # because every headline number is a SUBJECT-PAIRED difference between grow_X and

@@ -39,7 +39,10 @@
 #   Or as a batch job: see pack_run.sbatch.
 #
 # ENVIRONMENT
-#   GRID         TSV of `eval<TAB>dataset<TAB>model<TAB>seed`, one per line.
+#   GRID         TSV of `eval<TAB>dataset<TAB>model[<TAB>align<TAB>seed<TAB>stem]`,
+#                one per line. Four fields is the legacy layout (no alignment axis)
+#                and still works: align defaults to `none` and the stem is rebuilt as
+#                `<model>__seed<N>`, which is what utils.cell_stem returns for it.
 #   G            GPUs to round-robin over    (default: from SLURM, else 1)
 #   K            co-tenants per GPU          (default 10, see the bound below)
 #   CACHE        MOABB epoch cache           (default /scratch/amounir/moabb_cache)
@@ -171,6 +174,18 @@ else
 fi
 
 GRID="${GRID:?set GRID to a TSV of eval<TAB>dataset<TAB>model<TAB>seed}"
+
+# Split one grid line into the six fields the loop uses, filling in the two the
+# legacy 4-column layout does not carry. The stem is READ, never rebuilt, whenever
+# the generator supplies it: it is the single string that has to match what
+# run_moabb_hydra.py writes, and a shell copy of that rule drifting by one character
+# would make this script re-run a finished campaign without one error message.
+parse_cell() {
+  IFS=$'\t' read -r EV DS M AL SEED STEM <<< "$1"
+  if [ -z "$STEM" ]; then          # legacy: eval/dataset/model/seed
+    SEED="$AL"; AL="none"; STEM="${M}__seed${SEED}"
+  fi
+}
 CACHE="${CACHE:-/scratch/amounir/moabb_cache}"
 SUFFIX="${SUFFIX:-xsess}"
 # SLURM_GPUS_ON_NODE is what the allocation actually granted; asking for 4 and
@@ -374,7 +389,7 @@ start=$(date +%s)
 #   job live and still on     -> genuinely in flight on another node,
 #     that host                  do not steal its work
 reap_stale() {
-  local c owner pid host jid key ev ds m sd reaped=0 alive jobnodes
+  local c owner pid host jid key ev ds stem rest reaped=0 alive jobnodes
   # One squeue for the whole sweep: the set of live jobs is the same for every claim,
   # and a call per claim would be hundreds of RPCs against the controller.
   alive=" $(squeue -u "$USER" -h -o '%A' 2>/dev/null | tr '\n' ' ') "
@@ -394,12 +409,12 @@ reap_stale() {
                    | tr '\n' ' ') "
       [[ "$jobnodes" == *" $host "* ]] && continue
     fi
-    # The cell key is the directory name: eval__dataset__model__sSEED.
+    # The cell key is the directory name: eval__dataset__<stem>. Only the first two
+    # separators are structural -- the stem carries its own `__` -- so peel exactly
+    # two fields off the front and take the rest verbatim.
     key=$(basename "$c")
-    ev=${key%%__*}; sd=${key##*__s}
-    m=${key%__s*}; m=${m##*__}
-    ds=${key#*__}; ds=${ds%%__*}
-    [ -s "$RESULTS_DIR/$ev/$ds/${m}__seed${sd}.csv" ] && continue
+    ev=${key%%__*}; rest=${key#*__}; ds=${rest%%__*}; stem=${rest#*__}
+    [ -s "$RESULTS_DIR/$ev/$ds/${stem}.csv" ] && continue
     rm -f "$owner"; rmdir "$c" 2>/dev/null && reaped=$((reaped + 1))
   done
   [ "$reaped" -gt 0 ] && echo "PACK reaped $reaped stale claim(s)"
@@ -425,9 +440,11 @@ while true; do
   sweep=$((sweep + 1))
   if [ "$sweep" -gt "$MAX_SWEEPS" ]; then
     echo "PACK giving up after $MAX_SWEEPS sweeps; cells still missing:"
-    while IFS=$'\t' read -r EV DS M SEED; do
-      [ -s "$RESULTS_DIR/${EV}/${DS}/${M}__seed${SEED}.csv" ] \
-        || echo "  MISSING $EV $DS $M seed$SEED"
+    while read -r line; do
+      [ -z "$line" ] && continue
+      parse_cell "$line"
+      [ -s "$RESULTS_DIR/${EV}/${DS}/${STEM}.csv" ] \
+        || echo "  MISSING $EV $DS $M align=$AL seed$SEED"
     done < "$GRID"
     break
   fi
@@ -437,15 +454,12 @@ while true; do
   claimed=0
   for line in "${ROWS[@]}"; do
     [ -z "$line" ] && continue
-    EV=$(echo "$line" | cut -f1)
-    DS=$(echo "$line" | cut -f2)
-    M=$(echo "$line"  | cut -f3)
-    SEED=$(echo "$line" | cut -f4)
+    parse_cell "$line"
 
-    OUT="$RESULTS_DIR/${EV}/${DS}/${M}__seed${SEED}.csv"
+    OUT="$RESULTS_DIR/${EV}/${DS}/${STEM}.csv"
     [ -s "$OUT" ] && continue
 
-    CLAIM="$CLAIMS/${EV}__${DS}__${M}__s${SEED}"
+    CLAIM="$CLAIMS/${EV}__${DS}__${STEM}"
     # mkdir is the atomic primitive here: it succeeds for exactly one caller and
     # fails for every other, across processes and across nodes on a shared FS.
     # A lock file with test-then-create would race.
@@ -485,11 +499,11 @@ while true; do
       # echoed in the banner; $EXTRA is for validation runs and must not carry science.
       # shellcheck disable=SC2086
       CUDA_VISIBLE_DEVICES=$gpu timeout "$CELL_TIMEOUT" python run_moabb_hydra.py \
-        eval="$EV" dataset="$DS" model="$M" seed="$SEED" \
+        eval="$EV" dataset="$DS" model="$M" align="$AL" seed="$SEED" \
         cache.enabled=true cache.path="$CACHE" \
         results_dir="$RESULTS_DIR" \
-        overwrite=true suffix="${SUFFIX}_${M}_s${SEED}" ${PROTOCOL} ${EXTRA:-} \
-        > "$LOGS/${EV}__${DS}__${M}__s${SEED}.log" 2>&1
+        overwrite=true suffix="${SUFFIX}_${STEM}" ${PROTOCOL} ${EXTRA:-} \
+        > "$LOGS/${EV}__${DS}__${STEM}.log" 2>&1
       # Release the claim if nothing was written, so the next sweep retries this
       # cell instead of recording it as done. The owner file has to go first --
       # rmdir refuses a non-empty directory, and the claim must be *gone*, not

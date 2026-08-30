@@ -68,14 +68,33 @@ Same tree, 24/24 cells: `grow_X` vs `fix_X`, same class frozen at the geometry g
 ends on — the only contrast where growth is the sole difference. Verdict: 0/4 pairs
 survive Holm, no sign flip. Analysis: `analysis/growth_contrast.py`.
 
-**This is why the final grid drops the `fix_*` arms**: the question they answer is
-answered.
+**This no longer justifies dropping the `fix_*` arms, and they are back in the final
+grid.** The scope is the problem: 24 cells is **n=9 subjects on bnci2014_001 alone**,
+one eval, on hopper cards the turing final grid cannot be paired with, and the best pair
+(`grow_sccnet`) sits at p=0.055. "0/4 survive Holm at n=9" is an underpowered null, not
+a null — and the paper's framing (growth as architecture search at the price of one
+training run) makes `fix_X` the ablation that isolates the contribution. On
+`within_session` + `cross_session` it costs ~24 GPU-h with a 3.9 h worst cell, so it
+hides entirely under the critical path, and it takes the ablation to ~250 subjects
+across 12 datasets.
 
-### Cross-dataset / alignment — jobs 504709, 505009, 505185, in flight
+### Cross-dataset / alignment — jobs 504709, 505009, 505185
 `/scratch/amounir/eegrow_xds/benchmarks/results_cross_dataset/cho2017`, **60 CSVs** =
 20 complete cells × 3 seeds as of 28/08. Stem:
-`{model}__{arm}__{align}__{tier}__seed{n}.csv`. Corrected code and protocol.
+`{model}__{arm}__{align}__{tier}__seed{n}.csv`. Corrected **code**.
 Status tracked in `JOBS_STATUS.md`.
+
+**Read the protocol carefully before reusing a timing from this tree.** `cross_dataset.py`
+takes its `train` block verbatim from `config.yaml`, which ships `patience: null` → 20
+(verified in the deployed `eegrow_xds/benchmarks/config/config.yaml`). So these cells ran
+the *undertrained* protocol, and the striking cost figure they produced — aligned cells
+3–5× cheaper, grow `euclidean` 3h19–3h43 against grow `none` ~16h50 — is **early stopping
+firing on whitened data and never firing on raw data**. The final grid sets
+`patience=200 = max_epochs`, where early stopping cannot fire at all, so both arms run the
+full budget and an aligned cell costs exactly what its raw twin costs. Planning the aligned
+arm on the 3–5× would have under-budgeted it threefold. The *scores* from this tree are
+fine for the corrected-protocol gate decomposition (all 36 `core` cells share one protocol
+and one tree); it is the *timings* that do not transfer.
 
 ### Euclidean-alignment replication — `/scratch/amounir/eegrow_ea`
 Stage 1 gate. `cho2017` passes (+1.51 pp, n=52); `bnci2014_001` is underpowered
@@ -87,7 +106,7 @@ Integration branch `exp/ea-replication`.
 ## Not yet run
 
 ### The final grid — `benchmarks/slurm/final_grid.tsv`
-396 cells, ~817 GPU-h projected, `/scratch/amounir/eegrow_budget`, results tag `final`
+1044 cells, ~1007 GPU-h projected, `/scratch/amounir/eegrow_budget`, results tag `final`
 (`/scratch/amounir/results_final`). This is the table the paper is written from and it
 **replaces v4 and v5 outright**. Rationale for every cut is in `final_grid.py`'s
 docstring; the protocol and the checkout are pinned in `final_grid.sbatch`.

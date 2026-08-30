@@ -41,7 +41,9 @@ from aligned_paradigm import make_aligned_paradigm  # noqa: E402
 from pipelines import build_pipeline  # noqa: E402
 from subject_stamp import stamped  # noqa: E402
 from utils import (  # noqa: E402
+    align_tag,
     cache_config,
+    cell_stem,
     cap_cuda_fraction,
     logger,
     pick_device,
@@ -58,15 +60,12 @@ logging.basicConfig(level=logging.INFO,
 def _align_tag(cfg) -> str:
     """Filename/suffix marker for the alignment arm ("" when raw).
 
-    The aligned and raw arms of the ablation are the *same* (eval, dataset, model,
-    seed) point, so without a marker the second one silently overwrites the first --
-    the exact accident that cost us the native-rate runs. Empty for ``align=none`` so
-    every pre-existing result file keeps its name.
+    Delegates to ``utils.align_tag`` so the rule has exactly one definition: the grid
+    generators emit the resulting stem into the TSV and ``pack_run.sh`` tests for it to
+    decide a cell is done, so a second copy of this logic that drifted would make the
+    packer re-run the campaign on top of itself in silence.
     """
-    tag = cfg.align.get("tag")
-    if not tag:
-        return ""
-    return f"{tag}{cfg.align.level}" if cfg.align.get("level") else str(tag)
+    return align_tag(cfg.align)
 
 
 def _make_evaluation(cfg, paradigm, dataset, hdf5_path, stamp=False):
@@ -204,8 +203,7 @@ def main(cfg: DictConfig) -> pd.DataFrame:
     # arms of the ablation are the same (eval, dataset, model, seed) point, so an
     # untagged stem makes the second arm overwrite the first -- silently, and for the
     # fit records as well as for the results.
-    tag = _align_tag(cfg)
-    stem = f"{label}__{tag}__seed{cfg.seed}" if tag else f"{label}__seed{cfg.seed}"
+    stem = cell_stem(label, _align_tag(cfg), cfg.seed)
     # One JSONL per cell: this process is its only writer, so appends from the
     # successive folds cannot interleave. Deep arms only -- the ML pipelines have
     # neither epochs nor a width. See eegrow.training.recording for why the growth
