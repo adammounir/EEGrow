@@ -4,6 +4,7 @@ defaults:
   - dataset: bnci2014_001
   - model: grow_sccnet
   - eval: cross_subject
+  - align: none
   - _self_
 
 seed: 42
@@ -42,6 +43,11 @@ train:
   #
   # The two knobs interact (+0.0854, p=1.1e-07), so neither can be set alone: the
   # corrected protocol is `patience=200` AND `selection_monitor=valid_acc` together.
+  # `stop_monitor: valid_loss` is right as it stands -- the loss is continuous, so
+  # patience actually fires on it. It is `selection_monitor` that has to move: the two
+  # full-budget cells have bit-identical trajectories and differ only in which epoch is
+  # handed back, and the loss hands back epoch 5 where the accuracy peak is at 158.
+  #
   # The defaults stay wrong on purpose -- flipping them re-dates every score in
   # `results_v5_published/`, which is still the reference frame for the archived
   # figures. So the corrected protocol is passed explicitly at launch::
@@ -59,7 +65,8 @@ train:
   # stopping outright, which is the only way to measure what a net would have reached
   # if simply left to train -- on `bd_deep4` the difference is not academic, its
   # validation loss bottoms at epoch 4 and patience 20 ends the fit at epoch 24 while
-  # the train loss is still descending.
+  # the train loss is still descending. Same caveat as `selection_monitor` above: `null`
+  # is the historical value, not the advice -- new work passes `train.patience=200`.
   patience: null
   # Learning-rate schedule: null (constant, what the whole v5 grid ran) or `cosine`.
   # KEEP IT null. The knob exists because it was a live hypothesis and it was tested;

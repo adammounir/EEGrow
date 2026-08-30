@@ -175,6 +175,41 @@ Within the shallow pair, 60 of the 173 cells account for 65 of the 70 hours (the
 bnci2015_001); the remaining 113 cost about 5 hours in total. The decision is which of
 those scopes to buy, and it has to be taken before submission rather than after.
 
+## 5. Amendments — two claims above no longer hold as written
+
+Added 2026-08-26. Everything in §1–§4 was produced before the protocol audit, and two of
+its statements have since been measured to be about something other than growth. The
+numbers are not edited in place; the corrections are stated here so a reader who cites
+§2 knows what they are citing.
+
+**(a) The EEGNeX verdict is a geometry artefact, not a growth result.** §2 reads "for
+EEGNeX it is decisive (2 cells out of 27)" from a −0.0322 median. The two arms are not
+width-matched: in `EEGNeX`, `filter_1` sizes the *fixed tail* as well as the block the
+growing arm widens, so `grow_eegnex` starting narrow also ships a permanently narrower
+tail that growth never reaches. The pair therefore contrasts two different target
+architectures, and its delta measures the missing tail. `grow_eegnex` vs `bd_eegnex` has
+to be re-run width-matched before any statement about EEGNeX is made; until then the
+honest count in §2 is **three** pairs, not four.
+
+**(b) The whole grid ran the training protocol that was later shown to be wrong.**
+Every cell here used `patience: 20` with `selection_monitor: valid_acc`, and nothing
+restored the best model — so each score comes from the weights 20 epochs past the arm's
+own best, measured at exactly 20, std 0.0, across all 140,490 folds. On the budget ×
+selection square (bnci2014_001 `within_session`, 36 paired units) that costs 0.3390
+against 0.4818 at full budget. Six of the nine arms audited were undertrained by between
++0.02 and +0.13. This does not flip §1's regime story — Riemannian ahead within-session,
+networks ahead cross-subject — because it hits both deep families the same way. It does
+mean **no absolute level in §1 is the level of a trained network**, and it means the
+paired deltas in §2 are differences between two undertrained fits, whose sign is only
+safe where the arms stop at comparable epochs.
+
+Two consequences for anything downstream. Any *new* campaign passes
+`train.patience=200 train.selection_monitor=valid_acc` explicitly (the shipped defaults
+stay historical so this document's numbers remain reproducible). And every p-value in §2
+is computed at the (subject, session) level, which is a replication layer, not an
+independent sample — see the unit-of-analysis note; at the subject level the same
+contrasts are far less significant than printed.
+
 ## Files
 
 | file | contents |

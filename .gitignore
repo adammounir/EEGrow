@@ -36,6 +36,10 @@ benchmarks/analysis/**/*.html
 benchmarks/analysis/**/*.tex
 benchmarks/analysis/**/*.pdf
 benchmarks/analysis/**/figures/
+# ... sauf les gabarits : `*.tmpl.html` est une SOURCE, pas une sortie. La règle du
+# dessus exclut le HTML parce qu'il est régénérable ; un gabarit ne l'est pas, et sans
+# lui `build_report_page.py` ne peut plus rien reconstruire.
+!benchmarks/analysis/**/*.tmpl.html
 # Les réductions par époque de la campagne v5 : 22 Mo, régénérables sur Margaret par
 # `analysis/export_v5_tidy.py` (versionné, lui). Les trois agrégats au niveau du score
 # sont versionnés, eux, parce qu'ils tiennent en 0,8 Mo et suffisent à refaire l'analyse
