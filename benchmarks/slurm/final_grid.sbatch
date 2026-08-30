@@ -15,8 +15,25 @@
 # Everything else -- G, K, the device ceiling, the cell list -- is derived by
 # plan_campaign.py from measurements and arrives on the sbatch line.
 #
+# THE ALIGNED AXIS RUNS ON ALL THREE PROTOCOLS (decided 2026-08-30). The script's
+# default switches euclidean on for the two cheap evals only; this campaign passes
+# --align-evals explicitly, so the generating command below is NOT the default one and
+# regenerating the grid without that flag silently drops 72 cross_subject cells:
+#
+#     1116 cells, 1740.0 GPU-h   (846 grow/bd raw + 846 grow/bd aligned + 2 x 24.5 fix)
+#
+# The +733 GPU-h buys the only place EA has a mechanism to act: cross_subject is subject
+# transfer, and Euclidean alignment whitens each subject in their own reference frame,
+# which is precisely the covariate shift the held-out subject introduces. On
+# within_session there is no transfer to correct, so that arm measures the cost of the
+# transform rather than its benefit -- it is the control, not the claim. Wall clock is
+# unchanged: the makespan is set by ONE cell (lee2019_mi cross_subject grow_deep, 98.1 h)
+# and its aligned twin runs beside it, not after it.
+#
 # Submit through the generated script, never by hand:
-#     python benchmarks/slurm/final_grid.py --out benchmarks/slurm/final_grid.tsv
+#     python benchmarks/slurm/final_grid.py \
+#         --align-evals within_session cross_session cross_subject \
+#         --out benchmarks/slurm/final_grid.tsv
 #     bash benchmarks/slurm/deploy_final.sh          # ships HEAD + stamps .eegrow_sha
 #     python benchmarks/slurm/plan_campaign.py \
 #         --grid /scratch/amounir/final_grid.tsv --outdir /scratch/amounir/passes_final \
