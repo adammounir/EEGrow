@@ -1,5 +1,111 @@
 # Jobs en cours
 
+## 31/08 (11 h 45) — POINT D'ÉTAPE : 871/1116, ETA ~04/09, 25 cellules mortes (2 causes)
+
+**Rien n'a été relancé. Rien n'a été soumis. La grille tourne.**
+
+### Avancement
+
+871/1116 CSV (78 %), 435 alignés / 436 bruts. 6 allocations `R`, 0 `PD`, walltime 7 j
+(la plus vieille à 23 h). Overrides vérifiés dans les logs :
+`train.patience=200 train.selection_monitor=valid_acc` — la campagne finale est bien dans
+la bonne case du carré 2×2, contrairement au gate cross-dataset du 29/08.
+
+| pass | fraction | fait / total | reste |
+|---|---|---|---|
+| `g3k2` | 0.425 | 26 / 26 | — |
+| `g3k6` | 0.141 | 26 / 26 | — |
+| `g3k8` | 0.106 | 52 / 52 | — |
+| `g3k10` | 0.084 | 653 / 666 | 13 trous OOM, **pass terminée** |
+| `g3k7` | 0.121 | 20 / 26 | 6 trous OOM, **pass terminée** |
+| `g3k9` | 0.094 | 38 / 40 | 2 trous OOM, **pass terminée** |
+| `g2k6` | 0.141 | 16 / 52 | en vol |
+| `g3k1` | 1.000 | 6 / 82 | en vol (+4 trous OOM) |
+| `g1k3` | 0.283 | 0 / 52 | en vol |
+| `g1k9` | 0.094 | 0 / 94 | en vol |
+
+245 manquants = **220 à calculer** + **25 mortes**. 30 cellules en vol (claims sans CSV).
+
+### ETA
+
+Le débit s'est effondré en entrant dans la queue chère : 40–120 CSV/h entre h-22 et h-10,
+puis **5,5 CSV/h sur les 10 dernières heures** (le reste est concentré sur `lee2019_mi` 116,
+`schirrmeister2017` 60, `cho2017` 25).
+
+- Gros du volume : 220 / 5,5 ≈ **40 h**, soit ~02/09.
+- **Contrainte réelle = makespan** : `cross_subject/lee2019_mi/grow_deep__seed0` et
+  `__easubject__seed0`, démarrées **31/08 02:13**, estimées 98,1 h → **fin vers 04/09 04 h**.
+  Les 12 cellules `cross_subject lee2019_mi` sont toutes en vol depuis 02:13 sauf
+  `bd_sccnet__easubject__seed0` (pas commencée).
+
+**ETA campagne complète : 3 à 4 jours, ~04/09.** Le walltime 7 j n'est pas menacé.
+
+### Les 25 cellules mortes — DEUX pannes différentes, pas une
+
+Tous les trous des passes terminées sont des OOM. **0 récupérée** par les 3 sweeps : les
+3 tentatives se heurtent au même mur.
+
+**Famille 1 — notre propre plafond (21 cellules)**, `g3k10` / `g3k7` / `g3k9` :
+
+```
+Tried to allocate ... GPU 0 has a total capacity of 10.58 GiB of which 9.63 GiB is free
+```
+
+Carte quasi vide, refus quand même → c'est `EEGROW_CUDA_FRACTION`, dérivé par
+`profile_grid_memory.py` **sur le réseau à l'initialisation**. Les bras `grow_*`
+s'élargissent en cours de route et sortent du plafond au pic de `compute_s_update`.
+**Réparable** : relancer ces cellules à une fraction plus haute.
+
+**Famille 2 — la carte est réellement pleine (4 cellules)**, `g3k1`, fraction déjà à 1.000 :
+
+```
+GPU 0 has a total capacity of 10.58 GiB of which 1.02 GiB is free.
+Process 1919980 has 5.68 GiB memory in use.
+```
+
+Le voisin, c'est nous. `g3k1` est soumis en **3 allocations qui coopèrent sur la même
+grille** (lignes 13–15 de `passes_final/submit.sh`), chacune `--gres=gpu:turing:3` avec
+`K=1` et `fraction=1.000`. Ce n'est sûr que si SLURM ne co-planifie jamais deux de ces
+allocations sur le même nœud. Il l'a fait (OOM du 31/08 à 03:37 et 06:29).
+**Monter la fraction ne réparera rien ici** — elle est déjà au maximum.
+
+Cellules touchées : uniquement `grow_shallow` et `grow_sccnet`, uniquement `within_session`,
+sur bnci2014_001 / bnci2014_002 / bnci2015_001 / schirrmeister2017 / physionetmi.
+
+### Pourquoi c'est un problème de papier et pas d'ordonnanceur
+
+Ce qui meurt, ce sont **les cellules qui ont le plus grossi**. Les retirer biaise
+l'échantillon survivant vers celles qui ont le moins grossi — dans le sens flatteur, et
+exactement sur l'axe de la revendication (efficacité paramétrique). Ces 25 cellules ne
+peuvent pas être simplement déclarées manquantes.
+
+### Passe de rattrapage — conçue, NON lancée
+
+**Correction par rapport à la note du 30/08** : les 25 cellules ont bien **libéré leur
+claim** (vérifié : `claims − CSV = 30`, dont 0 OOM). Un rattrapage peut donc réutiliser
+`eegrow_claims_final` sans répertoire neuf, il re-prendra les cellules sans CSV.
+
+Design : **une seule** allocation `G=3 K=1 fraction=1.000 --exclusive`, même `RESULTS_DIR`.
+Le `--exclusive` (ou une allocation unique au lieu de trois) est le point non négociable,
+sinon on refait la collision de la famille 2. À lancer **après** la fin des passes en vol,
+pour ne pas leur prendre de GPU.
+
+### Décision sur l'extension poolée × interpolation : NON
+
+Le gate cross-dataset du 29/08 a déjà tourné (52 sujets, cho2017, sujets comme unité,
+IC bootstrap appariés) : `pooled` n'est **jamais** significativement meilleur que `within`,
+`lodo` est significativement **pire** dans les 6/6 conditions (−1,4 à −2,7 pp),
+l'interpolation plafonne à ±0,8 pp avec un signe qui s'inverse selon le modèle.
+Réserve : ce gate tournait avec `selection_monitor=valid_loss` (défaut config, pas
+d'override sbatch), donc lecture directionnelle seulement — mais Q1/Q2 tiennent le modèle
+fixe, l'erreur s'y annule largement.
+
+→ On n'ajoute pas de section poolée. On garde le **négatif LODO** comme paragraphe de
+section « limites » : significatif, cohérent sur 6 conditions, plus solide qu'une table
+à moins d'1 pp non significatif.
+
+---
+
 ## 30/08 (22 h) — 5e BLOQUANT EN VOL : 13 cellules `grow_shallow` tuées par le PLAFOND VRAM
 
 **À décider avant la fin de la campagne. Rien n'a été relancé.**
