@@ -156,6 +156,18 @@ V5_BUDGET = BENCH / "results_v5_published" / "eegrow_v5_budget.csv.gz"
 # `final_grid.sbatch` passes exactly this string; if it ever diverges from this line,
 # the cost estimate below is describing a campaign nobody ran.
 PROTOCOL = "train.patience=200 train.selection_monitor=valid_acc"
+# The protocol the benchmark SHIPS (`config.yaml`: `patience: null` -> 20, selection on
+# `valid_loss`). Written out rather than obtained by omission, so the launch line states
+# which of the two campaigns it is instead of relying on a default staying put.
+#
+# The twin grid exists for one claim and one only. "The undertrained protocol REORDERS
+# arms" is asserted in this docstring and in `final_grid.sbatch`, and it currently rests
+# on SLURM 500573: bnci2014_001, n=9 subjects, 8 arms, 2 seeds, one eval. That is enough
+# to justify the override for our own campaign; it is not enough to tell the field that
+# published rankings are protocol artefacts. Running the SAME cells with the SAME code
+# on the SAME card class under this protocol leaves the two knobs as the only difference
+# between two 12-dataset rankings, which is the comparison the claim actually needs.
+SHIPPED_PROTOCOL = "train.patience=20 train.selection_monitor=valid_loss"
 MAX_EPOCHS = 200
 
 # Three architecture families, each as the pair the paper actually contrasts:
@@ -245,6 +257,11 @@ def main() -> None:
     ap.add_argument("--align-evals", nargs="+", default=list(ALIGN_EVALS),
                     help="evals that also get an align=euclidean twin; "
                          "adding cross_subject roughly doubles the campaign")
+    ap.add_argument("--protocol", choices=["corrected", "shipped"], default="corrected",
+                    help="which protocol this grid is PRICED for. It changes the cost "
+                         "model, never the emitted cells: the protocol reaches the "
+                         "runner through the wrapper's PROTOCOL, and the whole point of "
+                         "the shipped twin is that both campaigns cover the same cells.")
     a = ap.parse_args()
     # `none` spells the empty list: argparse's nargs="+" cannot take zero values, and
     # "price this grid without the arm I just added" is the first question anyone asks
@@ -291,9 +308,19 @@ def main() -> None:
     else:
         Path(a.out).write_text(text)
 
-    per_cell, per_eval = budget_factor([*a.models, *a.fix_models])
+    if a.protocol == "shipped":
+        # No budget factor at all, because v5 IS a shipped-protocol campaign: the cell
+        # being priced is literally the cell that was timed. This is the one use
+        # CAMPAIGNS.md still grants that tree -- its scores are dead three times over,
+        # its `time` column is an honest measurement.
+        per_cell, per_eval = {}, {ev: 1.0 for ev in SEEDS}
+    else:
+        per_cell, per_eval = budget_factor([*a.models, *a.fix_models])
     # An aligned cell is priced at 1.00x its raw twin. See the docstring: the 3-5x
     # saving measured on cho2017 was early stopping, which `patience=200` disables.
+    # Under `--protocol shipped` early stopping DOES fire, so that saving is real again
+    # and this line over-prices an aligned cell -- in the safe direction, and moot while
+    # the twin runs `--align-evals none`.
     by_eval: dict[str, list[float]] = {}
     by_arm: dict[str, list[float]] = {}
     for c, ev, _ds, m, al, _s in cells:
@@ -306,8 +333,8 @@ def main() -> None:
     worst = max(max(v) for v in by_eval.values())
     report = [
         f"{len(cells)} cells -> {a.out}",
-        f"  protocol           {PROTOCOL}",
-        f"  full-budget cost   {full:8.1f} GPU-h",
+        f"  protocol           {SHIPPED_PROTOCOL if a.protocol == 'shipped' else PROTOCOL}",
+        f"  projected cost     {full:8.1f} GPU-h",
         f"  worst single cell  {worst:8.1f} h     <- CELL_TIMEOUT and the partition "
         f"wall must both exceed this",
         "  by eval:",

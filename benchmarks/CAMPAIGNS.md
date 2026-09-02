@@ -111,6 +111,44 @@ Integration branch `exp/ea-replication`.
 **replaces v4 and v5 outright**. Rationale for every cut is in `final_grid.py`'s
 docstring; the protocol and the checkout are pinned in `final_grid.sbatch`.
 
+### The shipped-protocol twin — `benchmarks/slurm/shipped_grid.tsv`
+558 cells, **238 GPU-h**, same checkout, results tag `shipped`. Submitted 02/09 as jobs
+515931-515942. Exactly the `align=none` half of `final_grid.tsv` — verified as a set
+equality, not by regenerating with the same flags — so every cell has a
+corrected-protocol twin at the same (eval, dataset, model, seed), on the same turing
+cards, from the same `.eegrow_sha`.
+
+**Why v5 does not already answer this.** v5 did run `patience=20`, and `config.yaml`
+does ship `selection_monitor: valid_loss`. But `RestoreBestModel` did not exist yet
+(`0efbdb5`, 25/08), so *no* epoch was ever selected: the score was the last epoch, which
+early stopping puts exactly `patience` epochs past the best one — 20, std 0.0, on all
+140 490 folds. `selection_monitor` was an inert config key. So v5 is not "the shipped
+protocol", it is "no model selection at all", and pairing it against the final grid
+would put three code defects inside a difference meant to isolate two knobs. The twin
+runs the shipped *values* on the fixed *code*, the only contrast where the knobs are
+the whole difference.
+
+Note what this does and does not license. It measures **the knobs**. It does not
+reproduce the protocol under which the published numbers it is compared against were
+obtained, because those had no checkpointing either — that is a third protocol, and if
+the paper wants to claim published rankings are artefacts it needs to say which of the
+two it is talking about.
+
+**What it is for.** `final_grid.py`, `final_grid.sbatch`, this file and `config.yaml`
+all assert that the shipped protocol *reorders* arms. The evidence under that assertion
+is SLURM 500573: bnci2014_001, n=9 subjects, 8 arms, 2 seeds, within_session only.
+Enough to override the defaults for our own campaign; not enough to tell the field that
+its rankings are protocol artefacts. The twin turns the assertion into two complete
+12-dataset rankings whose only difference is `patience` and `selection_monitor`, and
+the readout is the ORDER — Kendall tau, sign flips, top-1 changes — not an accuracy
+delta, which is already known.
+
+**Cost.** 27 % of the same cells priced as corrected (238 against 870 GPU-h), because
+early stopping actually fires under `patience=20`. `final_grid.py --protocol shipped`
+applies *no* budget factor: v5 ran this budget, so each cell is priced at its own
+measured wall clock instead of an extrapolation. Worst cell 22.5 h measured, against a
+48 h `CELL_TIMEOUT`.
+
 ---
 
 ## Where things live, and why it is not one place
