@@ -53,6 +53,54 @@ benchmarks/results_v5_published/eegrow_v5_fold_summary.csv.gz
 # cross_session, x3.28 cross_subject), donc les 817 GPU-h, donc le CELL_TIMEOUT et le
 # mur d'allocation. Le régénérer suppose Margaret et des runs qu'on ne refera pas ;
 # s'il disparaît, le plan de campagne devient une affirmation invérifiable.
+
+# --- sorties par cellule des campagnes donneur/receveur et sélection de données ---
+#
+# Chaque cellule écrit une paire `<cell>.csv` (scores) + `<cell>__fits.jsonl` (un objet
+# par fit) : 985 paires, 250 Mo. Ce sont des *résultats*, au même titre que `results/`
+# et `benchmarks/outputs/`, et la même règle s'applique -- sauf que ceux-là ne sont pas
+# régénérables sans le cluster, donc ce qui est versionné à leur place n'est pas rien :
+# les scripts qui les produisent (`benchmarks/donor_*.py`, `analysis/donor_*.py`) ET
+# les agrégats au niveau du score, qui tiennent en ~30 ko et suffisent à refaire chaque
+# figure et chaque test sans Margaret -- `ranking_*.csv`, `figures_dxr_summary/
+# dxr_summary.csv`, `dsel2/all_pool_*.csv`, `dsel2/*_per_cluster.csv`,
+# `dsel_physionetmi_per_subject.csv`. Les motifs ci-dessous sont écrits pour les
+# laisser passer : ils excluent les répertoires de cellules, pas les CSV d'agrégat
+# posés à leur racine.
+#
+# Les runs bruts ne sont pas perdus pour autant, ils ne sont simplement pas dans git :
+# ils vivent sur le disque local et sur `/scratch/amounir`. S'ils doivent accompagner
+# une publication, c'est une archive versionnée (Zenodo) qu'il leur faut, pas un
+# historique additif où le ruleset interdit de les retirer ensuite.
+benchmarks/analysis/dxr_bnci2014_001/
+benchmarks/analysis/dxr_cho2017/
+benchmarks/analysis/dxr_lee2019_mi/
+benchmarks/analysis/dxr_physionetmi/
+benchmarks/analysis/dsel_physionetmi/
+benchmarks/analysis/dsel2/*/
+benchmarks/analysis/dsel_all/*/
+# Les PNG des rapports D×R. La règle `**/figures/` du dessus ne les rattrape pas :
+# ces répertoires ne s'appellent pas `figures`, ils s'appellent `figures_dxr*`. Le
+# `.csv` d'agrégat qui vit dans `figures_dxr_summary/`, lui, reste versionné.
+benchmarks/analysis/figures_dxr*/*.png
+
+# --- réductions et scores de la campagne finale ---
+#
+# `gd_events.csv.gz` (68 Mo) et `gd_curves_mean.csv.gz` (27 Mo) sont les réductions par
+# époque de la grille finale, régénérables par `analysis/export_growth_dynamics.py`
+# depuis `/scratch/amounir/results_final`. `gd_fits.csv.gz` (1,6 Mo) reste versionné
+# pour la raison qui a sorti `eegrow_v5_budget.csv.gz` de la liste : c'est le niveau
+# *fit*, celui dont dépendent les tests appariés, et il tient dans le dépôt.
+benchmarks/analysis/dynamics_final/gd_events.csv.gz
+benchmarks/analysis/dynamics_final/gd_curves_mean.csv.gz
+# `perf_final/scores/` est une copie locale d'une campagne ENCORE EN COURS (1082/1116
+# au 02/09). La versionner fige dans un historique non réécrivable un instantané
+# partiel, qui deviendrait un second cadre de référence à côté de la campagne complète
+# -- exactement le problème que la note sur les analyses régénérées décrit plus haut.
+# À publier en `results_final_published/`, sous forme d'agrégat, une fois la grille
+# terminée et seulement là.
+benchmarks/analysis/perf_final/scores/
+
 *.pt
 *.npy
 *.npz
