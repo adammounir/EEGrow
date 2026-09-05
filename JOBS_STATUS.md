@@ -1,5 +1,79 @@
 # Jobs en cours
 
+## 05/09 — `motif` EN COURS : 11 datasets de plus (539160 chauffe → 539161 D×R)
+
+**Pourquoi.** À n=6 datasets, « la croissance classe mieux les donneurs que
+l'accuracy » est **non résolu** : 3/5 admis à écart positif, binomial p=0.50 ; un
+modérateur y serait détecté avec une puissance ~0.3. La campagne mesure une
+**prévalence**, pas un effet nouveau. Pré-registration :
+`analysis/PREREG_motif_prevalence.md`, écrite avant le premier fit.
+
+**Les 11 ajoutés** (LeftRightImagery, n ≥ 16, critères posés avant tout résultat) :
+stieger2021 (62), yang2025 (51), hefmiich2025 (37), guttmannflury2025_mi (31),
+guttmannflury2025_me (31), chang2025 (28), forenzo2023 (25), zhou2020 (20),
+kumar2024 (18), dreyer2023b (21), brandl2020 (16). → 17 datasets au total.
+
+Deux ne sont pas là pour le nombre : **dreyer2023b** est la seconde cohorte du *même
+protocole* que dreyer2023a (l'un des deux échecs) — l'échec se réplique-t-il ? Et
+**guttmannflury2025_me** est le jumeau en mouvement *exécuté* de `_mi`, mêmes 31
+sujets, même matériel : le seul contraste intra-cohorte de la campagne.
+
+| job | quoi | forme | dépendance |
+|---|---|---|---|
+| 539160 | chauffe du cache MOABB | array 0-10%6, partition `normal`, 0 GPU | — |
+| 539161 | matrice D×R | array 0-10, 1 GPU, 3 shards co-tenants | `aftercorr:539160` |
+
+**`aftercorr` et pas `afterok`** : la tâche D×R *i* part quand la tâche de chauffe *i*
+sort en 0, donc dès que **ce** dataset est prêt — pas quand les onze téléchargements
+sont finis. Le makespan est le max des chaînes par dataset, pas la somme des pires.
+
+**Le D×R est aussi la sonde de coût, et c'est délibéré.** Le projet a transposé trois
+fois un coût par cellule et s'est trompé les trois fois (une fois d'un ordre de
+grandeur, une fois d'un facteur 7). Un fit donneur voit 100 % des essais d'un sujet, un
+fold de sonde 80 % : le `fit_seconds` du D×R **majore** donc le coût de la sonde du même
+dataset. La ligne `COST <dataset> ...` dans `/scratch/amounir/logs/motif_dxr_*` est ce
+qui dimensionnera `motif_probe`. **Ne pas soumettre la sonde avant de l'avoir lue.**
+
+Le D×R passe sur **GPU** et non CPU comme cho2017 : 1 140 s par fit donneur mesuré sur
+ses CSV (`device=cpu`), contre 40 s pour le même réseau en sonde sur turing. Le CPU
+était un choix de cohabitation d'un jour où les cartes étaient prises. Facteur ~25.
+
+### Ce qui a failli passer — la porte G2, corrigée avant soumission
+
+Première version : `ICC(1,1) > 0.05`. Passée sur les 6 datasets existants, elle en
+excluait **4**, dont **les deux seuls où la règle échoue** (dreyer2023a, physionetmi).
+Une porte qui retire précisément les négatifs biaise la prévalence vers le haut sans
+rien signaler. Deux défauts s'additionnaient : le seuil portait sur la fiabilité d'un
+réplicat isolé alors que la règle emploie une moyenne de 15 (Spearman-Brown : 0.05 sur
+un réplicat vaut 0.44 sur quinze), et deux exports de sonde étaient mal routés
+(`dynamics_fresh`), rendant un ICC `nan` lu comme un échec.
+
+Corrigée en `ICC(1,15) > 0.30` ; n'exclut plus que shin2017a (0.174). La correction est
+consignée **datée** dans la prereg, parce qu'elle a été faite après avoir vu qui elle
+excluait — et la garantie n'est pas la bonne foi : **l'endpoint est rapporté deux fois,
+avec et sans la porte**, et le script écrit en toutes lettres si les deux divergent.
+
+`k` est égalisé à 15 réplicats/sujet : les ajoutés ont de 1 à 11 sessions, donc k irait
+de 15 à 165, et « les nouveaux répondent mieux » aurait pu n'être que « ils ont plus de
+fits ».
+
+### Prior gelé (k égalisé), à ne pas reconstruire après coup
+
+| dataset | ICC(1,15) | suspects | gap | gap_clean | classe |
+|---|---:|---:|---:|---:|---|
+| shin2017a | 0.174 | 0 | +0.101 | +0.101 | *exclu G2* |
+| cho2017 | 0.691 | 7 | +0.330 | +0.076 | ROBUSTESSE |
+| dreyer2023a | 0.779 | 21 | −0.119 | −0.133 | ABSENT |
+| lee2019_mi | 0.606 | 5 | +0.082 | +0.358 | MOTIF |
+| liu2024 | 0.453 | 0 | +0.053 | +0.053 | MOTIF_NON_TESTÉ |
+| physionetmi | 0.441 | 1 | −0.189 | −0.164 | ABSENT |
+
+**Ce que la campagne ne mesure PAS** : le gain end-to-end d'une allocation. Le lien entre
+l'écran D×R et l'end-to-end est faible (P = 0.751, voir plus bas). La validation
+end-to-end reste à n=3 et cette campagne ne la déplace pas.
+
+---
+
 ## 05/09 — `dalloc_restored` TERMINÉ (531833/531834/531835, tous COMPLETED)
 
 432/432 cellules sur disque, rapatriées dans `benchmarks/analysis/dalloc_restored/`.
