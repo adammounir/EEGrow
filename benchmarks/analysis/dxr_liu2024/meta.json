@@ -1,0 +1,11 @@
+{
+  "dataset": "liu2024",
+  "classes": [
+    "left_hand",
+    "right_hand"
+  ],
+  "n_chans": 29,
+  "n_times": 1000,
+  "sfreq": 250.0,
+  "load_seconds": 51.7
+}

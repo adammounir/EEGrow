@@ -1,0 +1,11 @@
+{
+  "dataset": "dreyer2023a",
+  "classes": [
+    "left_hand",
+    "right_hand"
+  ],
+  "n_chans": 27,
+  "n_times": 1250,
+  "sfreq": 250.0,
+  "load_seconds": 58.5
+}
