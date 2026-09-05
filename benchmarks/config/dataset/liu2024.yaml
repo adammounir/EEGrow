@@ -1,0 +1,13 @@
+# Liu2024 : 50 sujets, 1 session, 2-class MI (main gauche / main droite), 250 Hz natif.
+# Second dataset frais, pour la même raison que dreyer2023a : une réplication externe
+# sur UN dataset reste une observation ; sur deux, elle a un signe à compter.
+#
+# Natif à 250 Hz, donc le `resample` est un no-op ici -- il est écrit quand même pour
+# que la config dise la fréquence de la grille plutôt que de laisser un lecteur la
+# déduire de l'absence de champ.
+name: liu2024
+moabb_class: Liu2024
+paradigm: LeftRightImagery
+subjects: null
+resample: 250.0
+kwargs: {}

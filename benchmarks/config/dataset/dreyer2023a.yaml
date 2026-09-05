@@ -1,0 +1,21 @@
+# Dreyer2023A : 60 sujets, 1 session, 2-class MI (main gauche / main droite), 27 ch,
+# 512 Hz. JAMAIS VU par aucune analyse de ce dépôt -- c'est précisément sa valeur.
+#
+# POURQUOI CELUI-CI. Le prédicteur de l'étage C (`restored_epoch`) et la lecture
+# « la taille » de claim 2 ont été trouvés SUR les cinq datasets déjà mesurés. Un
+# prédicteur post-hoc ne devient primaire que sur des données fraîches, et « fraîches »
+# veut dire un dataset dont aucun chiffre n'a servi à formuler l'hypothèse. Les sept
+# autres datasets du cache sont à n <= 14 sujets (MDE rho >= 0.69) et ne peuvent rien
+# trancher seuls ; Dreyer2023A est à n=60, soit la puissance de lee2019_mi.
+#
+# Le paradigme est identique à cho2017 / lee2019_mi (LeftRightImagery, 8-32 Hz), ce qui
+# est une condition et pas une commodité : une réplication qui change en même temps le
+# dataset ET le paradigme ne réplique rien.
+name: dreyer2023a
+moabb_class: Dreyer2023A
+paradigm: LeftRightImagery
+subjects: null   # null => tous les sujets
+# 250 Hz comme tout le reste de la grille. Un dataset servi à une autre fréquence
+# mesurerait le prétraitement autant que le sujet.
+resample: 250.0
+kwargs: {}

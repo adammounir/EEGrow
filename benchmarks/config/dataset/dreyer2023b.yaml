@@ -1,0 +1,13 @@
+# Dreyer2023B: 21 subj, 1 session, 2-class MI. The second cohort of the SAME
+# protocol as dreyer2023a, which is one of the two datasets where the rule FAILS.
+# It is in the grid as a designed control: does the failure replicate within a
+# protocol, or was dreyer2023a a draw?
+name: dreyer2023b
+moabb_class: Dreyer2023B
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+# Sampling grid unified at 250 Hz across the whole benchmark, like every other
+# dataset config here: a grow/bd pair split across two rates measures preprocessing,
+# not growth.
+resample: 250.0
+kwargs: {}

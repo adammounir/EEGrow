@@ -110,3 +110,13 @@ benchmarks/analysis/perf_final/scores/
 .DS_Store
 .idea/
 .vscode/
+
+# `results_fresh/` est la copie locale de la sonde des deux datasets frais. Les CSV de
+# score (84 Ko) sont versionnés -- `analysis/motif_readout.py` les lit pour l'ICC de
+# l'accuracy et les modérateurs de géométrie. Les modèles skorch et les JSONL par époque
+# (127 Mo) ne le sont pas : ils sont régénérables depuis /scratch/amounir/results_fresh
+# et n'entrent dans aucune analyse.
+benchmarks/analysis/results_fresh/**/*.joblib
+benchmarks/analysis/results_fresh/**/*__fits.jsonl
+benchmarks/analysis/results_motif/**/*.joblib
+benchmarks/analysis/results_motif/**/*__fits.jsonl

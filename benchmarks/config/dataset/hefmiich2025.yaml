@@ -1,0 +1,11 @@
+# HefmiIch2025: 37 subj, 3 sessions, 2-class MI (left/right hand). 10 s epochs --
+# the long-window end of the family, alongside shin2017a.
+name: hefmiich2025
+moabb_class: HefmiIch2025
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+# Sampling grid unified at 250 Hz across the whole benchmark, like every other
+# dataset config here: a grow/bd pair split across two rates measures preprocessing,
+# not growth.
+resample: 250.0
+kwargs: {}

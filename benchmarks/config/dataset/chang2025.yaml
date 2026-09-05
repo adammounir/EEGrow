@@ -1,0 +1,10 @@
+# Chang2025: 28 subj, 4 sessions, 3-class MI restricted to the left/right pair.
+name: chang2025
+moabb_class: Chang2025
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+# Sampling grid unified at 250 Hz across the whole benchmark, like every other
+# dataset config here: a grow/bd pair split across two rates measures preprocessing,
+# not growth.
+resample: 250.0
+kwargs: {}

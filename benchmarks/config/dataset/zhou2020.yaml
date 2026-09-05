@@ -1,0 +1,10 @@
+# Zhou2020: 20 subj, 7 sessions, 4-class MI restricted to the left/right pair.
+name: zhou2020
+moabb_class: Zhou2020
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+# Sampling grid unified at 250 Hz across the whole benchmark, like every other
+# dataset config here: a grow/bd pair split across two rates measures preprocessing,
+# not growth.
+resample: 250.0
+kwargs: {}

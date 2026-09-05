@@ -1,0 +1,10 @@
+# Forenzo2023: 25 subj, 5 sessions, 2-class MI (left/right hand).
+name: forenzo2023
+moabb_class: Forenzo2023
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+# Sampling grid unified at 250 Hz across the whole benchmark, like every other
+# dataset config here: a grow/bd pair split across two rates measures preprocessing,
+# not growth.
+resample: 250.0
+kwargs: {}

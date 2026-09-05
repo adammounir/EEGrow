@@ -1,0 +1,11 @@
+# GuttmannFlury2025 (imagined): 31 subj, 3 sessions, 2-class MI. Paired with the
+# _ME twin below -- same subjects, same rig, executed instead of imagined.
+name: guttmannflury2025_mi
+moabb_class: GuttmannFlury2025_MI
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+# Sampling grid unified at 250 Hz across the whole benchmark, like every other
+# dataset config here: a grow/bd pair split across two rates measures preprocessing,
+# not growth.
+resample: 250.0
+kwargs: {}

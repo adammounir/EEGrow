@@ -1,0 +1,21 @@
+# Les 11 datasets ajoutés pour la campagne « prévalence du motif ».
+# UNE LIGNE = UN INDICE DE TABLEAU SLURM, et l'ordre est un contrat : `motif_dxr.sbatch`
+# dépend de `motif_warm.sbatch` par `aftercorr`, qui apparie la tâche i à la tâche i.
+# Réordonner ce fichier entre deux soumissions apparierait un dataset au cache d'un
+# autre. Ajouter en fin de liste, jamais au milieu.
+#
+# Ordre = coût de téléchargement décroissant estimé, pour que le long pôle démarre
+# en premier quand les créneaux se libèrent.
+#
+# nom                    n_sujets  sessions  fits_sonde/graine (n x sess x 5 folds)
+stieger2021              # 62      11        3410   <- le long pôle, 6x le plus gros déjà mesuré
+yang2025                 # 51       3         765
+hefmiich2025             # 37       3         555   <- époques de 10 s, coût/fit élevé
+guttmannflury2025_mi     # 31       3         465
+guttmannflury2025_me     # 31       3         465   <- jumeau EXÉCUTÉ du précédent
+chang2025                # 28       4         560
+forenzo2023              # 25       5         625
+zhou2020                 # 20       7         700
+kumar2024                # 18       6         540
+dreyer2023b              # 21       1         105   <- contrôle conçu : même protocole que dreyer2023a
+brandl2020               # 16       1          80

@@ -1,0 +1,11 @@
+# Brandl2020: 16 subj, 1 session, 2-class MI (left/right hand). The smallest pool
+# admitted -- 16 donors is the floor at which a top-5 rule is still a choice.
+name: brandl2020
+moabb_class: Brandl2020
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+# Sampling grid unified at 250 Hz across the whole benchmark, like every other
+# dataset config here: a grow/bd pair split across two rates measures preprocessing,
+# not growth.
+resample: 250.0
+kwargs: {}

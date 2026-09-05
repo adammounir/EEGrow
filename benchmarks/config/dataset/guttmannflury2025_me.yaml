@@ -1,0 +1,12 @@
+# GuttmannFlury2025 (executed): the motor-EXECUTION twin of the config above. Same
+# 31 subjects and the same hardware, so the pair isolates what imagery costs --
+# the only within-cohort contrast the motif campaign has.
+name: guttmannflury2025_me
+moabb_class: GuttmannFlury2025_ME
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+# Sampling grid unified at 250 Hz across the whole benchmark, like every other
+# dataset config here: a grow/bd pair split across two rates measures preprocessing,
+# not growth.
+resample: 250.0
+kwargs: {}

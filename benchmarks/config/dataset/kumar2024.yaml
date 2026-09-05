@@ -1,0 +1,10 @@
+# Kumar2024: 18 subj, 6 sessions, 2-class MI (left/right hand).
+name: kumar2024
+moabb_class: Kumar2024
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+# Sampling grid unified at 250 Hz across the whole benchmark, like every other
+# dataset config here: a grow/bd pair split across two rates measures preprocessing,
+# not growth.
+resample: 250.0
+kwargs: {}

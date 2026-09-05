@@ -1,0 +1,12 @@
+# Stieger2021: 62 subj, 11 sessions, 4-class MI (restricted to left/right hand),
+# 64 ch, 1000 Hz. The largest MI cohort in MOABB and the one that carries the
+# campaign's power: 682 subject-sessions, ~6x the biggest already measured.
+name: stieger2021
+moabb_class: Stieger2021
+paradigm: LeftRightImagery
+subjects: null   # null => all subjects
+# Sampling grid unified at 250 Hz across the whole benchmark, like every other
+# dataset config here: a grow/bd pair split across two rates measures preprocessing,
+# not growth.
+resample: 250.0
+kwargs: {}
