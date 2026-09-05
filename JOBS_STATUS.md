@@ -1,5 +1,30 @@
 # Jobs en cours
 
+## 05/09 16h40 — le pôle série était stieger2021, corrigé par 539433
+
+**Mesuré, pas estimé.** stieger2021 = 598 sessions de ~615 Mo, soit **~360 Go**,
+téléchargées **une par une** par 539160_0 : 7,6 Go en 39 min, soit 3,3 Mo/s → **~30 h
+pour ce seul dataset**, quand les dix autres finissent en ~3 h. Rien de calculatoire
+là-dedans, c'est du réseau en série.
+
+**539433** (`slurm/stieger_pull.sbatch`, array 0-7, CPU) tire les sujets 8..62 en
+8 flux parallèles. **Purement additif** : il ne touche pas 539160_0, donc la chaîne
+`aftercorr` vers 539161_0 reste intacte. Sûr parce que `Stieger2021.data_path` teste
+`os.path.exists` avant chaque fichier (`stieger2021.py:417`) et que les tâches
+prennent des sujets disjoints ; et parce qu'il **ne fait aucun epoching** — c'est
+l'écriture concurrente dans le cache MOABB *traité* qui détruit une entrée partagée
+(incident des 276 sujets), pas le remplissage de `MNE-Stieger2021-data`.
+
+**Effet mesuré** : 3,3 → **15,6 Mo/s** (1,4 Go en 90 s), ×4,7. Reste ~350 Go → ~6 h.
+Le débit par flux tombe de 3,3 à 1,9 Mo/s : le rendement marginal décroît, doubler
+les flux ne doublerait pas le débit. Ne pas empiler d'aide supplémentaire sans
+remesurer.
+
+**ETA de la campagne** : ~3 h pour 9 datasets, ~2 h 30 pour yang2025 (fichier
+**unique** de 65,6 Go — non parallélisable), **~7 h pour stieger2021** (6 h de
+chauffe + ~1 h de D×R). Coût D×R mesuré sur hefmiich2025 : 37 sujets × 3 seeds =
+111 fits à 37,7 s, 3 shards → **19 min** par dataset de cette taille.
+
 ## 05/09 — `motif` EN COURS : 11 datasets de plus (539160 chauffe → 539161 D×R)
 
 **Pourquoi.** À n=6 datasets, « la croissance classe mieux les donneurs que
