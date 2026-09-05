@@ -1,0 +1,11 @@
+{
+  "dataset": "lee2019_mi",
+  "classes": [
+    "left_hand",
+    "right_hand"
+  ],
+  "n_chans": 62,
+  "n_times": 1000,
+  "sfreq": 250.0,
+  "load_seconds": 43.6
+}

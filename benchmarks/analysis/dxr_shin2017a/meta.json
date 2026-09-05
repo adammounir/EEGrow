@@ -1,0 +1,11 @@
+{
+  "dataset": "shin2017a",
+  "classes": [
+    "left_hand",
+    "right_hand"
+  ],
+  "n_chans": 30,
+  "n_times": 2501,
+  "sfreq": 250.0,
+  "load_seconds": 20.6
+}
