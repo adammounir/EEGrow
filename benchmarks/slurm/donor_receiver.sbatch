@@ -1,23 +1,37 @@
 #!/bin/bash
 #SBATCH --job-name=eegrow_dxr
-#SBATCH --partition=tau
-#SBATCH --gres=gpu:ampere:1
+#SBATCH --partition=tau,gpu
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=48G
 #SBATCH --time=12:00:00
+#SBATCH --exclude=margpu001,margpu004,margpu020,margpu021,margpu023,margpu024,margpu025,margpu026,margpu027,margpu029
 #SBATCH --output=/scratch/amounir/logs/dxr_%j.log
 #
 # La matrice donneur-receveur (claim 2 du chantier ICLR). Voir
 # benchmarks/donor_receiver.py pour le protocole ; ce fichier ne décide que deux
 # choses, et les deux sont des choix de cohabitation avec la campagne en cours.
 #
-# gpu:ampere:1, PAS turing. Deux raisons, dans cet ordre :
+# `gpu:1` SANS CLASSE, corrigé le 03/09 après mesure. Deux raisons, dans cet ordre :
 #
-# 1. NE PAS VOLER LA CAMPAGNE. La grille finale demande gpu:turing:3 et six
-#    allocations (512163-512168) attendent déjà en PENDING(Priority) sur ces cartes.
-#    Une demande turing de plus se met dans la même file et retarde le chemin
-#    critique (schirrmeister, ~70 h restantes) pour un travail qui tient en heures.
-#    Les nœuds ampere du tau (margpu007-008) sont libres à côté.
+# 1. LA CLASSE ÉTAIT DEVENUE LE GOULOT, PAS LA PROTECTION. Le pin `ampere` datait du
+#    jour où la campagne finale saturait les turing et où margpu007-008 étaient libres
+#    à côté. Le 03/09 à 17 h, `sinfo -O gres,gresused` donne l'inverse : les 6 cartes
+#    ampere du tau sont prises (margpu007 pour ~20 h, margpu008 pour 5 j par un `bash`
+#    interactif) et AUCUNE ampere du cluster n'est libre, tandis que la campagne
+#    `shipped` est à 498/507 cellules et va rendre 11 turing dans la soirée. Demander
+#    une classe, c'est ici attendre 20 h la mauvaise. Sans classe, le job prend la
+#    première carte utilisable qui se libère -- et le tau n'héberge que de l'ampere et
+#    du turing, donc « sans classe » ne veut pas dire « n'importe quoi ».
+#
+#    C'est aussi pour ça que la liste d'exclusion devient OBLIGATOIRE et non plus
+#    cosmétique : elle était portée en creux par le pin ampere. margpu024-027/029 sont
+#    pascal (sm_60, torch cu130 : "no kernel image is available") et apparaissent
+#    pourtant `idle` ; margpu001/004 sont volta ; margpu020/021 ont des cartes fantômes
+#    (mesuré le 02/09, cf. donor_all.sbatch) ; margpu023 est drained.
+#
+#    Partition `tau,gpu` et pas `gpu-best` : le best-effort est préemptible, ce qui est
+#    acceptable pour une cellule de 20 min et pas pour une matrice de 12 h.
 #
 # 2. LA COMPARAISON EST INTERNE À LA MATRICE. L'argument qui impose `--gres-type
 #    turing` à la campagne -- une différence appariée grow_X - bd_X ne doit pas avoir

@@ -59,6 +59,21 @@ DYNAMICS_URL = "https://claude.ai/code/artifact/1c817e93-e1a0-49e4-ab1f-0c2419c9
 #: fait que chaque page nomme les deux autres.
 DXR_URL = "https://claude.ai/code/artifact/d054d23b-25e8-4790-9994-069a7f632450"
 
+#: The grid this page is supposed to cover, so completeness is READ and not asserted.
+#: Until 03/09 both the header caveat and finding 05 said "campaign in flight" as a
+#: constant, which was true when they were written and stopped being true the night the
+#: last 40 schirrmeister2017 cells landed -- a page that states its own coverage from a
+#: string goes stale silently, in the one place a reader checks before citing it. One
+#: row per planned cell, no header.
+GRID_TSV = Path(__file__).resolve().parents[1] / "slurm" / "final_grid.tsv"
+
+
+def _planned() -> int | None:
+    """Number of cells the campaign plan emitted, or None if the plan is not at hand."""
+    if not GRID_TSV.exists():
+        return None
+    return sum(1 for ln in GRID_TSV.read_text().splitlines() if ln.strip())
+
 
 def main() -> None:
     scores_dir, fits_csv, out = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
@@ -284,15 +299,26 @@ def _findings(sc: pd.DataFrame, subj: pd.DataFrame) -> list[tuple[str, str]]:
                 f"waiting closes it. The {n_ls} LOSO headlines below therefore cannot "
                 "be split, and LOSO is the protocol a deployed decoder is judged on."))
 
-    # 5. Coverage, so no number above is read as final.
+    # 5. Coverage, so no number above is read as final -- or, once the plan is fully
+    #    scored, so no reader keeps discounting numbers that are.
     n_cell = len(sc.groupby(["eval", "dataset", "model", "align_tag", "seed"]))
-    out.append((
-        "This is a campaign in flight",
-        f"{n_cell:,} cells scored across {sc.dataset.nunique()} datasets, "
-        f"{sc.model.nunique()} arms and {sc['eval'].nunique()} protocols. Coverage is "
-        "uneven between arms and protocols; <a href=\"#coverage\">figure 01</a> is the "
-        "map, and every interval here is over the subjects actually present in both "
-        "arms of its own contrast."))
+    planned = _planned()
+    common = (f"across {sc.dataset.nunique()} datasets, {sc.model.nunique()} arms and "
+              f"{sc['eval'].nunique()} protocols. Coverage is uneven between arms and "
+              "protocols — that is the grid as planned, not a gap left by the queue; "
+              "<a href=\"#coverage\">figure 01</a> is the map, and every interval here "
+              "is over the subjects actually present in both arms of its own contrast.")
+    if planned is not None and n_cell >= planned:
+        out.append((
+            "The campaign is complete: every planned cell is scored",
+            f"<b>{n_cell:,} of {planned:,}</b> cells emitted by "
+            f"<code>final_grid.py</code>, {common}"))
+    else:
+        out.append((
+            "This is a campaign in flight",
+            f"{n_cell:,}"
+            + (f" of {planned:,}" if planned is not None else "")
+            + f" cells scored {common}"))
     return out
 
 
@@ -307,6 +333,11 @@ def _seed_sd(sc: pd.DataFrame, align_tag: str) -> float:
 def _write_page(out: Path, blocks, skipped, sc: pd.DataFrame,
                 subj: pd.DataFrame) -> None:
     n_cell = len(sc.groupby(["eval", "dataset", "model", "align_tag", "seed"]))
+    planned = _planned()
+    status = ("Campagne <b>terminée</b> — les "
+              f"{planned:,} cellules du plan sont toutes scorées."
+              if planned is not None and n_cell >= planned
+              else "Campagne <b>en cours</b>.")
     body = [f"""<header>
 <p class="eyebrow">eegrow · campagne finale · <code>results_final</code></p>
 <h1>Où la croissance gagne</h1>
@@ -320,7 +351,7 @@ soit celle d'eegrow plutôt que celle de braindecode. Le bras de contrôle
 <div><dt>unités sujet</dt><dd>{len(subj):,}</dd></div>
 <div><dt>datasets</dt><dd>{sc.dataset.nunique()}</dd></div>
 </dl>
-<p class="caveat">Campagne <b>en cours</b>. L'unité d'analyse est le <b>sujet</b> —
+<p class="caveat">{status} L'unité d'analyse est le <b>sujet</b> —
 sessions et graines sont moyennées avant tout test, parce qu'elles sont corrélées.
 Toutes les barres sont des bootstraps sur les sujets. Rapports jumeaux&nbsp;:
 <a href="{DYNAMICS_URL}"><i>Growth dynamics</i></a>, qui décrit le mécanisme que ces

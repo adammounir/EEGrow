@@ -31,8 +31,17 @@ import perf_io  # noqa: E402
 import donor_matrix as dm  # noqa: E402
 
 
-def build(dataset: str) -> pd.DataFrame:
-    fits = pd.read_csv(A / "dynamics_final" / "gd_fits.csv.gz")
+def build(dataset: str, dynamics: Path | None = None,
+          scores: Path | None = None) -> pd.DataFrame:
+    """Le classement d'un dataset. ``dynamics``/``scores`` surchargent l'arbre lu.
+
+    Les deux surcharges existent pour la réplication fraîche (`dreyer2023a`, `liu2024`),
+    dont l'export vit dans `dynamics_fresh` / `results_fresh` : la pré-registration gèle
+    « le classement vient de `donor_select_prep.py`, jamais re-dérivé », donc la seule
+    forme admissible de réutilisation est de paramétrer CE code, pas d'en écrire une
+    seconde version qui pourrait diverger d'un filtre en silence.
+    """
+    fits = pd.read_csv((dynamics or A / "dynamics_final") / "gd_fits.csv.gz")
     fits["align_tag"] = fits["align_tag"].fillna("none")
     f = fits[(fits["eval"] == dm.PROBE_EVAL) & (fits.model == dm.PROBE_MODEL)
              & (fits.align_tag == "none") & (fits.dataset == dataset)].copy()
@@ -40,13 +49,19 @@ def build(dataset: str) -> pd.DataFrame:
     probe = f.groupby("subject").agg(
         params_probe=("params_end", "mean"), width_probe=("width_end", "mean"),
         k_probe=("params_end", "size"),
+        # `restored_epoch` moyen : l'époque que `RestoreBestModel` a effectivement
+        # rendue, donc la durée d'apprentissage PRODUCTIF du sujet. C'est le prédicteur
+        # primaire de H1 ([[restored-epoch-supersedes-params]]), transporté ici pour la
+        # même raison que `params_probe` — une seule dérivation, à un seul endroit.
+        restored_probe=("restored_epoch", "mean"),
         # La part des réplicats collés à la cible : c'est la censure, elle varie d'un
         # sujet à l'autre et un sujet à 100 % de plafond a une valeur qui n'est pas une
         # mesure mais une borne. On la transporte pour pouvoir la lire à l'analyse.
         ceil_frac=("width_end", lambda s: float((s >= 40).mean())),
     ).reset_index()
 
-    sc = perf_io.attach_params(perf_io.load(A / "perf_final" / "scores"), fits)
+    sc = perf_io.attach_params(
+        perf_io.load(scores or A / "perf_final" / "scores"), fits)
     subj = perf_io.by_subject(sc)
     s = subj[(subj["eval"] == dm.PROBE_EVAL) & (subj.align_tag == "none")
              & (subj.model == dm.PROBE_MODEL) & (subj.dataset == dataset)]
@@ -63,8 +78,10 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--dataset", default="physionetmi")
     p.add_argument("--out", type=Path, default=None)
+    p.add_argument("--dynamics", type=Path, default=None)
+    p.add_argument("--scores", type=Path, default=None)
     a = p.parse_args(argv)
-    r = build(a.dataset)
+    r = build(a.dataset, a.dynamics, a.scores)
     out = a.out or A / f"ranking_{a.dataset}.csv"
     r.to_csv(out, index=False)
     print(f"{len(r)} sujets → {out}")

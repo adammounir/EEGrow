@@ -57,8 +57,13 @@ from scipy import stats
 #: Read off ``benchmarks/config/dataset/*.yaml``; hard-coded rather than re-parsed
 #: because the analysis must be runnable against an archived score tree whose configs
 #: have since moved.
+#: `dreyer2023a` et `liu2024` sont les deux datasets frais de la réplication
+#: pré-enregistrée : mêmes 8-32 Hz, même paradigme LeftRightImagery que cho2017 et
+#: lee2019_mi, donc même métrique. La condition n'est pas cosmétique — une réplication
+#: qui changerait en même temps le dataset ET l'échelle de la métrique ne répliquerait
+#: rien (cf. PREREG_claim2_fresh_dreyer_liu.md).
 AUC_DATASETS = {"bnci2014_004", "cho2017", "lee2019_mi", "physionetmi", "shin2017a",
-                "weibo2014"}
+                "weibo2014", "dreyer2023a", "liu2024"}
 
 #: MOABB's dataset display names, back to the config keys the rest of the campaign
 #: uses. The CSVs carry the display name; every path, claim and TSV row carries the key.
@@ -69,6 +74,7 @@ DATASET_KEY = {
     "Lee2019-MI": "lee2019_mi", "PhysionetMotorImagery": "physionetmi",
     "Schirrmeister2017": "schirrmeister2017", "Shin2017A": "shin2017a",
     "Weibo2014": "weibo2014", "Zhou2016": "zhou2016",
+    "Dreyer2023A": "dreyer2023a", "Liu2024": "liu2024",
 }
 
 #: The (braindecode, fixed control, growing) triples. Same table as

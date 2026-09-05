@@ -1,5 +1,924 @@
 # Jobs en cours
 
+## 05/09 — `dalloc_restored` TERMINÉ (531833/531834/531835, tous COMPLETED)
+
+432/432 cellules sur disque, rapatriées dans `benchmarks/analysis/dalloc_restored/`.
+Appariement **vérifié et non supposé** : 144 cellules contre 144 dans chaque bras,
+1 fit par cellule des deux côtés, et le readout **refuse** de tourner si une ligne
+n'a pas sa contrepartie exacte (fold × seed × budget × beta × sujet de test).
+
+Lecture par `analysis/alloc_restored_readout.py`, suivant `PREREG_alloc_restored.md`.
+
+**H_A — delta apparié par sujet de test, `restored_probe` − `acc_probe` :**
+
+| dataset | n | delta | IC95 | p Holm | MDE pré-enreg. |
+|---|---|---|---|---|---|
+| cho2017 | 52 | +0.0077 | [−0.0031, +0.0183] | 0.331 | +0.0241 |
+| lee2019_mi | 54 | **+0.0098** | [+0.0023, +0.0170] | **0.039** | +0.0163 |
+| physionetmi | 109 | −0.0048 | [−0.0149, +0.0050] | 0.351 | +0.0184 |
+
+Un seul dataset sur trois est significatif, et les deux nuls sont **sous la MDE
+pré-enregistrée** : à écrire « non résolu », jamais « restored ne fait pas mieux »
+(cf. [[underpowered-not-null]]).
+
+**H_B — l'écran hors ligne prédit-il le signe ? 3/3.** Mais le chiffre à porter avec
+n'est pas « 3/3 » : c'est que **2 des 3 signes ne sont pas statistiquement résolus**.
+P(signe prédit) = 0.917 / 0.994 / 0.824 → P(les 3 vrais signes sont ceux prédits)
+= **0.751**, soit ~25 % de chance qu'au moins un soit en fait inversé. Et sous
+pile-ou-face pur 3/3 vaut p=0.125, non significatif. L'ordre des magnitudes prédit
+par l'écran (cho2017 le plus fort) est **démenti** : cho2017 arrive second et n.s.
+
+**Ce que ça change pour l'angle du papier :** `restored_probe` bat `acc_probe` d'au
+mieux +0.010 sur un seul dataset, là où `acc_probe` seul capturait déjà tout le gain
+contre l'uniforme (+0.024 à +0.067 sur lee2019_mi). Le signal de croissance ajoute
+quelque chose de réel mais de marginal ; il ne renverse pas
+[[allocation-continuum]].
+
+### Suivi 05/09 — POURQUOI (post-hoc, `analysis/why_lee_responds.py`, zéro GPU)
+
+**La question « pourquoi seulement lee2019_mi » était mal posée : cho2017 répond aussi.**
+L'endpoint pré-enregistré moyennait sur une moitié de grille (beta=1, gros budget) où
+les deux allocations convergent et n'apportent que des zéros. Dose-réponse sur la
+divergence d'allocation : **+0.043/TVD (cho2017)**, +0.024 (lee2019_mi), **−0.053
+(physionetmi)**.
+
+**Mais l'avantage de cho2017 est de la robustesse, pas de l'information.** 7 sujets à
+accuracy ≥ 0.90 valent rang 22.8/52 comme donneurs ; `acc_probe` leur donne **5.00 de
+ses 5 places de top-5 pour chaque receveur**, `restored_probe` **0.00**. En les
+retirant, capture d'acc 0.123 → **0.427** et l'écart s'effondre de +0.330 à **+0.076**.
+
+**lee2019_mi est le seul cas propre** : y retirer les hauts performeurs *dégrade*
+l'accuracy (0.389 → 0.163) et *fait grossir* l'avantage (+0.104 → +0.380).
+
+**physionetmi est un échec cohérent** : pas d'aberrants, `acc_probe` capture 73 % du
+plafond de toute règle globale ; il ne reste rien à prendre.
+
+Réfutées et à ne pas ressortir : « rien à gagner » (physionetmi a le plus gros
+gisement), « le nul est mécanique » (Jaccard 0.000 à beta 8), « c'est la fiabilité »
+(causale *dans* un dataset, Spearman +1.00, mais l'accuracy est **plus** fiable partout
+— ICC(1,1) 0.961 vs 0.130 sur cho2017 — en étant une pire règle). Détail dans
+[[why-growth-rule-wins]].
+
+## 04/09 (soir) — `dalloc_restored` SOUMIS : 531833 / 531834 / 531835
+
+**432 cellules, 3 datasets, ≈ 80 GPU·h.** Teste `restored_probe` comme règle
+d'allocation — la mesure que H1 pré-enregistre comme primaire et qui **n'avait jamais
+été testée en intervention**, parce que le tuple `MEASURES` de `donor_allocate.py` la
+déclarait sous le nom `restored_epoch` alors que le classement écrit `restored_probe` :
+mesure déclarée, inatteignable, tout lancement se serait fait refuser. Corrigé.
+
+| job | dataset | shards | cellules | budgets |
+|---|---|---|---|---|
+| 531833 | cho2017 | 6 | 144 | 3/5/10 |
+| 531834 | lee2019_mi | 12 | 144 | 3/5/10 |
+| 531835 | physionetmi | 12 | 144 | 5/10/20 |
+
+Sharding dimensionné sur le coût **mesuré** sur les 1008 cellules `dalloc` terminées
+(médiane par cellule : cho2017 5.3 min, lee2019_mi 11.9, physionetmi 10.9), pas estimé.
+Sortie `/scratch/amounir/dalloc_restored/<dataset>`, séparée des globs de `dalloc/`.
+`beta=0` n'est pas relancé (déjà sur disque, ne dépend d'aucune mesure) ; budget plein
+non plus (il ne se déclenche qu'à beta=0).
+
+**Appariement vérifié avant soumission** : les `ranking_*.csv` régénérés pour porter
+`restored_probe` ont un écart **exactement nul** sur `params_probe`, `acc_probe`,
+`width_probe`, `ceil_frac` face à ceux du cluster, mêmes sujets. Strictement additif.
+
+Préreg : `benchmarks/analysis/PREREG_alloc_restored.md`, écrite avant le premier fit.
+H_B y gèle **3 signes prédits** par l'écran hors ligne (cho2017 +, lee2019_mi +,
+physionetmi −) ; le succès c'est 3/3, et 2/3 sera rapporté comme un demi-échec.
+
+## 04/09 — **FILE VIDE, TOUT EST FINI.** Les deux campagnes sont lues.
+
+`squeue -u amounir` ne renvoie rien. Les trois chantiers sont terminés et rapatriés :
+`eegrow_shipped` (542 cellules, 23 848 lignes), `eegrow_dalloc` (1008/1008 cellules) et
+la réplication fraîche (sonde 6/6 + deux matrices D×R).
+
+### 1. Réplication confirmatoire de claim 2 — l'endpoint primaire est tombé
+
+`benchmarks/analysis/claim2_fresh.py`, chaîne pré-enregistrée dans l'ordre imposé.
+
+**liu2024 est écarté par les deux garde-fous, qui sont d'accord** : ICC(1,k) 0.453/0.454
+sous le plancher 0.50, et garde-fou G à **−0.097** (p=0.75) contre +0.56/+0.67/+0.67 en
+référence. Le diagnostic sur la sonde seule dit pourquoi : **acc_probe médiane 0.508 en
+ROC-AUC, soit le hasard**, et **189/750 fits restaurés à l'époque ≤ 1** — liu2024 n'a que
+~40 essais par sujet, la sonde n'y apprend pas. Ce dataset ne compte ni pour ni contre.
+
+Donc **l'endpoint groupé sur 110 sujets n'est pas exécutable**, et ce qui reste est une
+estimation mono-dataset que la préreg qualifie elle-même de descriptive, à un MDE
+(+0.321) au-dessus de la cible (+0.288) :
+
+| | ρ partielle | IC95 | p unilat. | Holm | MDE |
+|---|---|---|---|---|---|
+| H1 `restored_epoch` | +0.254 | [+0.017, +0.457] | 0.018 | franchi | +0.321 |
+| H2 `params_probe` | +0.308 | [+0.049, +0.531] | 0.010 | franchi | +0.321 |
+
+dreyer2023a passe tout le reste largement : ICC(1,k) 0.778/0.748, G **+0.671**,
+k_probe = 15 pour les 60 sujets. **H3 s'inverse** : `params` survit au conditionnement
+(+0.187) et `restored_epoch` non (−0.055), l'inverse de l'étage C — sous une colinéarité
+de +0.857 qui n'était pas moindre historiquement (0.60–0.87).
+
+### 2. Continuum d'allocation — 9 budgets sur 9, tous les IC excluent zéro
+
+Delta apparié par sujet de test, β* contre β=0, **à budget d'essais fixe** :
+cho2017 +0.058 / +0.049 / +0.026, lee2019_mi +0.071 / +0.044 / +0.029,
+physionetmi +0.123 / +0.087 / +0.023. Courbe monotone, saturation vers β=2–4,
+**33–51 % de l'écart au plafond `all_pool` récupérés** pour un quart à un dixième des
+essais. Ne contredit pas le plafond de sélection : là on perdait les essais des sujets
+écartés, ici le budget est tenu constant. La sélection est dominée, l'allocation non.
+
+### Ce qui reste à faire (rien ne tourne)
+
+Rapport HTML, message à Sylvain (**pas envoyé sans accord d'Adam**), commits, et la
+re-lecture du `shipped` par frames par sujet.
+
+## 04/09 15:40 — **311 fits fantômes trouvés et purgés dans la sonde fraîche** (données maintenant propres)
+
+Le contrôle d'intégrité d'avant-analyse a trouvé une pollution que j'avais créée
+moi-même. dreyer2023a avait **405/403/403 enregistrements de fit pour 300 attendus**, avec
+des sujets à 10 fits au lieu de 5 — et de façon *variable selon la seed*, ce qui
+ressemblait à un défaut de données.
+
+**Cause, et elle est de moi.** En annulant `527597` (la sonde condamnée par
+`CELL_TIMEOUT`) j'ai supprimé `eegrow_claims_fresh` **mais pas** `results_fresh`. Les
+`__fits.jsonl` sont ouverts en **append** : `527804` a donc empilé ses 300 fits propres
+par-dessus les ~103 fits partiels du job mort. liu2024 est intact — le job annulé
+n'avait jamais atteint la 2ᵉ vague.
+
+**Pourquoi le CSV de scores ne montrait rien.** Il est écrit **une fois, à la fin de la
+cellule** ; le jsonl est écrit **fit par fit**. Un job tué laisse donc des scores propres
+et des fits pollués. C'est l'image miroir exacte du piège déjà connu
+([[jsonl-truncated-midwrite]], où un export en cours de campagne tronquait les fits sans
+toucher aux scores). Même asymétrie, sens inverse : **ne jamais valider une campagne sur
+le CSV de scores seul.**
+
+**Et ce n'était pas cosmétique.** `donor_select_prep.py` construit `params_probe` comme
+une *moyenne* sur les réplicats et `k_probe` comme leur *compte*. Les fits fantômes
+contaminaient la moyenne et gonflaient k — or k pilote `ICC(1,k)`, la porte d'admission
+de la réplication, via Spearman-Brown. La porte aurait été appliquée sur un k faux.
+
+**Purge, et elle est vérifiable.** La relance ayant écrit un bloc complet et contigu, les
+**300 dernières lignes** de chaque fichier sont exactement le run propre : `cv_ind`
+0..299 strictement croissant, 60 sujets × 5 fits. Le préfixe (105/103/103 lignes,
+`cv_ind` 0..104) est le run mort. Originaux conservés dans
+`/scratch/amounir/results_fresh_backup_avant_purge/`. Après purge, les 6 fichiers sont
+conformes (`cv_ind` complet, fits/sujet constant à 5) et **local et cluster sont
+bit-identiques** (md5 vérifiés des deux côtés).
+
+Le test qui a tout révélé, à passer désormais avant toute analyse : `cv_ind` doit couvrir
+exactement `0..n_sujets*n_folds-1` sans répétition, et le nombre de fits par sujet doit
+être constant. Un décompte de cellules ne l'aurait jamais vu.
+
+## 04/09 15:10 — **PLUS AUCUN JOB EN FILE. La sonde fraîche est complète (6/6, 110 sujets).**
+
+`527804` : `COMPLETED 0:0` en **1 h 28**. Sortie vérifiée fichier par fichier —
+dreyer2023a **60 sujets × 3 seeds**, liu2024 **50 × 3**, six CSV, aucun trou, aucun
+doublon. Les 110 sujets jamais vus de la réplication pré-enregistrée sont mesurés.
+
+**Et la 4ᵉ correction du modèle de coût, qui est la variable qui manquait aux trois
+autres : la classe de carte.** J'avais prévu 6 h ; il a atterri sur des **A40**
+(margpu007, 46 Go) et non sur les 2080 Ti/turing où toutes mes mesures avaient été
+prises. ~8,8 s/fit en solo sur A40 contre ~35 s/fit solo-équivalent sur 2080 Ti : un
+**facteur ~4 entre classes**. Tout dimensionnement calibré sur turing est donc ~4×
+pessimiste sur ampere, et un coût mesuré sans sa classe de carte n'est pas reproductible.
+Le fond ne change pas (travail total fixe, seul le nombre de cartes raccourcit le wall
+clock **à classe donnée**) — mais l'ironie est nette : c'est en relâchant le pin `ampere`
+que le job a fini par tomber sur de l'ampere, et c'est ce qui l'a rendu 4× plus rapide.
+
+### Tout ce que la pré-registration demande est sur disque
+
+| pièce | état |
+|---|---|
+| matrice D×R dreyer2023a (`525777`) | 60/60 unités |
+| matrice D×R liu2024 (`525778`) | 50/50 unités |
+| sonde `grow_shallow` × 3 seeds × 2 datasets (`527804`) | 6/6 cellules, 110 sujets |
+
+### Le prochain pas est un EXPORT, pas du calcul
+
+`donor_select_prep.py` ne lit pas `results_fresh/` : il lit `analysis/dynamics_final/
+gd_fits.csv.gz` et `analysis/perf_final/scores`, c'est-à-dire les **réductions** de
+campagne. Les résultats frais doivent donc passer par la même étape d'export que celle
+déjà en attente pour `shipped`. C'est une tâche **locale** — le checkout cluster n'a même
+pas `perf_io.py`, et l'env d'analyse est le `.venv` local (pandas 3.0.5). Rapatriement de
+`results_fresh` en cours.
+
+Ordre imposé par la pré-registration, à ne pas inverser : export → **porte ICC(1,k) ≥ 0.50
+sur la sonde seule** → garde-fou G (`acc_probe` doit prédire `q_cent` par dataset) → H1
+groupée (primaire) → H2 (Holm) → H3 (descriptive, sans test).
+
+## 04/09 10:50 — `dalloc` COMPLET ; la sonde resoumise une 3ᵉ fois (**527804**), correctement dimensionnée
+
+### `dalloc` est fini : 1008/1008
+
+lee2019_mi est passé de 268 à **336/336** en 4 à 28 min par shard — `donor_allocate.py`
+a bien repris là où le TIMEOUT l'avait laissé, sans refaire les 268. Les trois datasets
+sont à 336/336. L'analyse du continuum d'allocation (courbe en beta à budget fixé,
+contrôle beta=0 contre `all_pool`, appariement à `n_train` égal contre `dsel2/`) est
+maintenant possible.
+
+### La sonde : 3ᵉ soumission, et je m'étais trompé trois fois sur son coût
+
+`527597` a bien démarré (le garde-fou CUDA était réglé) et tournait depuis 2 h 34 sur
+margpu018. En lisant SON log plutôt qu'en transposant : **89 fits en 2 h 34 = 104 s/fit**,
+pour ~300 fits attendus (60 sujets × 5 folds, comme les 260 fits mesurés sur les 52
+sujets de cho2017). Soit **8,6 h par cellule** contre un `CELL_TIMEOUT` à 4 h — et ce
+timeout est un `timeout` dur (`pack_run.sh` ligne 523). Les 3 cellules allaient être tuées
+à 10:00 UTC **sans écrire une seule ligne**. Annulé et resoumis avant l'échéance ; 0 CSV
+produit, donc rien de perdu au-delà des 2 h 34 de carte.
+
+Les trois estimations successives, pour ne pas refaire le tour :
+
+| # | valeur | d'où elle venait | verdict |
+|---|---|---|---|
+| 1 | 4 h/cellule | cho2017, **par nombre de sujets** (60/50 vs 52) | faux |
+| 2 | 1 h 15 | matrices D×R sur ces mêmes datasets, **par n_chans × n_times** | faux ×7 |
+| 3 | **8,6 h** | **le log du job lui-même** | la vraie |
+
+Les deux axes de transposition sont justes et aucun ne suffit : ni l'un ni l'autre ne
+porte **la co-tenance** (K processus sur une carte divisent la vitesse de chaque fit par
+~K) ni **le nombre de folds**.
+
+Ce que ça change au dimensionnement : le travail total est fixe, ~17 GPU-heures. Une
+seule carte ne peut pas le raccourcir — K=3 triple le débit apparent et divise la vitesse
+par trois. **Seul le nombre de cartes achète du wall clock.** D'où `527804` : **G=3 K=1**,
+chaque cellule seule sur sa carte à ~35 s/fit ≈ 2 h 55, deux vagues ≈ **6 h**.
+`CELL_TIMEOUT=18000` (5 h), walltime 11 h. K=1 plutôt que K=2 à cartes égales : même wall
+clock, mais la première vague est **écrite sur disque au bout de 3 h** au lieu que les six
+cellules finissent ensemble et se perdent toutes sur un walltime raté.
+
+## 04/09 04:35 — file vidée : **2 matrices réussies, 2 échecs qui sont les miens**, tout est resoumis
+
+### Ce qui a réussi
+
+**Les deux matrices D×R fraîches sont FAITES.** `525777` dreyer2023a **60/60 unités** en
+2 h 24, `525778` liu2024 **50/50** en **19 minutes**, les deux `COMPLETED 0:0`.
+La moitié « matrice » de la réplication pré-enregistrée est donc acquise ; il ne manque
+que la sonde pour pouvoir joindre les deux et lire H1/H2/H3.
+
+`dalloc` cho2017 **336/336** et physionetmi **336/336**, `COMPLETED` en 41-53 min/shard.
+
+### Deux échecs, et les deux viennent de moi
+
+**1. La sonde `525776` est morte en 1 seconde.** `PACK FATAL: EEGROW_CUDA_FRACTION
+unset` : j'avais écrit `G=3 K=2` dans `fresh_probe.sbatch` sans jamais définir la
+fraction CUDA. Le garde-fou a fait **exactement** ce qu'il devait faire — il a refusé
+plutôt que d'avertir et de tourner sur une valeur inventée ([[gates-must-refuse-not-warn]]).
+Coût réel : ~6 h de file d'attente perdues sur le chemin critique du chantier ICLR.
+
+**2. Quatre shards `dalloc` lee2019_mi ont été tués en TIMEOUT à 1 h 30.** C'est
+directement mon `scontrol update TimeLimit=01:30:00` d'hier soir. J'avais mesuré
+28,6 s/cellule sur **cho2017** et généralisé ; lee2019_mi est plus lourd et a débordé.
+cho2017 et physionetmi sont passés (41-53 min), lee2019_mi non : **268/336 cellules**,
+**68 manquantes**. Le walltime honnête achetait bien du backfill, mais je l'ai calibré
+sur le dataset léger au lieu du dataset lourd. `donor_allocate.py` sait reprendre
+(`skip (already done)`, ligne 203), donc rien n'est à refaire — seulement à finir.
+
+### La correction de fond : le coût ne suit pas le nombre de sujets
+
+J'avais estimé 4 h/cellule pour les datasets frais « du même ordre de grandeur que
+cho2017 » — en comparant **le nombre de sujets** (60 et 50 contre 52). Faux d'un ordre de
+grandeur. Les logs de 525777/525778 mesurent **15 s par fit de 200 époques** contre 41 s
+sur cho2017. Le bon axe est **n_chans × n_times** : cho2017 a 64 canaux, dreyer2023a 27
+(× 1250) et liu2024 29 (× 1000). D'où une matrice liu2024 en 19 min au lieu de 12 h.
+
+Le même axe donne la fraction CUDA **sans l'inventer**. `grid_memory_v2.json` est quasi
+affine en n_chans × n_times pour `grow_shallow` sur 2080 Ti : bnci2014_002 18 750 → 788 MiB,
+bnci2014_001 22 022 → 908, shin2017a 75 030 → 3668 (0.041 à 0.049 MiB/unité). dreyer2023a
+33 750 → ~1650 MiB (**0.15** de la carte), liu2024 29 000 → ~1420 (**0.13**). Et
+corroboration indépendante : 525777/525778 viennent de tourner à **0.30**, trois
+co-tenants sur une carte, sans un OOM. Valeur retenue : **0.30**, double du pire cas.
+
+### Resoumis
+
+| job | quoi | changement |
+|---|---|---|
+| **527597** | sonde fraîche, 6 cellules | `EEGROW_CUDA_FRACTION=0.30` ; **1 carte** au lieu de 3, `G=1 K=3`, 8 h. À ~1 h 15/cellule, 3 cartes n'achetaient qu'une heure de wall clock pour une attente en file bien plus longue — et ma priorité est tombée à 2448. |
+| **527598** | `dalloc` lee2019_mi, 68 cellules | walltime **natif 4 h**, plus de `scontrol`. Reprend, ne refait pas. |
+
+Veille ré-armée (le flux précédent s'est terminé sur « plus aucun job »).
+
+## 04/09 00:40 — **`eegrow_shipped` est TERMINÉE** (542/542), et le front frais recule à ~03 h 30
+
+### La campagne est finie, et c'est vérifié et non déduit
+
+Les **11 allocations** sont `COMPLETED` avec `ExitCode 0:0` — aucune `TIMEOUT`, aucune
+`FAILED`. La plus longue (515942) a tourné 13 h 41 sur un plafond de 48 h, donc elles se
+sont arrêtées faute de travail et non faute de temps. `515939`, la 4ᵉ allocation qui
+attendait en `PD(Resources)` avec un walltime de 2 jours, a démarré et est **sortie en
+27 secondes** : exactement le comportement prédit hier soir — elle n'avait plus une seule
+cellule à réclamer, et c'est pour ça qu'il ne fallait pas l'annuler mais la laisser
+libérer sa réservation toute seule.
+
+Sortie mesurée : **542 claims, 542 CSV, 0 cellule orpheline**, 0 fichier vide ou tronqué,
+**23 848 lignes** de résultats. Réparties en 308 `within_session` (12 datasets),
+162 `cross_session` (6), 72 `cross_subject` (12).
+
+*Réserve honnête* : je n'ai pas retrouvé le `.tsv` qui définissait la grille `shipped`
+(le checkout d'origine n'est plus là, et `final_grid.tsv` — 1116 lignes — est celui de
+`results_final`, pas de celui-ci). « 542 = la grille entière » repose donc sur la
+signature d'auto-terminaison (claims == CSV, 0 non réclamée, 11 sorties propres bien
+avant le walltime), pas sur un décompte de lignes. À reconfirmer au moment de l'export.
+
+### Le front confirmatoire a reculé, et la raison est mécanique
+
+Les 11 turing libérées n'ont pas profité aux jobs frais : elles ont été prises par mes
+**propres shards `dalloc`** (6 en cours sur margpu017 et margpu022) et par deux autres
+utilisateurs. Surtout, **ma priorité s'est effondrée de 7247 à 2448** — c'est le fairshare
+qui encaisse les ~60 GPU-heures que `shipped` vient de consommer. Terminer une grosse
+campagne coûte donc du rang sur la suivante ; ça n'a rien d'une anomalie, mais ça
+invalide l'ETA d'hier soir.
+
+Slurm donne maintenant une date ferme pour `525777` : **`StartTime=2026-09-04T01:28 UTC`**,
+soit 03 h 30 Paris. Nouveaux ETA :
+
+| | fin attendue (Paris) |
+|---|---|
+| `eegrow_dalloc` (6 R + 2 PD, 40 min/shard) | ~02 h |
+| sonde fraîche `525776` (4 h après départ) | ~07 h 30 |
+| matrices `525777/525778` | matinée, 15 h 30 au pire |
+| analyses H1/H2/H3 + garde-fou G | **début d'après-midi**, pas fin de matinée |
+
+Je n'ai pas mis les shards `dalloc` restants en `hold` pour dégager la voie : le backfill
+les laisserait passer de toute façon (1 h 30 de walltime se glisse avant une réservation
+à 01 h 28 sans la retarder), donc le gain serait nul et le coût réel sur la continuité
+d'allocation.
+
+### Débloqué par cette fin de campagne
+
+Le ré-export des réductions + le **diff par sujet** (`params_probe`, `acc_probe`,
+`k_probe`, `ceil_frac`, `width_probe`) — et non un diff des décomptes de cellules — puis
+l'analyse de changement de classement (Kendall tau, inversions de signe, top-1) dans un
+4ᵉ HTML. Ne dépend d'aucun GPU : faisable pendant que la file tourne.
+
+## 03/09 19:45 — ETA mesuré, et le pin `ampere` corrigé (il coûtait ~14 h)
+
+### L'ETA, mesuré sur disque et non estimé au walltime
+
+| campagne | avancement mesuré | fin attendue (Paris) |
+|---|---|---|
+| `eegrow_shipped` (515937/38/42) | **498 CSV / 507 claims** — 9 cellules, toutes déjà en vol | **~00 h – 01 h cette nuit** |
+| `515939` (4ᵉ alloc, PD Resources) | 0 cellule à prendre : les 9 sont claim'ées | démarre puis sort en ~15 min |
+| `eegrow_dalloc` (525602-604) | 1 shard R, 11 PD, 40 min/shard mesuré | ~06 h demain (estimation backfill) |
+| `525776` sonde fraîche | pas démarré | +4 h après démarrage → ~04-05 h |
+| `525777/525778` matrices D×R | pas démarrées | +12 h max → matinée |
+| analyses H1/H2/H3 + garde-fou G | dépendent de sonde ∩ matrices | **fin de matinée demain** |
+
+Les 9 cellules restantes de `shipped`, avec l'heure de prise du claim (UTC) : schirrmeister
+grow_deep seed0 14:45 / seed1 16:54 / seed2 **17:24**, cho2017 grow_shallow seed1 16:58 /
+seed2 17:16, lee2019_mi seed1 17:13, physionetmi cross_subject seed0 13:58, weibo2014
+seed1 17:32 / seed2 17:37. Le chemin critique est schirrmeister seed2 : 4,74 h mesurées
+par cellule → ~22 h UTC.
+
+### Le pin `ampere` était devenu le goulot, et c'est mesuré
+
+`sinfo -O gres,gresused` sur tout le cluster : **aucune carte ampere libre nulle part**.
+Sur le tau il n'y en a que 6 (margpu007-008) et elles sont prises par `jjobard` (array
+517347, ~20 h restantes sur margpu007), `aszatkow` (un `bash` interactif avec **5 j 15 h**
+restantes sur margpu008) et `ochabane`. Le raisonnement écrit dans les deux sbatch
+(« ampere, PAS turing, parce que shipped occupe les turing ») était juste au moment où il
+a été écrit et **faux maintenant** : `shipped` est à 98 % et rendra 11 cartes turing
+(margpu017 ×4, margpu019 ×4, margpu022 ×3) cette nuit. Demander `ampere` revenait à
+attendre ~20 h la classe la plus rare pendant que la plus abondante se libérait.
+
+Corrigé **sans resoumettre**, par `scontrol update` sur les jobs en attente — l'âge du job
+et donc la priorité sont conservés, ce qu'une resoumission aurait remis à zéro :
+
+- `TresPerNode=gres/gpu:N` sans classe (N=3 pour la sonde, **N=1** pour les matrices —
+  `donor_receiver.sbatch` ne demande qu'une carte, pas trois) ;
+- `Partition=tau,gpu` (pas `gpu-best`, préemptible : acceptable pour une cellule de
+  20 min, pas pour une matrice de 12 h) ;
+- `ExcNodeList` complétée. **C'est le point qui rendait la relaxation dangereuse** : la
+  protection contre les nœuds cassés était portée *en creux* par le pin ampere.
+  `donor_receiver.sbatch` n'avait **aucun** `--exclude`, et `fresh_probe.sbatch` avait
+  oublié **margpu020** — le nœud à carte fantôme qui a tué `515639_2` sans message le
+  02/09. Liste appliquée : margpu001,004 (volta), 020,021 (fantômes), 023 (drained),
+  024-027,029 (pascal sm_60, `idle` dans sinfo et inutilisables).
+
+`Reason` est passé de `Priority` à `None` sur les trois. Fichiers corrigés et redéployés
+(md5 identiques local/cluster : `5c4c938d…` et `b05e79cc…`).
+
+## 03/09 19:40 — **le front confirmatoire est ouvert** : cache frais VERT, pré-registration écrite, sonde + 2 matrices lancées (525776-525778)
+
+### Ce qui a changé en une heure
+
+`warm_fresh` (525597) a **réussi en 18 min**, pas en 12 h : les données brutes étaient
+déjà dans `mne_data`, il ne restait que la conversion BIDS. La porte du cache est
+verte — **dreyer2023a 60/60, liu2024 50/50, zéro manquant, zéro mensonge**, sur la clé
+de la campagne. Les deux datasets frais sont disponibles **maintenant**.
+
+### Trois jobs soumis (525776, 525777, 525778)
+
+| job | quoi | coût | walltime |
+|---|---|---|---|
+| 525776 `freshprobe` | sonde `grow_shallow within_session` × 2 datasets × 3 seeds | ~24 GPU-h, 6 cellules **en parallèle** (G=3 × K=2) | 12 h |
+| 525777 `dxr_dreyer` | matrice D×R, 60 donneurs × 3 seeds = 180 unités | 3 shards locaux | 12 h |
+| 525778 `dxr_liu` | matrice D×R, 50 donneurs × 3 seeds = 150 unités | 3 shards locaux | 12 h |
+
+**La sonde et les matrices sont INDÉPENDANTES** — une matrice D×R mesure des scores de
+transfert et n'a pas besoin du classement ; c'est seulement la corrélation finale qui
+les joint. D'où les trois en parallèle plutôt qu'en série.
+
+Fan-out local plafonné à **3** processus et pas plus : `donor_receiver.sbatch` demande
+une seule carte avec `EEGROW_CUDA_FRACTION=0.30`, donc 3 × 0.30 = 0.90 tient et 6
+aurait OOM la carte.
+
+`RESULTS_DIR` / `CLAIMS` / `LOGS` surchargés **ensemble** vers `*_fresh` : `pack_run.sh`
+l'exige (ligne 57) et partager `CLAIMS` avec `eegrow_shipped` en cours ferait moissonner
+ses cellules vivantes par `reap_stale`.
+
+### La pré-registration est écrite AVANT le premier fit
+
+`benchmarks/analysis/PREREG_claim2_fresh_dreyer_liu.md`. Primaire H1 :
+`restored_epoch` prédit `q_cent` contrôlé par `acc_probe`, unilatéral, **groupé sur les
+deux datasets**. Cible à répliquer : **+0.288 [+0.164, +0.414]**.
+
+**Puissance calculée avant, pas après** : MDE +0.321 à n=60 et +0.351 à n=50 — les deux
+**sous-puissants** seuls — contre **+0.241 groupé, puissant**. D'où l'endpoint groupé
+comme primaire et les deux datasets en descriptif. Un nul sur `liu2024` seul ne sera
+pas rapporté comme un échec.
+
+### La porte d'exclusion a été refaite, et deux candidats ont été RÉFUTÉS
+
+L'échéance de [[prereg-gate-one-sided]] (corriger avant un 6ᵉ dataset) est arrivée.
+Mesuré sur les 12 datasets :
+
+1. **Censure bilatérale à 0.50 — réfutée.** Elle attrape bien `shin2017a` (0.002 en
+   haut, **0.644 en bas** : il passait l'ancienne porte), mais elle **exclurait
+   `physionetmi`** (0.514), le dataset au plus fort effet et à la plus grande dispersion.
+2. **Sujets épinglés à une borne — réfutée, vide.** 0 % partout sauf schirrmeister (21 %),
+   bnci2014_001 (11 %), bnci2014_002 (7 %).
+3. **Fiabilité du classement `ICC(1,k) ≥ 0.50` — retenue.** Spearman ne voit que des
+   rangs : ni l'étendue ni la censure ne l'atteignent, seule la reproductibilité du
+   classement l'atténue.
+
+**Correction sur le passé** : sous ce critère `bnci2014_001` **passe** (ICC 0.928, ses
+89 réplicats/sujet). Il reste exclu, mais pour **la vraie raison — n=9**, MDE +0.94.
+L'exclusion publiée était le bon verdict pour le mauvais motif ; l'analyse ne change
+pas, la justification si.
+
+### Correctif sur les campagnes d'allocation
+
+Les 11 shards `dalloc` en attente demandaient **4 h pour 40 min de travail réel**
+(mesuré : 28,6 s/cellule, 41 CSV en 1 171 s). `scontrol update TimeLimit=01:30:00` sur
+525602/3/4 — aucune perte, aucun re-submit, et le backfill peut enfin les placer.
+
+---
+
+## 03/09 18:55 — **étage 5 lancé (525602-525604)**, cache frais en route (525597), et le jumeau n'est PAS fini
+
+### Le jumeau, d'abord, parce que c'était la question
+
+`eegrow_shipped` = **8 des 12 shards terminés**. 515937 (4 h 41, margpu017), 515938
+(1 h 46, margpu019) et 515942 (7 h 57, margpu022) tournent encore, walltime 2 jours
+chacun ; **515939 est PENDING(Resources)** derrière eux. Aucune date de fin fiable tant
+que 515939 n'a pas démarré. `results_shipped/` compte **513 fichiers de fits**, répartis
+12 / 6 / 12 répertoires sur within_session / cross_session / cross_subject. Le diff par
+sujet prévu par [[eegrow-twin-reports]] attend la fin de la campagne — et il portera sur
+les frames par sujet, jamais sur les décomptes de cellules.
+
+### Ce que l'analyse gratuite a trouvé AVANT de dépenser un GPU
+
+Les ~2 900 pools déjà entraînés aux étages 3 et 4 relus non pas comme cinq bras à
+comparer, mais comme des points d'une relation **composition → qualité**. Chaque cellule
+connaît sa composition exacte (colonne `chosen`) et son score. Cela donne ce qu'aucune
+comparaison de points ne donnait : la PENTE et l'ÉTENDUE, donc le plafond.
+
+**Le prix de sélectionner dépasse le plafond d'une règle parfaite dans 36 cas sur 36**
+(3 datasets × 3 valeurs de K × 4 plis). Le « plafond » est le meilleur pool observé à K
+— un maximum sur échantillon fini, donc *surestimé* par le bruit, ce qui va dans le sens
+de la conclusion ; le 90ᵉ centile est imprimé à côté et il est plus bas partout.
+
+| dataset | K | plafond (max) | plafond (p90) | prix de sélectionner | plis |
+|---|---|---|---|---|---|
+| cho2017 | 3 / 5 / 10 | +0.067 / +0.058 / +0.051 | +0.044 / +0.039 / +0.028 | +0.102 / +0.085 / +0.066 | 4/4 |
+| lee2019_mi | 3 / 5 / 10 | +0.079 / +0.066 / +0.046 | +0.067 / +0.047 / +0.035 | +0.132 / +0.101 / +0.065 | 4/4 |
+| physionetmi | 5 / 10 / 20 | +0.099 / +0.077 / +0.049 | +0.073 / +0.054 / +0.034 | +0.206 / +0.136 / +0.079 | 4/4 |
+
+« Notre règle échoue » et « aucune règle ne peut réussir » cessent d'être
+indiscernables. C'est la seconde qui est mesurée.
+
+**Et la composition compte beaucoup** — ρ du score du pool avec l'accuracy moyenne de
+ses membres : +0.56 / +0.67 / +0.67. La sélection n'est pas inutile : elle est
+**dominée**. À accuracy du pool contrôlée, `params_probe` et `restored_epoch` ajoutent
+encore +0.47 à +0.56 sur lee2019_mi et physionetmi — et **rien sur cho2017**
+(−0.083 et +0.013 n.s.), qui est déjà le dataset où claim 2 était la plus faible
+(+0.150). L'ordre des trois datasets est le même au niveau du pool qu'au niveau du
+sujet : cohérence interne, pas réplication.
+
+### 525602 / 525603 / 525604 — l'axe que les étages 3 et 4 n'ont pas parcouru
+
+`donor_allocate.py` (nouveau). Toute méthode d'usage d'un vivier revient à **répartir un
+budget d'essais** sur ses M donneurs : `w_i ∝ exp(beta·z_i)`, `n_i = B·w_i` écrêté au
+nombre d'essais que le donneur possède, surplus redistribué par paliers. Les deux
+protocoles publiés en sont des cas particuliers — `beta=0` étale sur tous les donneurs,
+`beta` grand redevient la sélection top-K — donc **un seul balayage relie l'étage 3 à
+l'étage 4** au lieu de deux points isolés.
+
+Ce que ça répare : `all_pool` gagne 45/45 avec **plus de sujets ET plus d'essais**. Le
+docstring de `donor_select.py` le dit lui-même, « la comparaison mélange plus de données
+et meilleures données ». À budget d'essais fixé, `beta=0` contre `beta` grand ne fait
+plus varier que **sur combien de sujets** le budget est réparti.
+
+| job | dataset | budgets (équivalent-sujets) | cellules |
+|---|---|---|---|
+| 525602 | cho2017 | 3 / 5 / 10 + plein | 336 |
+| 525603 | lee2019_mi | 3 / 5 / 10 + plein | 336 |
+| 525604 | physionetmi | 5 / 10 / 20 + plein | 336 |
+
+4 shards chacun, `--constraint=ampere|turing|hopper` (la vraie condition sm_75+ plutôt
+qu'une liste de nœuds), partitions `tau,gpu,gpu-best`.
+
+**Deux défauts attrapés avant la soumission, et c'est à ça que sert le `--dry-run`.**
+
+1. *À budget plein, tous les beta sont identiques.* Quand B égale la somme des essais
+   disponibles, l'écrêtage sature tous les donneurs et l'allocation devient l'identité :
+   les sept beta produisaient la même cellule. **84 fits par dataset qui n'auraient été
+   que des copies d'`all_pool`.** Ce n'est pas un bug mais une propriété : on ne
+   repondère pas un vivier qu'on doit épuiser, sauf à dupliquer des essais — ce qui
+   ferait entrer des doublons dans le split de validation de skorch et biaiserait le
+   choix d'époque. Refusé. Le budget plein reste comme **ancre** (beta=0 doit retomber
+   sur `all_pool`) et l'axe est porté par les budgets contraints.
+2. *`pick_device()` prend `model_cfg`.* Mort en 20 s au premier smoke (525593).
+
+**Smoke réel avant soumission, pas seulement un dry-run.** 525596 : budget visé 2021 →
+**2021 essais livrés**, 606 → 606, 1010 → 1010, 39/39 donneurs à beta=0, sha de
+provenance `58c6bee` identique aux cellules de `dsel2/`. Mais le shard n'avait tiré que
+des cellules beta=0 — le chemin d'écrêtage restait non testé, donc 525601 l'a forcé :
+`beta=8` sert **5 à 7 donneurs sur 39**, budget toujours exact. Le continuum va bien de
+39 donneurs à 5.
+
+**L'appariement est la condition de validité, et il tient par deux clous.** Les plis
+viennent de `donor_select.folds_of` **importée**, jamais réimplémentée ; le checkout est
+`eegrow_budget`, épinglé au même `EEGROW_SHA=58c6bee` que les cellules de `dsel2/` et
+`dsel_all/`. Casser l'un des deux casserait l'appariement **en silence**, sans qu'aucune
+colonne ne le signale.
+
+### 525597 — le cache des deux datasets frais (CPU, aucun GPU)
+
+`dreyer2023a` (60 sujets) et `liu2024` (50), tous deux 2-class main gauche/droite, même
+paradigme `LeftRightImagery` que cho2017 et lee2019_mi. Sur `--partition=normal`,
+marg001, 12 h de walltime : c'est du téléchargement et du décodage mono-thread, donc ça
+part **pendant** que les cartes sont prises au lieu d'attendre derrière.
+
+Pourquoi eux : `restored_epoch` et la lecture « la taille » de claim 2 ont été formulés
+SUR les cinq datasets déjà mesurés, et un prédicteur post-hoc ne devient primaire que
+sur des données fraîches. Les sept autres datasets du cache sont à n ≤ 14 (MDE ρ ≥ 0.69)
+et ne peuvent rien trancher seuls. Ces deux-là sont à n=60 et n=50, soit la puissance de
+lee2019_mi. **Aucune prédiction n'est encore écrite** : ce job rend le test possible, il
+ne le fait pas.
+
+À surveiller : `/scratch` est à **91 %** (5,0 To libres), le cache MOABB pèse déjà 79 Go
+et `mne_data` 112 Go. Le job imprime `df`/`du` avant et après — un cache à moitié écrit
+par manque de place est exactement l'état qui déclenche le `rmtree` destructeur de MOABB.
+
+## 03/09 17:30 — **523644 + 523645 TERMINÉS** (COMPLETED 0:0) et analysés
+
+| job | elapsed | nœud | carte |
+|---|---|---|---|
+| 523645 D×R shin2017a | **14:05** | margpu011 | ampere |
+| 523644_0 `all_pool` | 48:35 | margpu006 | ampere |
+| 523644_1 | 29:17 | margpu010 | ampere |
+| 523644_2 | 56:34 | margpu018 | turing |
+| 523644_3 | 1:00:21 | margpu019 | turing |
+
+Intégrité : 32 cellules `all_pool` (4 plis × 8 graines) et 87 unités D×R (29 donneurs
+× 3 graines) — comptes attendus, campagne fermée avant export, donc pas de
+`__fits.jsonl` tronqué au sens de [[jsonl-truncated-midwrite]].
+
+### Étage 4 — `all_pool` sur lee2019_mi : **15 comparaisons sur 15**, 4 plis concordants
+
+`all_pool` (K=40) bat les 5 règles aux 3 K. Écarts par sujet de test, du plus petit au
+plus grand : `params_top` K=10 **+0.046**, jusqu'à `params_bottom` K=3 **+0.210**.
+`roc_auc` moyen d'`all_pool` = 0.8045 (n=54).
+
+La base de l'étage 4 passe donc de **2 à 3 datasets, 45/45 comparaisons**. C'était le
+point le plus étroit du dossier ; il ne l'est plus.
+
+**Le contrôle de sous-entraînement est vacuous, et il faut le dire.** Les deux bras
+sortent à `epochs médiane 200 [200, 200], budget 100 %` — sur les trois datasets. C'est
+mécanique : `patience=200` = `max_epochs=200`, donc l'early stopping ne peut jamais se
+déclencher et `stop_reason` ne discrimine rien. Le mode d'échec que le script cherchait
+(`all_pool` coupé à `max_epochs` pendant que les règles s'arrêtent tôt) **ne peut pas se
+produire**. Ce qui sauve la lecture n'est pas ce contrôle mais l'asymétrie de charge :
+`all_pool` voit 4 à 8× plus d'essais par époque, donc **plus** de pas de gradient à
+budget d'époques égal — il est sur-entraîné par rapport aux règles, pas sous-entraîné.
+La direction de l'artefact possible est l'inverse de celle qui menacerait la conclusion.
+
+### Étage 1-2 — shin2017a réplique, mais trébuche sur un angle mort de la porte
+
+`ranking_shin2017a.csv` construit depuis la campagne `final` (2610 fits `grow_shallow` /
+`within_session`, k_probe=45 réplicats/sujet — le plus dense des cinq).
+
+| | n | ρ(#params) | ρ partielle | MDE | ICC_k | plafond | plancher |
+|---|---|---|---|---|---|---|---|
+| **shin2017a** | 29 | +0.256 [−0.103, +0.562] | **+0.210** [−0.196, +0.545] | 0.549 | 0.903 | **0.00** | **0.64** |
+
+Même signe que les quatre autres, sous-puissant (MDE 0.549 > l'effet groupé ~0.29) —
+donc non concluant seul et **non nul**, au sens de [[underpowered-not-null]].
+
+Méta, primaire pré-enregistrée inchangée, sensibilité imprimée à côté :
+
+| | n donneurs | ρ groupée | IC95 | I² |
+|---|---|---|---|---|
+| 3 datasets retenus (pré-enregistré) | 215 | **+0.288** | [+0.158, +0.414] | 19 % |
+| + shin2017a (post-hoc) | 244 | +0.281 | [+0.154, +0.398] | **0 %** |
+
+**La conclusion est insensible à la décision d'inclusion** — c'est le meilleur cas
+possible pour le rapporter : l'estimation bouge de 0.007 et l'hétérogénéité tombe à zéro.
+
+**Mais la porte pré-enregistrée est unilatérale.** Le critère est `ceil_probe >= 0.50`,
+il ne regarde que le **plafond**. shin2017a le passe haut la main (plafond 0.00) tout en
+étant censuré à **64 % au plancher** (`width_end <= 8`) — le défaut symétrique de celui
+qui a fait exclure bnci2014_001. Dispersion du prédicteur, qui est la quantité qui
+compte vraiment :
+
+| dataset | plafond | plancher | CV(#params) | statut |
+|---|---|---|---|---|
+| physionetmi | 0.18 | 0.33 | 0.213 | retenu |
+| lee2019_mi | 0.34 | 0.15 | 0.160 | retenu |
+| cho2017 | 0.26 | 0.06 | 0.192 | retenu |
+| **shin2017a** | 0.00 | **0.64** | **0.070** | zone grise |
+| bnci2014_001 | **0.91** | 0.00 | 0.031 | exclu |
+
+shin2017a a 2.3× la dispersion de bnci2014_001 mais 2.3 à 3× moins que les trois
+retenus. La porte telle qu'écrite l'aurait accepté **en silence** : c'est exactement le
+défaut de [[gates-must-refuse-not-warn]], transposé au critère lui-même. À corriger en
+un critère sur la dispersion (`CV` ou étendue relative), pas sur un seul bord.
+
+## 03/09 ~13:55 — **extension de la couverture D×R** : `all_pool` sur lee2019_mi (**523644**) + matrice sur shin2017a (**523645**)
+
+**Le trou qui est comblé.** L'inventaire par étage montrait une pyramide inversée : 4
+datasets à l'étage 1, 4 à l'étage 2, 3 à l'étage 3, **2 à l'étage 4** — or c'est l'étage 4
+(`all_pool`) qui porte la conclusion la plus large de la page (« l'effet de sélection est
+un ordre de grandeur plus petit que le coût de restreindre le vivier »). Les 30/30
+comparaisons sont 5 règles × 3 K × **2 datasets** : elles ne sont pas indépendantes et la
+base réelle est n=2. C'est la faiblesse du dossier, davantage que l'exclusion de
+bnci2014_001 ou l'échec du garde-fou sur cho2017.
+
+| étage | cho2017 | physionetmi | lee2019_mi | bnci2014_001 | shin2017a |
+|---|---|---|---|---|---|
+| 1 — matrice D×R | ✅ | ✅ | ✅ | ✅ | **523645** |
+| 2 — prédicteur | +0,150 | +0,385 | +0,229 | +0,048 (sonde saturée) | à suivre |
+| 3 — intervention | garde-fou tombe | −0,038 | −0,020 | non lancé | non prévu |
+| 4 — `all_pool` | ✅ | ✅ | **523644** | non lancé | non prévu |
+
+**523644 — `all_pool` sur lee2019_mi.** Dimensionné au `--dry-run`, pas extrapolé : vivier
+de **40–41 donneurs × 200 essais = ~8 000 essais/fit**, contre 7 800 pour cho2017 mais sur
+1 000 pas de temps au lieu de 750, soit **1,37× la charge cho2017** (dont les shards ont
+fini en 19 à 39 min sur 3 h allouées). D'où `--mem=32G` au lieu de 24 G. 32 cellules
+(4 plis × 8 seeds, pas de réplicat), 4 shards, `--array=0-3`. Sortie
+`/scratch/amounir/dsel_all/lee2019_mi`, séparée de `dsel2/` comme les deux autres.
+
+`--gres=gpu:ampere:1` **forcé**, alors que `donor_all.sbatch` demande `gpu:1` sans type :
+le twin `eegrow_shipped` (515936-515942) demande `gpu:turing:3` sur la même partition
+`tau` et a déjà 3 tâches en PENDING. Une demande turing de plus se met dans sa file. Effet
+de bord à consigner : lee2019_mi tournera donc sur du matériel **plus** homogène que
+cho2017/physionetmi (qui se sont dispersés sur margpu002/003/006/009/016/028) — le
+contraste `all_pool − règle` est interne à un dataset, donc cela ne biaise aucune
+comparaison rapportée.
+
+**523645 — matrice D×R sur shin2017a.** Le seul 5ᵉ dataset individuellement lisible :
+**n=29 sujets → MDE ρ = 0,50**, quand les 7 autres datasets disponibles sont à n ≤ 14
+(MDE ≥ 0,69) et ne pourraient qu'alimenter la méta-analyse. Porte la méta de 215 à ~244
+donneurs. `LOCAL_FANOUT=1` avec `N_SHARDS=3` sur un seul nœud : la matrice classe des
+donneurs **entre eux**, donc l'homogénéité matérielle est une condition du protocole, pas
+un confort. `EEGROW_CUDA_FRACTION=0.30` × 3 tenants = 0,90 (le défaut du sbatch tient pour
+3 shards, pas pour 4). `--cpus-per-task=12`, `THREADS=4`, `--mem=64G` — au-dessus des 48 G
+du défaut, qui était calibré pour les 52 sujets de cho2017 alors qu'ici il y a 3 processus
+sur le même nœud.
+
+**Ce qui n'est PAS lancé, et pourquoi.** L'étage 3 ne s'étend pas aux datasets restants,
+et la raison est structurelle et non budgétaire : sélectionner K=5 dans un vivier de 11
+sujets, c'est K/M ≈ 0,45, en pleine zone de saturation où toutes les règles convergent —
+c'est exactement l'effet mesuré en figure 03 (+0,043 → +0,022 quand K/M monte). Le
+protocole y serait aveugle par construction.
+
+**Vérifié avant soumission.** `ranking_lee2019_mi.csv` est **bit-identique** (md5
+`f913d718…`) entre le checkout cluster, `benchmarks/analysis/` et le ré-export du 03/09 :
+la troncature JSONL du 31/08 n'a pas touché lee2019_mi, l'étage 4 part donc de la même
+sonde que l'étage 3 déjà publié. Cache `MNE-BIDS-shin2017-a` présent. Aucun des deux
+répertoires de sortie n'existait.
+
+**Statut à 13:57** : `523644_0` RUNNING sur margpu006, shards 1-3 PENDING(Resources),
+`523645` PENDING(Priority).
+
+**ETA MESURÉE à 14:05 (12:05 UTC cluster).** Chiffres pris dans le log en cours, pas
+extrapolés du dimensionnement.
+
+- `523644_0` : 1ʳᵉ cellule bouclée, `fit 357.6s` → **6,0 min/cellule**, 8 cellules/shard →
+  shard ≈ **48 min**, fin vers **14:45**. Premier point : `f0__all_pool__d0__seed0`,
+  8000 essais d'entraînement issus de 40 donneurs, **roc_auc 0,7828** sur 14 sujets
+  held-out. Chargement des 54 sujets depuis le cache : 41 s.
+- `523644_[1-3]` : PENDING(Resources) — toutes les cartes **ampere** sont prises (le
+  `--gres=gpu:ampere:1` que j'ai forcé est aussi ce qui les bloque ; les nœuds `idle` de
+  `gpu-best` sont des pascal, exclus par le template). Estimation Slurm **16:55**, mais
+  c'est l'estimation pessimiste calée sur l'expiration du walltime 3 h du shard 0 ; le
+  backfill devrait les prendre dès ~14:45. Collecte des 32 cellules : **fin d'après-midi**.
+- `523645` : PENDING(Priority), estimation Slurm de démarrage **04/09 18:06**. La cause est
+  interne : il est derrière **mes propres** `eegrow_shipped` (515937/38/39, priorité 7867
+  contre 7246, walltime 2 jours chacun) sur la partition `tau`. Durée propre inconnue ;
+  repère mesuré sur la matrice lee2019_mi (513725) : **9 unités par shard en 246 min** à
+  54 sujets / 200 essais / 62 ch / 1000 pts. shin2017a a 29 sujets ; la charge réelle sera
+  lisible sur la ligne `data ready` au démarrage.
+
+## 03/09 14:15 — **audit GPU complet** : les 24 cartes « libres » n'existent pas, mais une partition entière était inexploitée
+
+Déclencheur : `523644_[1-3]` PENDING(Resources) et `523645` annoncé à **04/09 18:06**.
+`sinfo` montrait 5 nœuds `idle` — l'audit établit que c'était une illusion, et trouve
+ailleurs de quoi tout débloquer.
+
+### Ce que l'env peut réellement utiliser
+
+`torch==2.13.0+cu130` de l'env `bench` embarque **sm_75, 80, 86, 90, 100, 120**. Donc :
+
+| Type | CC | Utilisable | Cartes | Libres au 03/09 12:10 |
+|---|---|---|---|---|
+| **pascal** (P100) | sm_60 | ❌ | 19 (margpu024-027, 029) | 19 — **capacité morte** |
+| **volta** | sm_70 | ❌ | 5 (margpu001, 004) | 0 |
+| turing | sm_75 | ✅ | 23 | 5 (dont 2 sur nœuds exclus) |
+| rtx | sm_75 présumé | ⚠️ non vérifié | 4 | 0 |
+| ampere | sm_80/86 | ✅ | 22 | **2, partition `gpu`** |
+| hopper | sm_90 | ✅ | 3 | 0 |
+
+**Les 19 pascal sont inutilisables, c'est mesuré et non déduit.** Job `501434_0`
+(`p-pascal`, margpu029, 26/08) : `Tesla P100-PCIE-16GB with CUDA capability sm_60 is not
+compatible`, puis mort réelle sur `RuntimeError: GET was unable to find an engine to
+execute this computation` dans `F.conv2d`. L'exclusion des pascal dans les templates est
+donc juste et permanente tant qu'on ne réinstalle pas un build cu126.
+
+**Piège évité au passage.** Relâcher `--gres=gpu:ampere:1` en `gpu:1` rouvrait aussi les
+**volta** (margpu001, 004), sm_70, tout aussi incompatibles — et *absents* de la liste
+`--exclude`, qui ne couvre que pascal + les cartes fantômes. D'où le passage par
+`Features=ampere|turing|hopper`, qui exprime la vraie contrainte (sm_75+) au lieu de
+l'énumération de nœuds.
+
+### La trouvaille : la partition `gpu`
+
+`scontrol show partition` : `gpu` = margpu[001,010-011], `AllowGroups=ALL
+DenyAccounts=services-accounts`. Le compte `tau` y a donc accès, et **aucun template ne
+l'a jamais visée**. margpu010 et margpu011 portent `ampere:2` avec **1 carte libre
+chacune**, 88 et 80 CPU libres, 1030G et 500G de RAM.
+
+**Pas d'exposition à la préemption**, contrairement à ce que `PreemptType=preempt/partition_prio`
++ `PriorityTier=1` (contre 100 pour `tau`) laisse craindre : la préemption par priorité de
+partition suppose deux partitions partageant un nœud, or margpu[010-011] n'appartiennent
+qu'à `gpu`. Aucune partition de tier supérieur ne peut les réclamer.
+
+### Ce qui a été appliqué (sans resoumission, `scontrol update` sur jobs PENDING)
+
+- `523645` → `Partition=tau,gpu`, **`gres/gpu:ampere:1` conservé**. Le protocole n'est pas
+  touché : même classe de carte que les 4 autres matrices, et `LOCAL_FANOUT=1` garde les 3
+  shards sur un seul nœud. Démarré sur **margpu011 à 12:12**, soit **~30 h gagnées** sur
+  l'estimation Slurm.
+- `523644_[1-3]` → `Partition=tau,gpu-best,gpu`, `TresPerNode=gres/gpu:1`,
+  `Features=ampere|turing|hopper`. Les 3 shards ont démarré **dans les 16 s**.
+
+**Résultat : 4 shards `all_pool` + la matrice shin2017a tournent en parallèle, file vide.**
+
+| job | nœud | carte | démarré |
+|---|---|---|---|
+| 523644_0 | margpu006 | ampere | 11:55 |
+| 523644_1 | margpu010 | ampere | 12:12 |
+| 523644_2 | margpu018 | turing | 12:12 |
+| 523644_3 | margpu019 | turing | 12:12 |
+| 523645 | margpu011 | ampere | 12:12 |
+
+Santé au démarrage vérifiée sur les deux nouveaux logs : `device=cuda`, aucun
+avertissement de compatibilité, chargement du cache en cours.
+
+### Hétérogénéité matérielle assumée sur `all_pool`, et pourquoi c'est acceptable
+
+Les shards 0-1 sont sur ampere, les shards 2-3 sur turing. **Ce serait inadmissible sur la
+matrice D×R** — elle classe les donneurs entre eux, une dérive systématique par carte
+biaiserait le classement, d'où `LOCAL_FANOUT=1` maintenu. Ici le contraste est
+`all_pool − règle`, et le bras « règle » de la campagne `dsel2` a *déjà* tourné sur du
+tau/gpu-best mixte : mélanger côté `all_pool` rend les deux bras **plus** comparables, pas
+moins. Ordre de grandeur : effets de 0,06 à 0,28 contre un écart numérique inter-cartes
+~1e-4.
+
+### Ce qui reste indisponible, et n'est pas récupérable
+
+margpu020 (1 turing libre) et margpu021 (1 turing libre) restent exclus : cartes fantômes
+mesurées (`515639_2` mort en 12 s le 02/09). Les rouvrir donnerait 2 cartes contre un
+risque de requeue en boucle, pour une campagne qui se termine dans l'heure — non rentable.
+Après application, **le cluster est saturé en sm_75+** : plus une seule carte utilisable
+libre.
+
+**Limite que ces deux jobs ne lèvent pas.** Les cinq datasets sont **tous du motor
+imagery**, quatre sur cinq en binaire gauche/droite. La conclusion porte sur « un sujet en
+imagerie motrice », pas sur « l'EEG », et aucune extension prévue ne change cela.
+
+## 03/09 12:46 — les deux rapports sont **régénérés sur la grille complète**
+
+| | avant (31/08, grille à 956) | après (03/09, grille à 1116) |
+|---|---|---|
+| cellules | 956 | **1 116** |
+| scores (perf) | 34 741 | **48 888** |
+| unités sujet | 8 591 | **11 808** |
+| folds (dynamics) | 120 249 | **167 076** |
+| opportunités de croissance | 498 160 | **542 187** |
+| neurones ajoutés | 1 067 782 | **1 371 399** |
+| figures | 52 + 32 | **52 + 32** (aucune ajoutée, aucune perdue) |
+
+Chaîne exécutée : `rsync` des 1 116 CSV de score → `perf_final/scores/` ; SLURM **523597**
+(`normal`, 8 CPU, 706 s) a relancé `export_growth_dynamics.py` sur les 12 Go de JSONL vers
+`/scratch/amounir/gd/out_1116` — l'export du 31/08 dans `out/` est **conservé à côté**, pas
+écrasé, pour que les figures publiées avant aujourd'hui restent rattachables aux frames qui
+les ont produites. `gd_provenance.csv` sort avec le **même `eegrow_sha=58c6beebc12e`**
+qu'au 31/08 : rien à réconcilier entre les deux exports.
+
+**Un résultat change de signe de conclusion.** L'ancienne page disait « `grow − fix` va de
+−0,0031 à +0,0081, **0 sur 6** survivent à Holm ». La grille complète dit **+0,0001 à
++0,0136, 2 sur 6** survivent, et `shallow` / cross-session sort à **+0,0136 [+0,0078,
++0,0197] sur 71 sujets**, intervalle franchement au-dessus de zéro. La croissance gagne
+donc quelque part — mais l'écart type graine-à-graine sur la même grille est **0,0436**,
+soit trois fois l'effet : c'est réel et plus petit que relancer la même configuration.
+
+**Les deux pages ne peuvent plus mentir sur leur propre couverture.** Le bandeau et le
+constat 05 disaient « campagne en cours » via une chaîne constante — vraie à l'écriture,
+silencieusement fausse la nuit où la grille s'est terminée. Ils **comptent** maintenant
+`final_grid.tsv` et affichent `n_scoré / n_planifié`.
+
+### La page D×R était concernée elle aussi — et pas pour la raison attendue
+
+`build_dxr_report.py` ne lit que des agrégats, mais les cinq scripts qui **produisent**
+ces agrégats (`donor_matrix`, `donor_summary`, `donor_predictor`, `donor_select_prep`,
+`donor_figures`) lisent `perf_final/scores` et `dynamics_final/gd_fits.csv.gz`. La
+campagne finale entre dans D×R par **la sonde** `grow_shallow` / `within_session` /
+`align=none` : `params_probe`, `acc_probe`, `ceil_frac`, et les `ranking_*.csv` qui ont
+servi d'entrée à l'étage 3.
+
+Le défaut n'est pas « il manquait des cellules ». **Aucune cellule bnci2014_001 n'est
+nouvelle** — mêmes 3 graines. Mais un CSV de score s'écrit **une fois, à la fin** de la
+cellule (absent ou complet), alors qu'un `__fits.jsonl` s'écrit **fold par fold** : l'export
+du 31/08 a lu bnci2014_001/grow_shallow/within_session à **493 folds sur 810**, et une
+cellule tronquée est indiscernable d'une cellule complète en aval.
+
+| | ancien | nouveau |
+|---|---|---|
+| folds de la sonde bnci | 493 | **810** |
+| ρ brut bnci | +0,285 | **+0,217** |
+| **ρ partiel bnci** | +0,239 | **+0,048** |
+| plafond de la sonde bnci | 93 % | 91 % |
+| sonde des 3 autres datasets | — | **bit-identique** (delta 0 sur les 5 colonnes) |
+| **ρ méta rapporté (n=215)** | +0,288 [+0,159, +0,412] | **inchangé, au chiffre près** |
+
+Le garde-fou pré-spécifié `ceil_probe < 0.50` exclut bnci2014_001 (il est à 0,91) : le
+défaut n'atteint donc pas l'analyse rapportée. **Sur 380 lignes de texte de la page,
+exactement 3 nombres changent, tous sur la ligne bnci2014_001.** C'est l'argument pour
+pré-spécifier le garde-fou avant de voir les données.
+
+L'étage 3 (3 840 cellules GPU) est **sauf** : il tourne sur `ranking_cho2017`,
+`ranking_lee2019_mi` et `ranking_physionetmi`, tous trois bit-identiques. Rien à relancer
+sur le cluster.
+
+**À refaire pour le jumeau `shipped` le jour où il tombe** : ré-exporter les réductions
+même si la liste de cellules paraît inchangée, et diffuser les frames **par sujet**, pas
+les décomptes de cellules — un décompte de cellules ne voit pas une liste de folds
+tronquée.
+
+## 03/09 09:00 — la campagne `final` est **TERMINÉE : 1116/1116**
+
+Les 40 cellules schirrmeister2017 qui restaient hier sont passées dans la nuit. Plus
+aucun job `final` en queue. Contrôle de santé : **0 CSV de moins de 1 ko**, 50 004 lignes
+de scores, et la répartition par eval tombe exactement sur la grille émise —
+648 `within_session` + 324 `cross_session` + 144 `cross_subject` = 1116.
+
+C'est la table à partir de laquelle le papier est écrit, et elle remplace v4 et v5.
+Conséquence immédiate sur le dépôt : la note du `.gitignore` qui exclut
+`perf_final/scores/` invoque « une campagne ENCORE EN COURS (1082/1116 au 02/09) ». Cette
+raison a expiré — la voie prévue est maintenant ouverte : publier un agrégat dans
+`results_final_published/`, la grille étant terminée.
+
+## 03/09 09:00 — jumeau `shipped` : **438/558**, mais le débit est tombé
+
+| | |
+|---|---|
+| CSV écrits | **438 / 558** (242 within + 138 cross_session + 58 cross_subject), 0 vide |
+| passes démarrées | 6 / 10 — `g1k3`, `g1k9`, `g2k6`, `g3k8`, `g3k9`, et la grosse `g3k10` (333 cellules) |
+| passes jamais démarrées | `g3k1` (41), `g3k2` (13), `g3k6` (13), `g3k7` (13) = **80 cellules** |
+| jobs | 4 COMPLETED, **2 RUNNING** (515941 margpu017 depuis 8 h 47 ; 515942 margpu022 depuis 53 min), **6 PENDING** |
+
+**438 cellules en 10 h, puis 7 en 3 h.** Ce n'est pas une panne, c'est l'ordre de
+passage : les petites cellules sont parties d'abord et l'early stopping tire vraiment à
+`patience=20` (c'est toute la raison pour laquelle ce jumeau coûte 238 GPU-h et non 870).
+Il ne reste que la queue lourde, et il n'y a que **2 nœuds** pour la traiter.
+
+**Le goulot est le `--exclusive` sur turing**, comme prévu. margpu018/019/020 sont tenus
+par `jjobard` (`distraq`, 12 h 42 à 16 h 36 restantes), margpu019 aussi par `strivaud`
+(7 h 28), margpu028 par `tweikert` (9 h 59). margpu023 est `drained*` (« Feature test :
+Not responding »), 021 exclu du sbatch. Aucun turing entier ne se libère avant ~7 h.
+
+**ETA.** À capacité actuelle (2 nœuds, ~2,3 cellules/h sur la queue lourde) : ~50 h, soit
+le **5 septembre en soirée**. Si les nœuds de jjobard se libèrent ce soir et que les
+6 jobs PENDING démarrent : ~15-20 h, soit le **4 septembre**. Fourchette honnête :
+**4-6 septembre**, inchangée depuis hier.
+
+Vérification de portée refaite ce matin : `wc -l` sur les 10 passes de
+`/scratch/amounir/passes_shipped` somme à **558**, et les logs confirment
+`protocol='train.patience=20 train.selection_monitor=valid_loss'` et
+`sha=58c6beebc12e` sur chaque allocation — le protocole et le checkout sont bien inscrits
+par cellule, ce pour quoi le raccourci `PROTOCOL=shipped` avait été écarté.
+
 ## 02/09 — jumeau PROTOCOLE LIVRÉ soumis (jobs 515931-515942, tag `shipped`)
 
 **Ce qu'il mesure.** « Le protocole livré RÉORDONNE les bras » est écrit dans

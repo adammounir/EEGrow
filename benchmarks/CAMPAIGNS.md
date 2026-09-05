@@ -101,15 +101,63 @@ Stage 1 gate. `cho2017` passes (+1.51 pp, n=52); `bnci2014_001` is underpowered
 (MDE 6.69 pp against a 5.05 pp target) and is a **non-conclusive null, not a null**.
 Integration branch `exp/ea-replication`.
 
----
-
-## Not yet run
-
-### The final grid — `benchmarks/slurm/final_grid.tsv`
-1044 cells, ~1007 GPU-h projected, `/scratch/amounir/eegrow_budget`, results tag `final`
+### The final grid — `benchmarks/slurm/final_grid.tsv` — **COMPLETE, 03/09**
+**1116/1116 cells**, ~870 GPU-h, `/scratch/amounir/eegrow_budget`, results tag `final`
 (`/scratch/amounir/results_final`). This is the table the paper is written from and it
 **replaces v4 and v5 outright**. Rationale for every cut is in `final_grid.py`'s
 docstring; the protocol and the checkout are pinned in `final_grid.sbatch`.
+
+Finished overnight 02→03/09 with the last 40 `schirrmeister2017` cells. Health check on
+the complete tree: **0 CSVs under 1 kB**, 50 004 score rows, and the per-eval split lands
+exactly on the emitted grid — 648 `within_session` + 324 `cross_session` +
+144 `cross_subject` = 1116.
+
+Reduced and plotted on the complete grid the same day: `perf_final` (1116 cells, 48 888
+scores, 11 808 subject-level units, 52 figures) and `dynamics_final` (167 076 folds,
+542 187 growth opportunities, 32 figures), the latter re-exported by SLURM 523597 into
+`/scratch/amounir/gd/out_1116`. The 31/08 export in `/scratch/amounir/gd/out` covered
+**956** cells of a grid still being written and is kept beside it rather than overwritten,
+so the figures published before 03/09 remain traceable to the frames that produced them.
+
+**Both pages used to state their own coverage from a constant string** ("campaign in
+flight"), which was true when written and silently false the night the grid finished.
+They now count `final_grid.tsv` and report `n_scored / n_planned`, because the sentence a
+reader checks before citing a number is the one that must not be able to go stale.
+
+#### A reduction taken mid-write is not a smaller reduction, it is a different one
+
+The 31/08 export was run deliberately on an unfinished grid, and its docstring says so.
+What that licenses is narrower than it looks. A **score CSV** is written once, at the end
+of a cell: it is either absent or complete, so an early export loses whole cells and
+nothing else. A **`__fits.jsonl` is appended fold by fold**, so an early export also
+truncates cells that are present — and a truncated cell looks exactly like a complete
+one downstream.
+
+It happened, on one cell that mattered. `bnci2014_001` / `grow_shallow` /
+`within_session` had **493 of its 810 folds** in the 31/08 frames — same 3 seeds, no cell
+missing, 61 % of the folds. Everything computed per subject from `params_end` on that
+dataset was therefore a mean over a biased 61 % sample. Consequences, measured against
+the complete export rather than assumed:
+
+- the three other probe datasets (`physionetmi`, `lee2019_mi`, `cho2017`) are **bit-identical**
+  across the two exports on all of `params_probe`, `acc_probe`, `width_probe`, `k_probe`,
+  `ceil_frac` — so the 160 new cells touched no probe of theirs;
+- `bnci2014_001`'s **partial ρ collapses from +0.239 to +0.048** and its raw ρ from
+  +0.285 to +0.217, on the very dataset already flagged as underpowered (n=9, MDE 1.14);
+- the D×R report's reported analysis does **not** move: `bnci2014_001` is excluded by the
+  pre-specified `ceil_probe < 0.50` guard-rail (it sits at 0.91), so the pooled partial
+  ρ stays **+0.288 [+0.159, +0.412], n=215** to the digit. The whole 380-line page changed
+  by exactly three numbers, all on the `bnci2014_001` row.
+
+The guard-rail is what turned a silent data defect into a non-event, which is the
+argument for pre-specifying it. **The rule to carry forward:** re-export the reductions
+after a campaign closes even when the cell list looks unchanged, and diff the per-subject
+frames rather than the cell counts — cell counts cannot see a truncated fold list. This
+applies to the `shipped` twin the day it lands.
+
+---
+
+## Not yet run
 
 ### The shipped-protocol twin — `benchmarks/slurm/shipped_grid.tsv`
 558 cells, **238 GPU-h**, same checkout, results tag `shipped`. Submitted 02/09 as jobs

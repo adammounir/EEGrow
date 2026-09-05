@@ -48,6 +48,20 @@ SHOWCASE = dict(eval_="within_session", dataset="bnci2014_001", align="")
 #: with no effect size is trivia, and an effect size with no mechanism is a table.
 PERF_URL = "https://claude.ai/code/artifact/44b84ba1-d91c-418a-a223-6c0b923cc6ac"
 
+#: The grid these frames are a reduction OF, so the page reads its own completeness
+#: instead of asserting it. The 31/08 export covered 956 cells of a grid still being
+#: written and the caveat said so correctly; it kept saying so after the grid finished,
+#: which is the failure mode a constant has and a count does not. One row per planned
+#: cell, no header. Same constant, same reason, in `build_perf_report`.
+GRID_TSV = Path(__file__).resolve().parents[1] / "slurm" / "final_grid.tsv"
+
+
+def _planned() -> int | None:
+    """Number of cells the campaign plan emitted, or None if the plan is not at hand."""
+    if not GRID_TSV.exists():
+        return None
+    return sum(1 for ln in GRID_TSV.read_text().splitlines() if ln.strip())
+
 
 def _sweep(fits: pd.DataFrame) -> list[tuple[str, str]]:
     """The (eval, align) pairs the campaign actually contains, in protocol order."""
@@ -245,6 +259,13 @@ def _write_page(out: Path, blocks, skipped, fits: pd.DataFrame,
              "stop_subject": "stop_by_subject", "coverage": "coverage"}
 
     n_cell = len(fits.groupby(["eval", "dataset", "model", "align_tag", "seed"]))
+    planned = _planned()
+    if planned is not None and n_cell >= planned:
+        status = (f"Campagne <b>terminée</b> — les {planned:,} cellules du plan sont "
+                  "toutes réduites ici. Ces figures décrivent la grille complète.")
+    else:
+        status = ("Campagne <b>en cours</b>. Ces figures décrivent ce qui est écrit sur "
+                  "disque à l'instant de l'export, pas la grille complète.")
     body = [f"""<header>
 <p class="eyebrow">eegrow · campagne finale · <code>results_final</code></p>
 <h1>Growth dynamics</h1>
@@ -258,8 +279,7 @@ aucun code de tracé.</p>
 <div><dt>opportunités de croissance</dt><dd>{len(events):,}</dd></div>
 <div><dt>neurones ajoutés</dt><dd>{events.loc[events.applied.fillna(False).astype(bool), 'grow_n_kept'].sum():,.0f}</dd></div>
 </dl>
-<p class="caveat">Campagne <b>en cours</b>. Ces figures décrivent ce qui est écrit sur
-disque à l'instant de l'export, pas la grille complète. Lire
+<p class="caveat">{status} Lire
 <a href="#coverage">Campaign coverage</a> en premier. Rapport jumeau&nbsp;:
 <a href="{PERF_URL}"><i>Où la croissance gagne</i></a> — les scores que ce mécanisme
 produit, décomposés en terme de croissance et terme de codebase.</p>
