@@ -35,8 +35,15 @@
 #   sbatch benchmarks/slurm/motif_warm.sbatch
 set -uo pipefail
 
-# Plancher d'espace libre sur /scratch, en Go. En dessous, la tâche refuse de démarrer.
-FLOOR_GB="${FLOOR_GB:-800}"
+# Plancher d'espace libre, en Go. En dessous, la tâche refuse de démarrer.
+#
+# LE PLANCHER SE LIT SUR LE QUOTA, PAS SUR `df`. Le 05/09 la campagne a perdu 7 datasets
+# sur 11 : les chauffes sont mortes sur `OSError: [Errno 122] Disk quota exceeded`
+# pendant que `df /scratch` affichait 4,2 To libres. Les deux chiffres sont vrais et
+# n'ont rien à voir — `df` mesure le filesystem (50 To, partagé), le quota mesure ce que
+# CET utilisateur a le droit d'écrire (1 To). C'est le second qui borne, et c'est le
+# premier que ce script regardait : la porte a laissé passer onze tâches dans un mur.
+FLOOR_GB="${FLOOR_GB:-60}"
 
 LIST="${LIST:-/scratch/amounir/eegrow_budget/benchmarks/slurm/motif_datasets.txt}"
 # Premier champ des lignes non commentées : le nom du dataset. Le reste de la ligne est
@@ -47,11 +54,21 @@ if [ -z "$DS" ]; then
   exit 2
 fi
 
-FREE_GB=$(df -BG --output=avail /scratch | tail -1 | tr -dc '0-9')
-echo "=== $DS  node=$(hostname)  start=$(date -Is)  libre=${FREE_GB}G  plancher=${FLOOR_GB}G"
+# `quota` sans -s : blocs de 1 Ko, donc pas d'unite a reparser. Champ 1 = utilise,
+# champ 2 = quota souple. Le nom du filesystem est sur sa propre ligne, d'ou le getline.
+QUOTA_LINE=$(quota 2>/dev/null | awk '/data\/scratch/{getline; print $1, $2}')
+if [ -z "$QUOTA_LINE" ]; then
+  echo "REFUS: impossible de lire le quota /scratch. Sans plancher fiable on n'ecrit pas." >&2
+  exit 3
+fi
+USED_KB=$(echo "$QUOTA_LINE" | awk '{print $1}')
+LIMIT_KB=$(echo "$QUOTA_LINE" | awk '{print $2}')
+FREE_GB=$(( (LIMIT_KB - USED_KB) / 1048576 ))
+DF_GB=$(df -BG --output=avail /scratch | tail -1 | tr -dc '0-9')
+echo "=== $DS  node=$(hostname)  start=$(date -Is)  quota_libre=${FREE_GB}G  plancher=${FLOOR_GB}G  (df=${DF_GB}G, non contraignant)"
 if [ "$FREE_GB" -lt "$FLOOR_GB" ]; then
-  echo "REFUS: ${FREE_GB}G libres < plancher ${FLOOR_GB}G. Un cache ecrit a moitie par" >&2
-  echo "manque de place declenche le chemin destructeur de MOABB. Rien n'a ete ecrit." >&2
+  echo "REFUS: ${FREE_GB}G sous le quota < plancher ${FLOOR_GB}G. Un cache ecrit a moitie" >&2
+  echo "par manque de place declenche le chemin destructeur de MOABB. Rien n'a ete ecrit." >&2
   exit 3
 fi
 

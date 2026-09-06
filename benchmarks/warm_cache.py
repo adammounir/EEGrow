@@ -113,6 +113,21 @@ def warm(name: str, cache: Path, force: bool) -> None:
             msg = "ok"
         except Exception as exc:                    # a warmer reports, never crashes
             msg = f"ÉCHEC {type(exc).__name__}: {str(exc)[:140]}"
+            # ... SAUF quand il n'y a plus de place. Un sujet illisible est un incident
+            # local qu'on saute ; EDQUOT (122) et ENOSPC (28) sont un état GLOBAL qui se
+            # reproduira à l'identique sur tous les sujets suivants, et chaque tentative
+            # laisse une entrée de cache à moitié écrite — l'état exact qui déclenche le
+            # `interface.erase()` -> `rmtree` de MOABB sur une entrée partagée. Le 05/09,
+            # faute de cette distinction, la chauffe a tourné 2 h à échouer 50 fois de
+            # suite et est sortie en 0, en se croyant propre.
+            if isinstance(exc, OSError) and exc.errno in (28, 122):
+                print(f"    [{i}/{len(todo)}] sub-{s}  {time.time() - t0:7.1f}s  {msg}",
+                      flush=True)
+                raise RuntimeError(
+                    f"plus de place (errno {exc.errno}) en chauffant {name}/sub-{s} : "
+                    f"abandon immédiat, {len(todo) - i} sujets non tentés. "
+                    f"Vérifier `quota -s`, pas `df`."
+                ) from exc
         print(f"    [{i}/{len(todo)}] sub-{s}  {time.time() - t0:7.1f}s  {msg}",
               flush=True)
 
@@ -126,12 +141,22 @@ def main() -> int:
     args = ap.parse_args()
 
     t0 = time.time()
+    failed = []
     for name in args.datasets.split(","):
         try:
             warm(name, Path(args.cache), args.force)
         except Exception as exc:
             print(f"=== {name}: ÉCHEC GLOBAL {type(exc).__name__}: {exc}", flush=True)
+            failed.append(name)
     print(f"\n=== terminé en {(time.time() - t0) / 60:.1f} min", flush=True)
+    # Le code de sortie ne pilote PAS `aftercorr` — c'est `check_cache` qui porte la
+    # porte, et c'est bien lui qui doit décider si les fits ont le droit de partir.
+    # Mais un `warm_rc=0` sur une chauffe qui a explosé rend le log menteur : le 05/09
+    # les sept tâches mortes sur le quota affichaient toutes `warm_rc=0 gate_rc=1`, et
+    # il fallait lire la porte pour comprendre que la chauffe, elle, n'allait pas bien.
+    if failed:
+        print(f"=== ÉCHEC sur : {', '.join(failed)}", flush=True)
+        return 1
     return 0
 
 

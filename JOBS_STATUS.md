@@ -1,5 +1,54 @@
 # Jobs en cours
 
+## 06/09 — LA CAMPAGNE EST ARRÊTÉE : quota /scratch de 1 To saturé
+
+**Ce n'était pas le débit, c'était le quota.** `quota -s` : 1024 G utilisés sur
+1024 G. Le `df` montrait 4,2 To libres sur le filesystem — trompeur, la contrainte
+est **par utilisateur**. Les chauffes sont mortes sur `OSError: [Errno 122] Disk
+quota exceeded`.
+
+**Bilan des 11 datasets** : 4 D×R complets (hefmiich2025, guttmannflury2025_mi,
+guttmannflury2025_me, kumar2024). 7 tâches D×R en `DependencyNeverSatisfied`,
+c'est-à-dire **jamais lancées** : stieger2021, yang2025, chang2025, forenzo2023,
+zhou2020, dreyer2023b, brandl2020.
+
+**La porte a fait son travail.** `warm_rc=0 gate_rc=1` sur les 7 : le script de
+chauffe avalait les `OSError` par sujet et se croyait sorti propre ; c'est
+`check_cache` qui a refusé, et `aftercorr` n'a donc jamais relâché le D×R. Aucun
+résultat calculé sur un cache troué. Cf. [[gates-must-refuse-not-warn]].
+
+**La campagne n'a jamais tenu dans le quota, et ce n'est pas 539433 qui l'a causé.**
+Sans stieger2021 : mne_data 397 G + brainbert 281 G + popt 30 G + moabb_cache 110 G
++ divers 60 G = **878 G**. stieger2021 complet demande ~345 G (287 fichiers .mat
+présents pour 165 G, soit ~48 % de 598 sessions) → **1223 G**, contre 1024 G de
+quota. Le mur était structurel. Le tirage parallèle a avancé l'heure de la collision
+et l'a fait tomber pendant la chauffe des dix autres, rien de plus.
+
+**Le levier, mesuré : le brut est ~10× le cache traité, et il est jetable.**
+zhou2020 68 G brut → 6,6 G cache. guttmannflury_mi 25 G → 1,9 G. kumar2024 13 G →
+2,3 G. Le pipeline lit `moabb_cache`, pas `mne_data`.
+
+Récupérable sans rien re-télécharger, ~242 G :
+- `MNE-guttmannflury2025-data` 50 G — **doublon pur** (contient `ME/` et `MI/`, déjà
+  présents dans les deux répertoires séparés `-mi-data` et `-me-data`).
+- le brut des datasets dont le cache est **complet** : lee2019-mi 61, schirrmeister
+  26, gutt-me 26, gutt-mi 25, kumar2024 13, gigadb 10, Dreyer2023A 9,3, eegfnirs
+  5,9, weibo 4,1, hefmiich 3,9, bnci 3,8, eegbci 1,9, liu2024 0,9 ≈ 192 G.
+
+À **garder** : le brut des 5 datasets au cache troué (zhou2020 68 G / 5 sujets
+manquants, chang2025 44 G / 6, forenzo2023 40 G / 20, brandl2020 4,6 G / 9,
+Dreyer2023B 2,9 G / 1 sujet).
+
+**Non touchable sans l'accord d'Adam** : `brainbert` 281 G + `popt` 30 G = 311 G,
+soit 30 % du quota, qui appartiennent aux chantiers de réplication BrainBERT/PopT.
+
+**Redesign nécessaire pour stieger2021 et yang2025** : chauffer sujet par sujet en
+effaçant le brut de chaque sujet dès ses epochs cachés. L'empreinte de pointe devient
+quelques sujets au lieu de 345 G. yang2025 reste le cas dur — **fichier unique de
+65,6 Go**, indivisible.
+
+**EN ATTENTE DE L'ARBITRAGE D'ADAM** : rien n'est effacé pour l'instant.
+
 ## 05/09 16h40 — le pôle série était stieger2021, corrigé par 539433
 
 **Mesuré, pas estimé.** stieger2021 = 598 sessions de ~615 Mo, soit **~360 Go**,
