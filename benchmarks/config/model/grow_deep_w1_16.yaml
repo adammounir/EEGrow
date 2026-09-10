@@ -1,0 +1,32 @@
+# PILOTE w1 -- l'etage 1 est-il le vrai goulot, et la regularisation le vrai defaut ?
+#
+# Le pilote goulot 578293 a fait varier w2 (l'aval) et n'a rien trouve : issue (b).
+# La mesure sur ses 3240 fits dit pourquoi -- train loss 0.001-0.004 sur 230 essais,
+# meilleure valid loss a 0.1-0.2 nats sous ln(4), 18-28%% des fits sous le prior
+# uniforme. Le bras n'est pas limite en capacite, il est limite en regularisation, et
+# elargir w2 ne fait qu'accelerer la memorisation (optimum epoque 19 -> 11).
+#
+# Ce pilote-ci croise donc DEUX facteurs que 578293 n'a jamais bouges :
+#   * w1  : conv_time 1->w1 et conv_spat w1->w1 sur les electrodes. La campagne l'a
+#           tenu a 8 A TOUS LES NIVEAUX, contre 25 pour le Deep4Net de reference. Le
+#           banc de filtres SPATIAUX -- l'operation qui fait le travail en MI, c'est
+#           ce que CSP calcule -- est 3x plus etroit que la reference, et la jonction
+#           growable est EN AVAL de ce collapse.
+#   * reg : drop_prob=0.5 + norm_junction. growing_deepeeg etait la seule archi
+#           growing sans aucune regularisation ; shallow/sccnet/eegnex sont a 0.5 et
+#           le Deep4Net de braindecode porte 3 Dropout.
+#
+# LIMITE ASSUMEE : `reg` est un facteur GROUPE (dropout ET normalisation ensemble).
+# S'il gagne, il faudra un second passage pour le decomposer. C'etait le prix a payer
+# pour ne pas tripler la grille.
+#
+# Ce fichier : w1=16, regularisation OFF (defauts), jonction 8 -> 32 par croissance.
+kind: growing
+arch: GrowingDeepEEGNet
+label: grow_deep_w1_16
+needs_sfreq: false
+grow_every: 5
+module_kwargs:
+  w1: 16
+  w2: 8
+  target_w2: 32
