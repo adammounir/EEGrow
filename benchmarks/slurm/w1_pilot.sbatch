@@ -133,7 +133,7 @@ export MOABB_RESULTS=$ROOT/moabb_results_w1
 # found" sans echouer, rendant des CSV bien formes contre un device absent. On sonde
 # mem_get_info -- deduire l'ordinal de nvidia-smi est ce qui avait tue 47 cellules.
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
-python - <<'PROBE' || { echo "GPU PROBE FAILED -- abandon de la tache"; exit 90; }
+python - <<'PROBE'
 import sys, torch
 if not torch.cuda.is_available():
     print("torch.cuda.is_available() est False"); sys.exit(1)
@@ -154,6 +154,33 @@ if REF not in name:
     print(f"carte {name} != modele de reference '{REF}' : refus, "
           f"le pilote doit rester homogene"); sys.exit(1)
 PROBE
+PROBE_RC=$?
+
+# UNE CELLULE QUI TOMBE SUR UN CRENEAU FANTOME DOIT REVENIR EN FILE, PAS MOURIR.
+#
+# Le defaut est PAR CARTE et pas par noeud : margpu021 a repondu sainement a une sonde
+# manuelle (RTX 2080 Ti, matmul ok) sur un de ses creneaux et "No devices were found"
+# sur un autre, 20 min plus tard ; margpu020 a fait pareil. Exclure des noeuds coute
+# donc des cartes saines sans garantir quoi que ce soit.
+#
+# Surtout, echouer est ici la MAUVAISE reaction : la sonde rend la main en 5 s, donc un
+# creneau fantome reprend une tache toutes les 5 s et peut faire "finir" un array de 72
+# cellules en quelques minutes, tout en echecs. Une remise en file rend le creneau
+# fantome inoffensif -- il ne fait plus que brasser la meme tache jusqu'a tomber sur une
+# carte qui repond.
+#
+# Plafond a 5 remises : sans lui, un parc entierement fantome bouclerait indefiniment.
+# Au-dela on sort en 90, ce qui redevient visible dans sacct.
+if [ $PROBE_RC -ne 0 ]; then
+  if [ "${SLURM_RESTART_COUNT:-0}" -lt 5 ]; then
+    echo "GPU PROBE FAILED (rc=$PROBE_RC) sur $(hostname) -- creneau fantome ou modele" \
+         "non conforme, remise en file (essai ${SLURM_RESTART_COUNT:-0}/5)"
+    scontrol requeue "${SLURM_JOB_ID}"
+    exit 90
+  fi
+  echo "GPU PROBE FAILED (rc=$PROBE_RC) apres 5 remises en file -- abandon de la tache"
+  exit 90
+fi
 
 # PROVENANCE ET VERSION DU CODE, ASSERTEES PLUTOT QU'ARRANGEES.
 # Un garde-fou refuse, il n'avertit pas : sans le troisieme test ci-dessous, un tree
