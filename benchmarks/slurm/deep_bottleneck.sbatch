@@ -78,7 +78,12 @@ echo "[$(date -Is)] db task=${SLURM_ARRAY_TASK_ID} restart=${SLURM_RESTART_COUNT
 source /scratch/amounir/miniforge3/etc/profile.d/conda.sh
 conda activate bench
 module load cuda/13.1 || true
-export PYTHONPATH=$ROOT/benchmarks
+# $ROOT/src EN PREMIER, ET PAS SEULEMENT $ROOT/benchmarks. L'env `bench` porte un
+# editable .pth qui pointe en dur sur /scratch/amounir/eegrow/src : sans cette ligne,
+# `import eegrow` resout vers l'AUTRE checkout. C'est ce qui a tue les 36 cellules de
+# 578248 (`ModuleNotFoundError: eegrow.alignment`), et c'est le mecanisme decrit a
+# pack_run.sh:82-84. PYTHONPATH est consulte avant les chemins ajoutes par le .pth.
+export PYTHONPATH=$ROOT/src:$ROOT/benchmarks
 export MNE_DATA=/scratch/amounir/mne_data
 export MOABB_RESULTS=$ROOT/moabb_results_db
 
@@ -99,6 +104,28 @@ print(f"PROBE ok: {name} sm_{cap[0]}{cap[1]} free={free/2**30:.1f}G/{total/2**30
 if cap[0] * 10 + cap[1] < 75:
     print("carte sous sm_75 : torch ne peut pas y tourner"); sys.exit(1)
 PROBE
+
+# PROVENANCE, ASSERTEE PLUTOT QU'ARRANGEE -- copie de pack_run.sh:316-353, car ce
+# pilote ne passe pas par pack_run.sh et n'heritait donc d'aucun garde-fou. Ici le
+# mauvais checkout a echoue bruyamment (il lui manquait alignment.py), mais c'etait un
+# coup de chance : un tree d'aout complet aurait rendu des CSV de la bonne forme avec
+# le bug s=0 de retour. Un garde-fou refuse, il n'avertit pas.
+python - "$ROOT" <<'PY' || { echo "GUARD FAILED -- abandon"; exit 91; }
+import inspect, sys
+import eegrow
+from eegrow.training import loop
+root = sys.argv[1].rstrip("/") + "/"
+if not eegrow.__file__.startswith(root):
+    sys.exit(f"FATAL: ROOT est {root} mais eegrow importe depuis {eegrow.__file__}")
+if "best_s == 0.0" not in inspect.getsource(loop.grow_step):
+    sys.exit(f"FATAL: {loop.__file__} est anterieur a 5337c56 (abstention s=0 absente)")
+sys.path.insert(0, root + "benchmarks")
+from utils import tree_sha  # noqa: E402
+sha = tree_sha()
+if not sha:
+    sys.exit("FATAL: ce tree ne sait pas nommer son commit -- eegrow_sha=None partout")
+print(f"guard ok  eegrow={eegrow.__file__}  abstention s=0 presente  sha={sha[:12]}")
+PY
 
 # PROTOCOL byte-identique a final_grid.py : sans ces deux overrides on relance la
 # campagne sous-entrainee, avec des CSV bien formes et aucun avertissement.
