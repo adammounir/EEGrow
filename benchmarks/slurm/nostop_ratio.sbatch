@@ -128,7 +128,9 @@ then
   if [ "$tries" -lt 8 ]; then
     echo "GPU PROBE FAILED (essai $tries) -- carte tenue 60 s puis requeue"
     sleep 60
-    scontrol requeue "$SLURM_JOB_ID"
+    # Viser la tache, pas le tableau : sur 582871 un requeue trop large a tue des cellules
+    # saines en cours d'entrainement (cf. le commentaire detaille dans grow_vs_bd.sbatch).
+    scontrol requeue "${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}"
     sleep 120   # laisse SLURM traiter le requeue ; sortir avant l'annulerait
     exit 0
   fi

@@ -152,7 +152,14 @@ then
   if [ "$tries" -lt 8 ]; then
     echo "GPU PROBE FAILED (essai $tries) -- carte tenue 60 s puis requeue"
     sleep 60
-    scontrol requeue "$SLURM_JOB_ID"
+    # VISER LA TACHE, PAS LE TABLEAU. Mesure du 10/09 sur 582871 : 9 echecs de probe ont
+    # produit 15 evenements REQUEUED, et deux cellules SAINES (taches 3 et 5, "PROBE ok",
+    # en cours d'entrainement depuis 3 min) sont mortes a la seconde exacte ou la tache 7
+    # se remettait en file -- "CANCELLED ... DUE TO JOB REQUEUE" dans leur propre log.
+    # Un requeue vise trop large detruit le travail des soeurs et l'array ne converge
+    # jamais. `readout_ablation.sbatch` et `w1_pilot.sbatch` utilisaient deja la forme
+    # explicite ; ce sont ces deux fichiers-ci qui avaient derive.
+    scontrol requeue "${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}"
     sleep 120   # laisse SLURM traiter le requeue ; sortir avant l'annulerait
     exit 0
   fi
