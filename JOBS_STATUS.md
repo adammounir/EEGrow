@@ -1,5 +1,50 @@
 # Jobs en cours
 
+## 10/09 — 578293 relu sur l'endpoint MÉCANIQUE : la sélection était morte, w2 la réveille, et ça ne paie toujours pas
+
+**Aucun job lancé.** Le test que j'allais soumettre (`grow_deep` avec un `w2` élargi) est
+**exactement 578293**, déjà terminé. Ce qui manquait n'était pas des cellules, c'était de
+lire le bon endpoint dans des `fits.jsonl` déjà sur disque — 6 982 événements de croissance.
+
+**Ce que `n_proposed` vaut, vérifié sur la campagne et plus seulement en sonde** : le
+nombre de candidats que gromo propose = le **fan-out** de la jonction, donc `w2`. Mesuré
+8 / 16 / 32 aux trois niveaux, sans exception.
+
+**La sélection aux trois niveaux** (`kept = floor < proposed` = le plancher singulier
+coupe vraiment ; `floor = proposed` = il ne coupe rien ; `kept = cap` = c'est le plafond
+`target − width` qui décompte, pas une sélection) :
+
+| niveau | évts | plancher coupe | plafond décompte | **rien n'est coupé** | décades médianes |
+|---|---|---|---|---|---|
+| `w2=8` (campagne) | 1 620 | 0.0 % | 0.0 % | **100.0 %** | 0.42 |
+| `w2=16` | 1 667 | 3.2 % | 1.0 % | **95.8 %** | 0.68 |
+| `w2=32` | 3 695 | **71.0 %** | 12.4 % | 16.6 % | 1.89 |
+
+Hors des pas où le plafond mord, `floor/proposed` médian vaut 1.000 à `w2=8` (100 % des
+pas), 1.000 à `w2=16` (98.6 %), et **0.906 à `w2=32`** (29 % seulement à 1.000). Donc le
+réveil à `w2=32` est bien le plancher singulier et **pas** le plafond qui décompte vers la
+cible — c'était l'artefact à écarter, il est écarté.
+
+**Conclusion, et elle est plus forte que ce que je visais.** Sur la campagne `results_final`
+le bras `grow_deep` n'a jamais sélectionné : rang saturé, 8 candidats pour 8 places, le
+spectre est plat par construction. Mais 578293 a déjà fait tourner le niveau où la
+sélection fonctionne, et son endpoint accuracy ne bouge pas — `grow − fix`, famille de 6,
+**rien ne survit à Holm** (meilleur : eucl-w16 +0.0138, p brut 0.024, p Holm 0.145). Donc
+ce n'est pas « on ne sait pas parce que la sélection était morte » : **à `w2=32` gromo
+sélectionne réellement (71 % des pas, ~2 décades d'étalement) et n'achète rien de plus que
+le jumeau gelé.** C'est un négatif mécaniquement interprétable, pas une mesure vide.
+
+**Ce qui reste à ne pas confondre.** Le nul `grow − fix` de `results_final` sur le bras
+deep (+0.003 pour un MDE de ±0.008) reste sous-puissant et ne doit pas être écrit comme un
+nul. Ce que le tableau ci-dessus établit ne passe pas par le score : c'est mesuré à la
+source, sur les propositions de gromo elles-mêmes.
+
+**Corollaire pour le pilote goulot lui-même** : ses trois niveaux tiennent `w2_in = w2`,
+donc au premier pas de chaque niveau `n_proposed == largeur courante` — la saturation de
+rang est reconduite à chaque niveau, et la sélection ne se réveille qu'une fois la largeur
+partie bien au-delà de `w2`. C'est pour ça que le réveil n'apparaît qu'à `w2=32`, où la
+croissance va jusqu'à 128.
+
 ## 10/09 13h00 UTC — 581692 : ablation de readout, SOUMISE
 
 **18 cellules** (`results_readout/`), `eegrow_sha=650b9ea79114`, branche `exp/deep-bottleneck`.
