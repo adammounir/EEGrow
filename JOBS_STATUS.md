@@ -1,5 +1,56 @@
 # Jobs en cours
 
+## 10/09 (nuit) — PLAN COMPLET (12/12) : le contraste dépend de l'alignement, et c'est la baseline qui bouge
+
+582871 a rendu ses 5 dernières cellules (COMPLETED, 14:19 à 16:23). Intégrité vérifiée :
+**12/12 cellules, 18 lignes chacune, un seul `eegrow_sha` (9a9cc03e), `device=cuda`
+partout, sujets 1-9, sessions `0train`/`1test`, aucune manquante.**
+
+| `grow_deep − bd_deep4` | delta | IC95 bootstrap sujet | MDE(n=9) | sujets gagnés |
+|---|---|---|---|---|
+| `align=none` | **−0.0660** | [−0.0999, −0.0338] | 0.0529 | 1/9 |
+| `align=euclidean` | **+0.0146** | [−0.0189, +0.0448] | 0.0506 | 6/9 |
+
+**L'interaction est significative : +0.0806, IC95 [+0.0481, +0.1185].** L'alignement ne
+déplace donc pas les deux bras du même montant — il change bel et bien le contraste. Mais
+la décomposition par bras dit *lequel* bouge :
+
+- sur `bd_deep4` : **−0.0612**, IC95 [−0.0967, −0.0215] → l'alignement euclidien **dégrade**
+  la baseline, significativement (0.4847 → 0.4235) ;
+- sur `grow_deep` : **+0.0195**, IC95 [−0.0169, +0.0615], MDE 0.0621 → |effet| < MDE,
+  **mesure vide**, pas un nul (0.4187 → 0.4381).
+
+Autrement dit le contraste ne remonte pas parce que la croissance devient bonne, mais
+parce que la référence devient mauvaise. Et même sous l'alignement le plus favorable, à
+budget plein, le delta vaut **+0.015 et n'est pas significatif** — le +0.133 publié n'est
+reproduit sous **aucun** des deux alignements.
+
+Piège à ne pas rejouer : sous `euclidean`, `grow_deep` gagne sur **6/9 sujets** alors que
+l'IC contient zéro. Le compte de signes n'est pas une preuve ; c'est l'appariement par
+sujet qui tranche (cf. `unit-of-analysis-subject`).
+
+L'alignement resserre aussi les deux bras (sd inter-lignes 0.1524 → 0.1107 sur `bd_deep4`,
+0.1293 → 0.1092 sur `grow_deep`) : il homogénéise les sujets en coupant le haut.
+
+Analyse de référence : `/tmp/gvb_full.py` sur Margaret (bootstrap **apparié** par sujet,
+20 000 tirages, MDE ≈ 2.9·sd/√n affichée à côté de chaque effet).
+
+**Deuxième bug du garde-fou GPU, corrigé (`11005d3`).** `scontrol requeue "$SLURM_JOB_ID"`
+visait trop large : 9 échecs de sonde ont produit **15 événements REQUEUED**, et deux
+cellules saines (tâches 3 et 5, `PROBE ok`, 3 min d'entraînement) sont mortes à la seconde
+exacte où la tâche 7 se remettait en file — `CANCELLED ... DUE TO JOB REQUEUE` dans leur
+propre log. La forme correcte `${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}` était déjà
+dans `readout_ablation.sbatch` et `w1_pilot.sbatch`. Pour le job en vol, le déclencheur a
+été coupé autrement : `scontrol update jobid=582871_{4,6} ExcNodeList=margpu020` → zéro
+requeue ensuite, les 3 dernières cellules ont tourné d'une traite.
+
+**582872 (nostop-ratio) : toujours 0 cellule.** Les 10 cartes ampere sont prises par des
+jobs à **11 h à 35 h de walltime restant** (`gblayer`, `jjobard`). Le job est premier en
+priorité sur sa classe, mais rien ne se libère avant ce soir. Les turing ont 4-6 cartes
+libres. Basculer `--gres=gpu:ampere:1` → `gpu:turing:1` le ferait partir tout de suite et
+garderait le contraste homogène (les 8 cellules bougent ensemble) — **décision d'Adam, pas
+faite.**
+
 ## 10/09 (soir) — align=none complet à 3 graines ; la panne GPU est une carte morte, pas la concurrence
 
 **`grow_deep` ne s'améliore PAS quand on retire l'early stopping.** 582394 a rendu la
