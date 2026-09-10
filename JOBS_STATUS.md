@@ -1,5 +1,58 @@
 # Jobs en cours
 
+## 10/09 (soir) — align=none complet à 3 graines ; la panne GPU est une carte morte, pas la concurrence
+
+**`grow_deep` ne s'améliore PAS quand on retire l'early stopping.** 582394 a rendu la
+graine 3, donc `align=none` est bouclé : 3 graines × 9 sujets, unité d'analyse = le sujet.
+
+| | publié (budget coupé) | budget plein, 3 graines |
+|---|---|---|
+| `bd_deep4` | 0.275 | **0.4847** |
+| `grow_deep` | 0.408 | **0.4187** |
+| delta | +0.133 | **−0.0660** |
+
+IC95 bootstrap sujet **[−0.0999, −0.0338]**, `grow_deep` gagne sur **1/9 sujets**,
+sd inter-sujet 0.0547 → MDE(n=9, 80 %) 0.0529, franchi. Stable d'une graine à l'autre —
+`bd_deep4` 0.4798 / 0.4943 / 0.4800, `grow_deep` 0.4260 / 0.4129 / 0.4172 : ce n'est pas
+du bruit de graine. Le budget rend **+0.21 point** à `bd_deep4` et **+0.011** à
+`grow_deep`. Le contraste publié mesurait un réseau coupé à l'époque 4, pas la croissance.
+
+`align=euclidean` : 1 seule cellule (`grow_deep` graine 1, 0.4452), bras non apparié,
+rien de lisible tant que `bd_deep4 euclidean` manque.
+
+**La panne n'était pas la concurrence — c'est une carte morte.** 582231 en `%6` avait
+perdu 12/18, 582394 en `%3` a reperdu 5/8 : baisser la concurrence n'a rien changé, donc
+l'explication « trop de tâches pour 4 cartes » était fausse. Sonde 582835 (4 tâches de
+10 s sur margpu020, chacune imprimant `SLURM_JOB_GPUS` à côté du verdict) :
+
+```
+SLURM_JOB_GPUS=0 -> available True      SLURM_JOB_GPUS=2 -> available True
+SLURM_JOB_GPUS=1 -> available False     SLURM_JOB_GPUS=3 -> available True
+                    RuntimeError: No CUDA GPUs are available
+```
+
+L'index physique **1** de margpu020 (`GPU-b0d82f38-d668-8ea7-a2da-dc32f41245c5`) est
+inutilisable par torch alors que `nvidia-smi` le liste normalement — même signature que
+margpu021. La cascade s'explique exactement : quand les cartes saines sont prises, la
+seule libre est la morte ; la tâche la saisit, meurt en 4 s, **la rend**, la suivante la
+reprend. Cinq cellules mortes en 20 secondes sur la même carte.
+
+**Correctif** (`grow_vs_bd.sbatch` et `nostop_ratio.sbatch`) : sur échec du probe, la
+tâche **tient la carte 60 s** — pendant cette fenêtre elle est hors du pool et les
+cellules sœurs démarrent sur des cartes saines — puis `scontrol requeue`, avec un plafond
+de 8 essais au-delà duquel on échoue vraiment. Un garde-fou doit finir par refuser, mais
+il ne doit pas recycler le piège.
+
+**582871** : les 5 cellules restantes (`--array=3-7%3`, POINTS=`grow_vs_bd_rest.txt`).
+**582872** : nostop-ratio relancé sur **`--partition=tau,gpu`**. 582215 était resté
+PENDING 45 min sans lancer une cellule : la partition `gpu` n'a que 4 ampere
+(margpu010-011 ; margpu001 est volta donc sous sm_75), toutes allouées, derrière ~8 jobs
+gblayer et un job cbarbano de 6 jours. margpu007 et margpu008 portent 3 ampere chacun et
+sont dans `tau`. Pool éligible 4 → 10 cartes, **même classe** de carte des deux côtés
+(`--gres=gpu:ampere:1`), donc aucune paire du contraste ne traverse ampere/turing.
+
+---
+
 ## 10/09 — RÉSULTAT : le gain publié de `grow_deep` change de signe ; 582394 complète le design
 
 **Les 4 cellules acquises de 582231** (`align=none`, graines 1-2, n=9 sujets, sessions et

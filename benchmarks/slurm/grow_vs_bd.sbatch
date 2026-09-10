@@ -50,15 +50,28 @@
 # carte -- la contrainte que deep_bottleneck.sbatch documente. Ne PAS apparier ces
 # resultats avec results_deepbottleneck/, qui a tourne sur ampere.
 #
-# CONCURRENCE : %3, PAS %6. LEÇON DU 10/09
-# ----------------------------------------
-# La premiere soumission (582231) tournait en %6 sur un noeud qui n'a que 4 turing et
-# que d'autres utilisateurs partagent. 12 taches sur 18 ont atterri sans device
-# utilisable : `nvidia-smi` listait bien une 2080 Ti mais `torch.cuda.is_available()`
-# rendait False. Elles sont mortes en 4 secondes sur le probe (exit 90) -- le garde-fou
-# a refuse au lieu de laisser tourner des cellules contre une carte absente, ce qui est
-# exactement le mode de defaillance de margpu021 (47 cellules perdues). On plafonne a 3
-# pour laisser une carte aux autres jobs du noeud.
+# CE N'ETAIT PAS LA CONCURRENCE, C'EST UNE CARTE MORTE. MESURE DU 10/09
+# ----------------------------------------------------------------------
+# 582231 (%6) a perdu 12 cellules sur 18, 582394 (%3) en a reperdu 5 sur 8 : baisser la
+# concurrence n'a rien change, donc l'explication "trop de taches pour 4 cartes" etait
+# fausse. La sonde 582835 (4 taches de 10 s sur margpu020) donne la vraie cause :
+#
+#     SLURM_JOB_GPUS=0 -> available True     SLURM_JOB_GPUS=2 -> available True
+#     SLURM_JOB_GPUS=1 -> available False    SLURM_JOB_GPUS=3 -> available True
+#                         RuntimeError: No CUDA GPUs are available
+#
+# L'index physique 1 de margpu020 (GPU-b0d82f38-d668-8ea7-a2da-dc32f41245c5) est
+# inutilisable par torch alors que `nvidia-smi` le liste normalement, 1 MiB occupe,
+# persistence Enabled, compute mode Default. Meme signature que margpu021, qui avait
+# coute 47 cellules.
+#
+# La cascade s'explique alors exactement : quand les cartes saines sont prises, la seule
+# libre est la morte ; la tache la saisit, meurt en 4 s, LA REND, et la suivante la
+# reprend. Cinq taches sont mortes en 20 secondes sur la meme carte. Un `exit` immediat
+# est donc le pire comportement possible ici -- il recycle le piege.
+# D'ou le traitement en bas de fichier : tenir la carte 60 s (elle sort du pool pendant
+# que les soeurs demarrent) puis se remettre en file, avec un plafond d'essais.
+# %3 reste pour laisser une carte aux autres jobs du noeud.
 #SBATCH --job-name=grow-vs-bd
 #SBATCH --partition=tau
 #SBATCH --gres=gpu:turing:1
@@ -115,8 +128,9 @@ export MOABB_RESULTS=$ROOT/moabb_results_gvb
 # found" sans echouer, donc chaque cellule tournait contre un device absent et rendait
 # des CSV bien formes. On sonde `mem_get_info` -- deduire l'ordinal de nvidia-smi est
 # precisement ce qui avait fait echouer 47 cellules.
-nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
-python - <<'PROBE' || { echo "GPU PROBE FAILED -- abandon de la tache"; exit 90; }
+echo "SLURM_JOB_GPUS=${SLURM_JOB_GPUS:-unset} CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
+nvidia-smi --query-gpu=index,uuid,name,memory.total --format=csv,noheader || true
+if ! python - <<'PROBE'
 import sys, torch
 if not torch.cuda.is_available():
     print("torch.cuda.is_available() est False"); sys.exit(1)
@@ -127,6 +141,24 @@ print(f"PROBE ok: {name} sm_{cap[0]}{cap[1]} free={free/2**30:.1f}G/{total/2**30
 if cap[0] * 10 + cap[1] < 75:
     print("carte sous sm_75 : torch ne peut pas y tourner"); sys.exit(1)
 PROBE
+then
+  # CARTE MORTE != CELLULE MORTE. Sortir ici rendrait la carte au pool et la tache
+  # suivante la reprendrait aussitot : c'est la cascade qui a tue 5 cellules de 582394
+  # en 20 secondes (cf. l'en-tete). On la GARDE 60 s -- pendant cette fenetre elle est
+  # hors du pool et les cellules soeurs demarrent sur des cartes saines -- puis on se
+  # remet en file. Le plafond evite qu'un noeud entierement casse ne boucle sans fin ;
+  # au-dela on echoue vraiment, parce qu'un garde-fou doit finir par refuser.
+  tries=${SLURM_RESTART_COUNT:-0}
+  if [ "$tries" -lt 8 ]; then
+    echo "GPU PROBE FAILED (essai $tries) -- carte tenue 60 s puis requeue"
+    sleep 60
+    scontrol requeue "$SLURM_JOB_ID"
+    sleep 120   # laisse SLURM traiter le requeue ; sortir avant l'annulerait
+    exit 0
+  fi
+  echo "GPU PROBE FAILED apres $tries essais -- abandon de la tache"
+  exit 90
+fi
 
 # PROVENANCE, ASSERTEE PLUTOT QU'ARRANGEE -- copie de deep_bottleneck.sbatch:117-137.
 python - "$ROOT" <<'PY' || { echo "GUARD FAILED -- abandon"; exit 91; }

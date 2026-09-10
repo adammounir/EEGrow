@@ -44,8 +44,18 @@
 # ratio. Les deux bras d'une paire sont le meme (label, align, seed) : dans un
 # repertoire commun le second ecraserait le premier -- CSV, joblib ET fits.jsonl --
 # silencieusement. Un sous-repertoire par ratio est la seule separation qui tienne.
+# POURQUOI `tau,gpu` ET PAS `gpu` SEULE
+# --------------------------------------
+# La premiere soumission (582215) est restee PENDING(Resources) 45 min sans lancer une
+# seule cellule. La partition `gpu` ne compte que 4 ampere (margpu010-011, 2 chacun --
+# margpu001 est volta, donc sous sm_75 et inutilisable), toutes allouees, derriere une
+# file de ~8 jobs gblayer et un job cbarbano qui tourne depuis 6 jours. Or margpu007 et
+# margpu008 portent 3 ampere CHACUN et sont dans `tau`, ou personne ne fait la queue
+# pour de l'ampere. Ouvrir les deux partitions fait passer le pool eligible de 4 a 10
+# cartes sans changer la CLASSE de carte : `--gres=gpu:ampere:1` la contraint des deux
+# cotes, donc aucune paire du contraste ne traverse de frontiere ampere/turing.
 #SBATCH --job-name=nostop-ratio
-#SBATCH --partition=gpu
+#SBATCH --partition=tau,gpu
 #SBATCH --gres=gpu:ampere:1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -95,9 +105,14 @@ export MOABB_RESULTS=$ROOT/moabb_results_ns
 
 # La carte fantome : margpu021 annoncait gpu:turing:3 et repondait "No devices were
 # found" sans echouer. On sonde `mem_get_info` -- deduire l'ordinal de nvidia-smi est
-# precisement ce qui avait fait echouer 47 cellules.
-nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
-python - <<'PROBE' || { echo "GPU PROBE FAILED -- abandon de la tache"; exit 90; }
+# precisement ce qui avait fait echouer 47 cellules. La sonde 582835 a montre que le
+# cas n'est pas propre a margpu021 : sur margpu020 c'est l'index physique 1 qui rend
+# `No CUDA GPUs are available`, cartes 0/2/3 saines. Meme traitement qu'a
+# grow_vs_bd.sbatch -- on TIENT la carte morte 60 s au lieu de la rendre au pool, sans
+# quoi la tache suivante la reprend et l'array se vide en cascade.
+echo "SLURM_JOB_GPUS=${SLURM_JOB_GPUS:-unset} CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
+nvidia-smi --query-gpu=index,uuid,name,memory.total --format=csv,noheader || true
+if ! python - <<'PROBE'
 import sys, torch
 if not torch.cuda.is_available():
     print("torch.cuda.is_available() est False"); sys.exit(1)
@@ -108,6 +123,18 @@ print(f"PROBE ok: {name} sm_{cap[0]}{cap[1]} free={free/2**30:.1f}G/{total/2**30
 if cap[0] * 10 + cap[1] < 75:
     print("carte sous sm_75 : torch ne peut pas y tourner"); sys.exit(1)
 PROBE
+then
+  tries=${SLURM_RESTART_COUNT:-0}
+  if [ "$tries" -lt 8 ]; then
+    echo "GPU PROBE FAILED (essai $tries) -- carte tenue 60 s puis requeue"
+    sleep 60
+    scontrol requeue "$SLURM_JOB_ID"
+    sleep 120   # laisse SLURM traiter le requeue ; sortir avant l'annulerait
+    exit 0
+  fi
+  echo "GPU PROBE FAILED apres $tries essais -- abandon de la tache"
+  exit 90
+fi
 
 # PROVENANCE, ASSERTEE PLUTOT QU'ARRANGEE -- copie de deep_bottleneck.sbatch:117-137.
 python - "$ROOT" <<'PY' || { echo "GUARD FAILED -- abandon"; exit 91; }
