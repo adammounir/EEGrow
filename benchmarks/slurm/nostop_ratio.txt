@@ -1,0 +1,25 @@
+# eval  dataset  model  seed  align  min_singular_ratio  tag_ratio
+#
+# 8 cellules, contraste APPARIE INTRA-BRAS : meme (bras, graine, alignement), seul le
+# plancher singulier change. Pas de jumeau `fix_*` ici -- la question posee est
+# "est-ce que le meme reseau apprend mieux avec un plancher plus bas", pas "est-ce que
+# la croissance bat le gele". Ces deux endpoints n'ont pas la meme puissance et
+# melanger les deux est ce qui a rendu 578293 illisible au premier passage.
+#
+# POURQUOI CES DEUX BRAS ET PAS `grow_deep`
+# ------------------------------------------
+# Sur `grow_deep` (w2=8) le plancher est INERTE PAR CONSTRUCTION : n_proposed = fan-out
+# = 8 pour 8 places, mesure sur 1 620 evenements de croissance de 578293 -> le plancher
+# ne coupe rien dans 100.0 % des pas. Le baisser ne peut rien changer, et une cellule
+# qui ne peut pas bouger ne merite pas de carte. Les deux bras retenus sont les seuls
+# ou le plancher mord reellement :
+#   grow_shallow    spectre sur ~4 decades, garde ~15 % de ce qu'on lui offre
+#   grow_deep_w32   plancher coupe dans 71.0 % des pas (mesure, 3 695 evenements)
+within_session bnci2014_001 grow_shallow  1 euclidean 0.1  r010
+within_session bnci2014_001 grow_shallow  1 euclidean 1e-6 r1em6
+within_session bnci2014_001 grow_shallow  2 euclidean 0.1  r010
+within_session bnci2014_001 grow_shallow  2 euclidean 1e-6 r1em6
+within_session bnci2014_001 grow_deep_w32 1 euclidean 0.1  r010
+within_session bnci2014_001 grow_deep_w32 1 euclidean 1e-6 r1em6
+within_session bnci2014_001 grow_deep_w32 2 euclidean 0.1  r010
+within_session bnci2014_001 grow_deep_w32 2 euclidean 1e-6 r1em6
