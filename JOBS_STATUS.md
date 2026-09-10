@@ -1,5 +1,50 @@
 # Jobs en cours
 
+## 10/09 — 582231 : `grow_deep` contre `bd_deep4` à budget plein, et fin des bras `fix_*`
+
+**Deux jobs vivants.**
+
+| job | quoi | où | état |
+|---|---|---|---|
+| `582231` | `grow_deep` vs `bd_deep4`, 3 graines × 2 alignements | tau / **turing** (margpu020-021) | 12 cellules actives |
+| `582215` | plancher singulier 0.1 vs 1e-6, `grow_shallow` + `grow_deep_w32` | gpu / **ampere** | 8 cellules, `PENDING (Resources)` |
+
+**Règle posée par Adam : plus aucune comparaison contre `fix_*`.** L'endpoint est
+`grow_*` contre `bd_*`. Les 6 cellules `fix_deepeeg` de 582231 (tâches 1, 4, 7, 10, 13,
+16) ont été annulées, et le `fits.jsonl` partiel de la tâche 4 — 16 lignes, aucun CSV —
+a été supprimé : une cellule annulée pollue le jsonl en append, c'est la faute que
+`cancelled-cell-pollutes-fits-jsonl` documente.
+
+**`benchmarks/slurm/grow_vs_bd.txt` n'est PAS édité** tant que l'array tourne. Les tâches
+encore en file indexent ce fichier par numéro de ligne ; en retirer les lignes `fix_*`
+maintenant décalerait tout ce qui reste et ferait tourner des cellules sur le mauvais
+point, sans jamais échouer. Le fichier reste le procès-verbal de ce qui a été soumis ;
+c'est ici qu'est enregistré ce qui a été annulé.
+
+**Ce que 582231 vient trancher.** Le workbook publié annonce `grow_deep` +0.133 sur
+`bd_deep4` (bnci2014_001 `within_session`), mais `bd_deep4` y score **0.275**, sous le
+seuil exact de chance à 4 classes (0.295) : Deep4 y était scoré à l'époque 4. Le carré
+budget × sélection donne **0.4818** au même bras une fois entraîné, et 578293 donne
+**0.4214** à `grow_deep` à budget plein. Si ça tient, le +0.133 ne rétrécit pas, il
+**change de signe**. Effet attendu ~0.06, MDE de la cellule +0.0486 : au-dessus, mais de
+peu. Unité d'analyse = le sujet, n=9.
+
+**Conséquence de la règle, à assumer.** Sans `fix_deepeeg`, `grow − bd` ne se décompose
+plus en terme de croissance + terme d'architecture (10 484 paramètres contre 284 479,
+2 étages contre 4). L'attribution devra venir de la lecture d'architecture déjà faite,
+pas d'un bras supplémentaire.
+
+**Pourquoi le seuil singulier n'est pas un axe sur `grow_deep`.** À `w2=8`,
+`n_proposed` = fan-out = 8 pour 8 places : sur les 1 620 pas de croissance de 578293 le
+plancher ne coupe rien dans 100 % des cas. Deux bras à 0.1 et 1e-6 y seraient identiques.
+L'axe vit dans 582215, sur les deux bras où il mord.
+
+**Protocole des deux arrays** : `train.patience=10000 train.selection_monitor=valid_acc`,
+assertés avant le `srun` par une résolution `--cfg job`. Vérifié sur les premières
+cellules : `epochs: 200`, `restored_epoch` renseigné.
+
+---
+
 ## 10/09 — 578293 relu sur l'endpoint MÉCANIQUE : la sélection était morte, w2 la réveille, et ça ne paie toujours pas
 
 **Aucun job lancé.** Le test que j'allais soumettre (`grow_deep` avec un `w2` élargi) est
