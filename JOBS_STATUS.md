@@ -1,6 +1,36 @@
 # Jobs en cours
 
-## 10/09 08h25 — 578248 : pilote goulot sur les deux bras deep
+## 10/09 08h36 — 578293 : pilote goulot, RESOUMIS (578248 mort en 60 s)
+
+**578248 : 36/36 cellules FAILED**, toutes sur
+`ModuleNotFoundError: No module named 'eegrow.alignment'`, en moins d'une minute.
+Zéro CSV produit.
+
+**Cause.** L'env conda `bench` porte `__editable__.eegrow-0.1.0.pth` qui pointe en dur
+sur `/scratch/amounir/eegrow/src` — un autre checkout, sans `alignment.py`. Mon sbatch
+n'exportait que `PYTHONPATH=$ROOT/benchmarks`, donc `import eegrow` résolvait vers
+l'autre tree. `pack_run.sh:82-84` exporte déjà `$ROOT/src:$ROOT/benchmarks` pour
+exactement cette raison ; ce pilote ne passe pas par `pack_run.sh` et n'en héritait pas.
+**L'échec bruyant est un coup de chance** : un tree d'août complet aurait rendu des CSV
+de la bonne forme avec le bug s=0 de retour.
+
+**Corrigé** en deux commits : `PYTHONPATH=$ROOT/src:$ROOT/benchmarks` + recopie du
+garde-fou de provenance de `pack_run.sh:316-353` (chemin sous ROOT, abstention s=0
+présente, tree capable de nommer son commit). Le garde-fou a immédiatement attrapé un
+second trou du même genre : le sbatch n'exportait pas non plus `EEGROW_SHA` depuis
+`$ROOT/.eegrow_sha`, donc **chaque ligne aurait porté `eegrow_sha=None`**.
+
+Vérifié à la main sur le cluster avant resoumission :
+`eegrow=/scratch/amounir/eegrow_budget/src/eegrow/__init__.py`, `sha=c34750c0fadc`.
+
+**578293 soumis à 08h36**, déployé @ `c34750c`. 4 tâches R, guard ok dans le log de la
+tâche 0. Coût par cellule **non encore mesuré** — bnci2014_001 n'était pas dans
+`/scratch/amounir/mne_data` et la première vague le télécharge. ETA à donner une fois
+la première cellule tombée, pas avant.
+
+Design, endpoint et limites : voir la section 578248 ci-dessous, inchangés.
+
+## 10/09 08h25 — 578248 : pilote goulot sur les deux bras deep (MORT, voir ci-dessus)
 
 **36 cellules, bnci2014_001 within_session, partition `gpu`, A100 (margpu010/011),
 array bridée à %4.** Branche `exp/deep-bottleneck`, déployée @ 3b10e09. Résultats dans
