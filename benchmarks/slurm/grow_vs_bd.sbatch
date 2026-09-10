@@ -49,6 +49,16 @@
 # cellules tiennent dessus, donc aucune paire ne traverse de frontiere de classe de
 # carte -- la contrainte que deep_bottleneck.sbatch documente. Ne PAS apparier ces
 # resultats avec results_deepbottleneck/, qui a tourne sur ampere.
+#
+# CONCURRENCE : %3, PAS %6. LEÇON DU 10/09
+# ----------------------------------------
+# La premiere soumission (582231) tournait en %6 sur un noeud qui n'a que 4 turing et
+# que d'autres utilisateurs partagent. 12 taches sur 18 ont atterri sans device
+# utilisable : `nvidia-smi` listait bien une 2080 Ti mais `torch.cuda.is_available()`
+# rendait False. Elles sont mortes en 4 secondes sur le probe (exit 90) -- le garde-fou
+# a refuse au lieu de laisser tourner des cellules contre une carte absente, ce qui est
+# exactement le mode de defaillance de margpu021 (47 cellules perdues). On plafonne a 3
+# pour laisser une carte aux autres jobs du noeud.
 #SBATCH --job-name=grow-vs-bd
 #SBATCH --partition=tau
 #SBATCH --gres=gpu:turing:1
@@ -77,7 +87,11 @@ fi
 # Commentaires filtres AVANT l'indexation : `sed -n Np` sur le fichier brut ferait
 # pointer la tache k sur une ligne de commentaire et `read` rendrait des variables
 # vides -- une cellule qui tourne sur le mauvais point sans jamais echouer.
-POINTS=$ROOT/benchmarks/slurm/grow_vs_bd.txt
+# POINTS est surchargeable par l'environnement (`sbatch --export=ALL,POINTS=...`)
+# pour rejouer un sous-ensemble de cellules sans dupliquer ce template. Le fichier
+# d'origine reste le proces-verbal de ce qui a ete soumis le 10/09 ; on ne l'edite
+# PAS pour retirer des lignes, ca decalerait l'indexation de toute tache en file.
+POINTS=${POINTS:-$ROOT/benchmarks/slurm/grow_vs_bd.txt}
 LINE=$(grep -v '^[[:space:]]*#' "$POINTS" | grep -v '^[[:space:]]*$' \
        | sed -n "$((SLURM_ARRAY_TASK_ID + 1))p")
 read -r EVAL DS MODEL SEED ALIGN <<< "$LINE"

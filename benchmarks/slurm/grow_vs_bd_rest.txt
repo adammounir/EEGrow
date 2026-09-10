@@ -1,0 +1,38 @@
+# eval  dataset  model  seed  align
+#
+# LES 8 CELLULES MANQUANTES DE 582231. A lire avec grow_vs_bd.txt, qui reste le
+# proces-verbal de ce qui avait ete soumis le 10/09 et qu'on n'edite pas.
+#
+# Sur les 18 cellules soumises :
+#   * 4 ont abouti      -- grow_deep et bd_deep4, graines 1-2, align=none
+#   * 6 ont ete annulees -- les bras `fix_deepeeg`, cf. la regle "plus de fix_*"
+#   * 8 sont mortes sur le probe GPU (exit 90) et sont reprises ici
+#
+# POURQUOI ELLES SONT MORTES
+# ---------------------------
+# %6 taches concurrentes sur margpu020, qui declare gpu:turing:4 et heberge d'autres
+# utilisateurs. Les taches au-dela des cartes libres ont recu une allocation dont
+# `torch.cuda.is_available()` rend False alors que `nvidia-smi` liste la carte. Aucune
+# n'a produit de CSV : le probe refuse avant l'entrainement. Rien a nettoyer.
+#
+# CE QUE CES 8 CELLULES COMPLETENT
+# ---------------------------------
+# Le design est 3 graines x 2 alignements. Les 4 cellules acquises donnent deja
+# align=none sur 2 graines :
+#
+#     bd_deep4 0.4870   grow_deep 0.4194   delta -0.0676  IC95 [-0.1033, -0.0339]
+#
+# soit le CHANGEMENT DE SIGNE du +0.133 publie. Ces 8 cellules ajoutent la graine 3 et
+# tout le bras euclidean -- elles testent si l'inversion tient sous alignement, ou si
+# l'alignement euclidien est ce qui portait le gain publie.
+#
+# Meme results_dir que les 4 acquises : `stem = cell_stem(label, align_tag, seed)`
+# separe (bd_deep4, none, 1) de (bd_deep4, euclidean, 1), aucune collision possible.
+within_session bnci2014_001 grow_deep 3 none
+within_session bnci2014_001 bd_deep4  3 none
+within_session bnci2014_001 grow_deep 1 euclidean
+within_session bnci2014_001 bd_deep4  1 euclidean
+within_session bnci2014_001 grow_deep 2 euclidean
+within_session bnci2014_001 bd_deep4  2 euclidean
+within_session bnci2014_001 grow_deep 3 euclidean
+within_session bnci2014_001 bd_deep4  3 euclidean

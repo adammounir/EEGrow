@@ -1,5 +1,50 @@
 # Jobs en cours
 
+## 10/09 — RÉSULTAT : le gain publié de `grow_deep` change de signe ; 582394 complète le design
+
+**Les 4 cellules acquises de 582231** (`align=none`, graines 1-2, n=9 sujets, sessions et
+graines moyennées avant l'appariement) :
+
+| | `bd_deep4` | `grow_deep` | delta |
+|---|---|---|---|
+| publié (budget coupé) | 0.275 | 0.408 | **+0.133** |
+| budget plein | **0.4870** | 0.4194 | **−0.0676** |
+
+IC95 bootstrap au niveau **sujet** : **[−0.1033, −0.0339]**. `grow_deep` ne gagne que sur
+**1 sujet sur 9**. Écart-type inter-sujet du delta 0.0568 → MDE(n=9, 80 %) = 0.0549 :
+l'effet le dépasse, la cellule n'est pas sous-puissante pour ce contraste. La prédiction
+inscrite dans l'en-tête de `grow_vs_bd.sbatch` est vérifiée — `bd_deep4` atteint 0.487
+là où le carré budget × sélection annonçait 0.4818, et `grow_deep` reste à 0.42 comme
+578293 le mesurait. **Le « gain de la croissance » sur le bras deep était un artefact de
+budget, pas un effet.**
+
+Ce qui reste à trancher : est-ce que l'inversion tient **sous alignement euclidien**, ou
+est-ce que l'alignement portait le gain publié. C'est l'objet de 582394.
+
+**Panne de 582231 : 12 cellules sur 18 mortes en 4 secondes, exit 90.**
+
+```
+NVIDIA GeForce RTX 2080 Ti, 11264 MiB
+torch.cuda.is_available() est False
+GPU PROBE FAILED -- abandon de la tache
+```
+
+`%6` tâches concurrentes sur margpu020, qui déclare `gpu:turing:4` et héberge d'autres
+utilisateurs. Les tâches au-delà des cartes libres ont reçu une allocation dont torch ne
+peut rien faire, pendant que `nvidia-smi` listait la carte — le mode de défaillance de
+`cuda-ordinal-vs-nvidia-smi`, cette fois attrapé. **Aucun nettoyage nécessaire** : le
+probe refuse avant l'entraînement, donc aucun CSV ni `fits.jsonl` n'a été écrit par ces
+12 tâches. C'est la démonstration que le garde-fou vaut son coût.
+
+**582394 reprend les 8 cellules manquantes** (graine 3 en `none`, tout le bras
+`euclidean`) via `benchmarks/slurm/grow_vs_bd_rest.txt`, en **`%3`** pour laisser une
+carte au nœud. `grow_vs_bd.sbatch` accepte désormais `POINTS` par l'environnement
+(`sbatch --export=ALL,POINTS=...`) plutôt qu'un template dupliqué ; l'indexation des 8
+lignes a été simulée avant soumission. Même `results_dir` que les 4 acquises : `stem`
+sépare `(bd_deep4, none, 1)` de `(bd_deep4, euclidean, 1)`, aucune collision.
+
+---
+
 ## 10/09 — 582231 : `grow_deep` contre `bd_deep4` à budget plein, et fin des bras `fix_*`
 
 **Deux jobs vivants.**
