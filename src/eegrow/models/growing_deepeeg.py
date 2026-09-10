@@ -15,12 +15,41 @@ Structure (2 stages)
     STAGE 1 :  conv_time (1->w1, kT x 1)
                conv_spat (w1->w1, 1 x C)        <- spatial collapse
                BN -> ELU -> MaxPool(time)       <- breaks the chain
-    STAGE 2 :  conv2a (w1->w2, kT x 1)          <- stage start: previous=None
+    STAGE 2 :  [Dropout]                        <- opt-in, block start (Deep4Net order)
+               conv2a (w1->w2, kT x 1)          <- stage start: previous=None
+               [GroupNorm] -> ELU               <- norm opt-in, INSIDE the junction
                conv2b (w2->w2, kT x 1)          <- growable junction (deep)
                BN -> ELU -> MaxPool(time)
     conv classifier (w2->n_outputs) -> squeeze
 
 conv2b grows its FAN-IN (= conv2a out_channels); its OUTPUT stays w2.
+
+REGULARISATION (`drop_prob`, `norm_junction`) -- added 10/09/2026, DEFAULTS OFF
+------------------------------------------------------------------------------
+Measured on the 3240 fits of pilot 578293 (bnci2014_001, n=9): every arm drives the
+train loss to 0.001-0.004 on 230 trials while the *best* valid loss reached is only
+0.1-0.2 nats under ln(4)=1.3863, and 18-28% of fits never beat the uniform prior at
+all. Widening w2 8->32 (10036 -> 65956 params) divides the final train loss by 4 and
+moves the valid optimum from epoch 19 to epoch 11. The arm is not capacity-limited,
+it is regularisation-limited -- which is *why* growth cannot pay here.
+
+This file was the only growing architecture with no regularisation at all:
+growing_shallow / growing_sccnet / growing_eegnex all carry drop_prob=0.5, and so
+does the braindecode Deep4Net this model imitates (3 Dropout modules). Both knobs
+therefore default to OFF, so every result produced before this commit is reproduced
+bit-for-bit by the defaults; the pilot turns them on explicitly.
+
+Why GroupNorm and not BatchNorm inside the junction. gromo applies
+`post_layer_function` *independently* to the main and the candidate branch
+(`_apply_extended_post_layer_function`, whose own docstring restricts that path to
+"stateless modules such as nn.ReLU"). A BatchNorm there would (a) update its running
+stats twice per line-search step and (b) be sized on conv2a's fan-out, which is
+exactly what grows. `nn.GroupNorm(1, C, affine=False)` has no parameter and no
+buffer, and its forward never reads `num_channels` -- it survives growth unchanged.
+Known limitation, stated rather than hidden: during a line search the candidate
+branch is normalised over its own channels, not jointly with the main branch, so the
+scaling factor gromo selects is parameterised differently from the post-merge model.
+That affects the choice of gamma at each growth event, not the merged architecture.
 """
 
 from __future__ import annotations
@@ -57,6 +86,8 @@ class GrowingDeepEEGNet(SequentialGrowingModel):
         filter_length_2: int = 10,
         pool_len: int = 3,
         pool_stride: int = 3,
+        drop_prob: float = 0.0,
+        norm_junction: bool = False,
         device: torch.device | str | None = None,
     ) -> None:
         super().__init__(in_features=n_chans, out_features=n_outputs, device=device)
@@ -105,11 +136,25 @@ class GrowingDeepEEGNet(SequentialGrowingModel):
         t1p = _conv_out(t1, pool_len, pool_stride)   # after pooling: chain is broken
 
         # ---- STAGE 2 (deep, AFTER a pooling) -------------------------------
+        # Dropout at the START of the deep block, which is the braindecode Deep4Net
+        # order (drop -> conv -> bn -> nonlin -> pool) and, like Deep4Net, block 1 is
+        # left bare. It sits OUTSIDE the junction: pool1 has already broken the chain,
+        # so gromo never crosses it and the line search never sees a stochastic mask.
+        self.drop_prob = float(drop_prob)
+        self.drop2 = nn.Dropout(p=self.drop_prob) if self.drop_prob > 0 else nn.Identity()
+
         # conv2a: stage start -> previous=None, allow_growing=False (chain broken).
         t2 = _conv_out(t1p, filter_length_2)
+        # Stateless and width-agnostic -- see the module docstring for why this cannot
+        # be a BatchNorm. `num_channels` is passed for readability only; GroupNorm's
+        # forward never reads it, which is precisely what lets it survive growth.
+        self.norm_junction = bool(norm_junction)
+        act2a: nn.Module = nn.ELU()
+        if self.norm_junction:
+            act2a = nn.Sequential(nn.GroupNorm(1, w2_in, affine=False), nn.ELU())
         self.conv2a = Conv2dGrowingModule(
             in_channels=w1, out_channels=w2_in, kernel_size=(filter_length_2, 1),
-            use_bias=False, post_layer_function=nn.ELU(),   # activation INSIDE the junction
+            use_bias=False, post_layer_function=act2a,   # activation INSIDE the junction
             previous_module=None, allow_growing=False,
             input_size=(t1p, 1), name="conv2a", device=self.device,
         )
@@ -154,7 +199,7 @@ class GrowingDeepEEGNet(SequentialGrowingModel):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.dimshuffle(self.ensuredims(x))
         x = self._stage1(x)
-        x = self.conv2b(self.conv2a(x))
+        x = self.conv2b(self.conv2a(self.drop2(x)))
         for m in self._tail2():
             x = m(x)
         return x
@@ -167,6 +212,7 @@ class GrowingDeepEEGNet(SequentialGrowingModel):
         """
         x = self.dimshuffle(self.ensuredims(x))
         x = self._stage1(x)
+        x = self.drop2(x)
         x_ext: torch.Tensor | None = None
         x, x_ext = self.conv2a.extended_forward(x, x_ext)
         x, x_ext = self.conv2b.extended_forward(x, x_ext)
