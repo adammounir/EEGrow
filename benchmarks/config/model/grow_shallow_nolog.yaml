@@ -1,0 +1,32 @@
+# ABLATION DE READOUT, point intermediaire : `Square -> AvgPool -> Identity`.
+#
+# Pourquoi ce bras existe. Le facteur `reg` du pilote w1 etait GROUPE (dropout ET
+# normalisation ensemble) : il a perdu, donc on n'a pas eu a le decomposer, mais s'il
+# avait gagne il aurait fallu un second passage. On ne refait pas l'erreur ici.
+#
+# `power -> generic` bouge trois choses a la fois (Square->ELU, AvgPool->MaxPool,
+# SafeLog->Identity). Or le log porte un effet propre, independant du quadratique : la
+# puissance de bande est a queue lourde, et le log transforme l'ERD -- une modulation
+# MULTIPLICATIVE de la puissance -- en un decalage ADDITIF, donc en quelque chose qu'un
+# classifieur lineaire peut lire. Sans ce bras, un effondrement de `generic` ne dirait
+# pas si c'est le carre ou la compression qui porte l'effet.
+#
+# Il garde donc l'estimateur de variance (Square+AvgPool = moyenne des carres) et ne
+# retire QUE la compression logarithmique. Meme geometrie de pooling, donc mêmes 18372
+# parametres et meme fcl=69 que grow_shallow (verifie).
+#
+# Lecture attendue -- une echelle a quatre barreaux :
+#   grow_shallow (power) > nolog > generic ~ grow_deep
+# Si nolog tombe deja au niveau de generic, c'est le LOG qui fait le travail ; s'il
+# reste haut, c'est le QUADRATIQUE. Les deux lectures sont interessantes et le plan
+# les separe avant de mesurer, pas apres.
+kind: growing
+arch: GrowingShallowFBCSPNet
+label: grow_shallow_nolog
+needs_sfreq: false
+grow_every: 5
+module_kwargs:
+  n_filters_time: 8
+  n_filters_spat: 40
+  target_n_filters_time: 40
+  readout: nolog

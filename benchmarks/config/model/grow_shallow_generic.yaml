@@ -1,0 +1,40 @@
+# ABLATION DE READOUT -- d'ou vient l'ecart de +0.108 entre grow_shallow et grow_deep ?
+#
+# Le pilote w1 (580878) a elimine deux des trois explications sur le bras deep :
+#   * capacite      : w1 8 -> 32 ne rapporte que +0.0235 (a reg off), 4x trop peu ;
+#   * regularisation: dropout+GroupNorm DEGRADE (10/12 contrastes apparies negatifs,
+#                     les 3 seuls IC95 significatifs tous du cote negatif).
+#
+# Reste le biais inductif. Shallow calcule `Square -> AvgPool -> SafeLog`, c'est-a-dire
+# la LOG-VARIANCE du signal filtre spatialement -- une log-puissance de bande. L'imagerie
+# motrice est un phenomene ERD/ERS : la quantite discriminante est la PUISSANCE mu/beta,
+# une fonctionnelle quadratique du signal. ShallowFBCSPNet est donc du FBCSP ecrit en
+# couches, et la statistique a estimer est DANS l'architecture. Deep, avec ELU+MaxPool,
+# doit approximer x^2 par morceaux -- ce qui se paie en unites et en essais, et il a
+# 8/16 filtres sur 230 essais.
+#
+# Ce bras teste l'explication sur le bras qu'on sait bien mesurer, en ne bougeant QUE le
+# readout : ELU -> MaxPool -> Identity, la queue generique de la famille ReLU. La
+# geometrie du pooling est tenue fixe, donc final_conv_length et le nombre de parametres
+# sont IDENTIQUES a grow_shallow (18372, fcl=69, verifie) : c'est une ablation de
+# fonction, pas un changement de capacite deguise.
+#
+# PREDICTION PREENREGISTREE : si l'explication est bonne, ce bras s'effondre vers
+# l'accuracy de grow_deep (~0.44 sur bnci2014_001). S'il tient a ~0.54, l'explication
+# est FAUSSE et l'ecart est ailleurs -- il faudra le dire.
+#
+# grow_deep n'est pas relance : il est deja dans results_w1pilot avec le meme protocole,
+# les memes graines et les memes alignements, donc directement appariable. grow_shallow
+# l'est en revanche, parce que ses chiffres v5 viennent d'une AUTRE campagne (protocole
+# patience/selection different) -- apparier deux campagnes est exactement l'erreur que
+# la note "xds-august-grid-obsolete" documente.
+kind: growing
+arch: GrowingShallowFBCSPNet
+label: grow_shallow_generic
+needs_sfreq: false
+grow_every: 5
+module_kwargs:
+  n_filters_time: 8
+  n_filters_spat: 40
+  target_n_filters_time: 40
+  readout: generic
