@@ -55,22 +55,34 @@
 # de carte, noeuds differents : 12 cellules, c'est le prix de ne pas avoir a s'en
 # expliquer. Les six niveaux du plan sont donc sur les deux memes noeuds.
 #
-# POURQUOI LA PARTITION `tau` ET PAS `gpu-best`
-# ---------------------------------------------
-# Constate au moment d'ecrire : TOUTES les ampere et TOUTES les hopper sont prises
-# (GRES_USED plein sur margpu005-016). `tau` est en PriorityTier=100 contre 1 pour
-# `gpu` et `gpu-best`, avec PreemptType=preempt/partition_prio et PreemptMode=REQUEUE :
-# y soumettre prend la main sur les jobs best-effort, qui sont REMIS EN FILE, pas tues
-# -- c'est le contrat de cette partition. Les seules ampere de `tau` sont margpu007 et
-# margpu008, 3 cartes chacune : le `%6` ci-dessous est exactement ce parc, et la
-# contrainte gres+partition suffit a epingler la classe sans --nodelist.
-# pascal (sm_60) et volta (sm_70) restent inutilisables : torch 2.13+cu130 veut sm_75+.
+# POURQUOI `tau` + turing, ALORS QUE LE PILOTE 578293 ETAIT SUR AMPERE
+# ---------------------------------------------------------------------
+# Recompte du parc au moment de soumettre, en soustrayant GRES_USED de GRES sur les
+# trois partitions accessibles (`tau`, `gpu`, `gpu-best`) : ZERO ampere libre, ZERO
+# hopper libre, QUATRE turing libres sur tout le cluster. Les 6 A100 de margpu007/008
+# ne sont pas prises par des jobs best-effort mais par des jobs `tau` (jjobard,
+# 578320/578324, limite 1 jour, 2h30 ecoulees) -- meme PriorityTier=100, donc la
+# preemption ne joue pas et il n'y a rien a prendre. La premiere soumission (580874,
+# ampere, annulee sans avoir ecrit une seule ligne) serait restee PENDING jusqu'a 21 h.
+#
+# Reste turing : margpu021 (3 cartes libres) et margpu020 (1), dans un parc `tau` de
+# 23 cartes qui se libere au fil de l'eau. C'est aussi la classe sur laquelle la
+# campagne v5 elle-meme a tourne. pascal (sm_60) et volta (sm_70) restent inutilisables :
+# torch 2.13+cu130 veut sm_75+.
+#
+# margpu021 est le noeud de l'incident de la carte fantome (annonçait gpu:turing:3 et
+# repondait "No devices were found" en rendant des CSV bien formes). Sonde avant de
+# soumettre plutot que supposee : RTX 2080 Ti, sm_75, 10.4G libres, matmul ok. Saine.
+#
+# Le changement de classe ne casse aucune comparaison : les six niveaux du plan sont
+# relances ICI, y compris w1=8/reg=off, donc aucune paire ne traverse de frontiere de
+# materiel. C'est exactement pourquoi ce niveau est relance et non repris.
 #
 # ORDRE DE LA GRILLE
 # ------------------
 # w1_pilot.txt est trie par GRAINE d'abord : les 24 premieres cellules sont le plan
-# COMPLET a la graine 0 (12 modeles x 2 alignements). A %6 cela donne une lecture de
-# tout le plan en 4 vagues au lieu de 12, et les graines 1-2 ne font que resserrer les
+# COMPLET a la graine 0 (12 modeles x 2 alignements). A %12 cela donne une lecture de
+# tout le plan en 2 vagues au lieu de 6, et les graines 1-2 ne font que resserrer les
 # intervalles. Reprenable : chaque tache saute sa cellule si le CSV existe.
 #
 # RESULTS_DIR DEDIE
@@ -79,14 +91,14 @@
 # presents dans results/ ET dans results_deepbottleneck/. Tout part dans results_w1pilot/.
 #SBATCH --job-name=w1-pilot
 #SBATCH --partition=tau
-#SBATCH --gres=gpu:ampere:1
+#SBATCH --gres=gpu:turing:1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --time=8:00:00
 #SBATCH --requeue
-#SBATCH --array=0-71%6
+#SBATCH --array=0-71%12
 #SBATCH --output=/scratch/amounir/eegrow_budget/w1_logs/w1_%A_%a.out
 #SBATCH --open-mode=append
 
@@ -131,6 +143,16 @@ cap = torch.cuda.get_device_capability(0)
 print(f"PROBE ok: {name} sm_{cap[0]}{cap[1]} free={free/2**30:.1f}G/{total/2**30:.1f}G")
 if cap[0] * 10 + cap[1] < 75:
     print("carte sous sm_75 : torch ne peut pas y tourner"); sys.exit(1)
+# MODELE DE CARTE EPINGLE, PAS SEULEMENT LA CLASSE. `gpu:turing` couvre plusieurs
+# modeles ; les comparaisons de ce pilote sont appariees fit par fit, donc une cellule
+# sur T4 contre une cellule sur 2080 Ti mettrait une difference de MATERIEL dans la
+# difference appariee. On refuse plutot que d'avertir : une tache qui atterrit sur un
+# autre modele sort en erreur et se voit dans squeue, au lieu de rendre un CSV bien
+# forme qu'on decouvrirait a l'analyse -- ou jamais.
+REF = "2080 Ti"
+if REF not in name:
+    print(f"carte {name} != modele de reference '{REF}' : refus, "
+          f"le pilote doit rester homogene"); sys.exit(1)
 PROBE
 
 # PROVENANCE ET VERSION DU CODE, ASSERTEES PLUTOT QU'ARRANGEES.
