@@ -1,5 +1,200 @@
 # Jobs en cours
 
+## 10/09 13h00 UTC — 581692 : ablation de readout, SOUMISE
+
+**18 cellules** (`results_readout/`), `eegrow_sha=650b9ea79114`, branche `exp/deep-bottleneck`.
+{`grow_shallow`, `grow_shallow_nolog`, `grow_shallow_generic`} × 3 seeds × 2 aligns, triées
+par graine — les **6 premières cellules sont le plan complet** à la graine 0.
+
+**La question.** D'où vient l'écart de **+0.108** entre `grow_shallow` et `grow_deep` ? Le
+pilote w1 en a tué deux explications sur trois : la **capacité** (w1 8→32 ne vaut que
++0.0235, 4× trop peu) et la **régularisation** (dropout+GroupNorm *dégrade*). Reste le
+**biais inductif** :
+
+| | queue |
+|---|---|
+| shallow | `BatchNorm → Square → AvgPool → SafeLog` |
+| deep | `BatchNorm → ELU → MaxPool` |
+
+`Square → AvgPool` = moyenne des carrés = **la variance** du signal filtré spatialement ;
+avec le log, c'est une log-puissance de bande. L'imagerie motrice est de l'ERD/ERS : la
+quantité discriminante est la **puissance** mu/beta, une fonctionnelle **quadratique**.
+ShallowFBCSPNet est donc du FBCSP écrit en couches — la statistique à estimer est *dans*
+l'architecture. Une queue ReLU doit approximer x² par morceaux, ce qui se paie en unités
+et en essais ; le bras deep a 8/16 filtres et 230 essais par sujet.
+
+**Corollaire pour le papier.** La jonction growable de deep (`conv2b`) vit en **aval** du
+collapse spatial à w1=8. Ce que ce collapse détruit ne se récupère pas en aval :
+**l'axe croissable n'est pas l'axe limitant**. Ce n'est pas un fait sur la croissance,
+c'est un fait sur l'endroit où la jonction a été posée — `growing_shallow` fait croître
+`conv_spat`, c'est-à-dire le goulot lui-même, et sa croissance paie.
+
+**Pourquoi ablater shallow et non augmenter deep.** deep diffère de shallow sur *quatre*
+axes à la fois (profondeur, largeur, position de jonction, readout) — lui ajouter le
+readout ne trancherait rien. On retire donc **un** facteur au bras qu'on sait bien mesurer,
+à géométrie de pooling tenue fixe : les trois variantes ont **18372 paramètres et
+`final_conv_length=69` à l'identique** (vérifié au smoke test et re-vérifié par le garde-fou
+de chaque tâche). Ablation de *fonction*, pas changement de capacité déguisé.
+
+**Facteur décomposé d'avance**, pour ne pas refaire le pari du facteur groupé `reg` :
+
+| bras | readout | ce qu'il retire |
+|---|---|---|
+| `grow_shallow` | `Square → AvgPool → SafeLog` | rien (référence) |
+| `grow_shallow_nolog` | `Square → AvgPool → Identity` | le log seul |
+| `grow_shallow_generic` | `ELU → MaxPool → Identity` | tout le readout |
+
+Le log porte un effet propre : la puissance de bande est à queue lourde, et le log
+transforme l'ERD — modulation **multiplicative** — en décalage **additif**, lisible par un
+classifieur linéaire. Sans le barreau intermédiaire, un effondrement de `generic` ne dirait
+pas si c'est le carré ou la compression qui porte l'effet.
+
+**Prédiction préenregistrée** : `power > nolog > generic ≈ grow_deep` (~0.44). **Si
+`generic` tient à ~0.54, l'explication du readout est fausse** et l'écart est ailleurs —
+ce sera à écrire tel quel.
+
+**Appariement.** `grow_shallow` est **relancé** et non repris : ses chiffres v5 viennent
+d'une autre campagne, sous un protocole différent (patience, selection_monitor) — apparier
+deux campagnes est l'erreur que `xds-august-grid-obsolete` documente. `grow_deep` n'est
+**pas** relancé : il est déjà dans `results_w1pilot` sous ce protocole, ces graines, ces
+alignements, donc appariable tel quel. D'où aussi le même modèle de carte épinglé
+(**2080 Ti**) et `dataset.resample=250`.
+
+**Ce que ça ne teste pas** : toujours pas l'endpoint `grow − fix` (MDE ~+0.05 à n=9 contre
+un effet visé de +0.0123). On teste l'accuracy **absolue**.
+
+---
+
+## 10/09 11h20 UTC — 580878 : pilote w1 × régularisation, EN COURS
+
+> **Point 12h20 UTC.** 38 terminées, 12 en vol, 20 en file, 2 échecs (`_3`, `_8`, rattrapés
+> par 580899/580903). Coût mesuré **15,5 min/cellule** (13:37–17:48 sur 38). Fin d'array
+> attendue **~13 h 00 UTC**. Graine 0 complète (24 cellules = le plan factoriel entier),
+> **lue** — voir la section « lecture graine 0 » plus bas.
+>
+> **Deux SHA dans les CSV**, `6c1ad3a614e6` et `53f24a118f37` : `git diff` entre les deux ne
+> touche **que** `benchmarks/slurm/w1_pilot.sbatch` (28 lignes, la remise en file sur carte
+> fantôme). Zéro ligne de modèle, d'entraînement ou de données — les cellules restent
+> appariables. Vérifié, pas supposé.
+>
+> **Point 13h00 UTC — un TROISIÈME SHA est attendu, et c'est de mon fait.** Le déploiement
+> de l'ablation de readout (`650b9ea79114`) a réécrit l'arbre cluster alors que **6 cellules
+> w1 tournaient encore**. Celles qui ont démarré après portent donc `650b9ea79114`.
+> `git diff 53f24a1 650b9ea` : `growing_shallow.py` + 4 fichiers **nouveaux** (2 yaml, 1
+> sbatch, 1 txt). **Zéro ligne** de `growing_deepeeg.py`, de `loop.py` ou du chemin données —
+> le bras deep n'a rien vu passer, les 72 cellules restent appariables. Dit ici plutôt que
+> découvert à l'analyse.
+
+**72 cellules** (`results_w1pilot/`), `eegrow_sha=6c1ad3a614e6`, branche `exp/deep-bottleneck`.
+Plan factoriel : {`grow_deep`, `fix_deepeeg`} × {reg off, reg on} × {w1 8, 16, 32} × 3 seeds × 2 aligns.
+
+**Pourquoi ce pilote.** 578293 a fait varier w2 (l'aval) et n'a rien trouvé. La mesure
+sur ses 3 240 fits dit pourquoi : train loss 0.001–0.004 sur 230 essais, meilleure valid
+loss à 0.1–0.2 nats sous ln 4, 18–28 % des fits jamais sous le prior uniforme, optimum de
+validation époque 11–20 sur 200. **Le bras n'est pas limité en capacité, il est limité en
+régularisation** — donc la croissance, qui ajoute de la capacité, ne peut rien payer.
+
+Les deux facteurs jamais bougés jusqu'ici :
+- **w1** — `conv_time 1→w1`, `conv_spat w1→w1` sur 22 électrodes, tenu à 8 partout contre
+  25/25 pour Deep4Net. La jonction growable vit **en aval** de ce collapse spatial ; celle
+  de `growing_shallow` est sur le signal brut (axe FBCSP). C'est l'hypothèse de mécanisme.
+- **reg** — `drop_prob=0.5` + `norm_junction`. `growing_deepeeg.py` était la **seule** archi
+  growing sans aucune régularisation (shallow/sccnet/eegnex à 0.5, Deep4Net à 3 Dropout).
+  Facteur **groupé** : s'il gagne, un second passage devra le décomposer.
+
+**Défauts OFF** (`drop_prob=0.0`, `norm_junction=False`) → sortie bit-identique à l'avant,
+vérifiée localement : aucun résultat publié n'est re-daté.
+
+**Cartes.** Recompte au moment de soumettre : **0 ampere, 0 hopper, 4 turing libres** sur
+tout le cluster. Les 6 A100 de margpu007/008 sont tenues par des jobs `tau` (jjobard, ≤21 h
+restantes) — même PriorityTier=100, rien à préempter. Première soumission **580874**
+(ampere) annulée sans avoir écrit une ligne. Le pilote tourne donc sur **turing RTX 2080 Ti**,
+classe épinglée *au modèle* : la sonde refuse toute autre carte, parce que les contrastes
+sont appariés fit par fit. Les six niveaux étant relancés ici (w1=8/reg=off compris), aucune
+paire ne traverse de frontière de matériel.
+
+**Carte fantôme, de retour.** margpu021 annonce `gpu:turing:3` ; deux cartes répondent, la
+troisième dit « No devices were found ». Sondée saine 20 min plus tôt sur un *autre* de ses
+créneaux — le défaut est par carte, pas par nœud. La sonde `mem_get_info` l'a attrapée en
+5 s (exit 90, tâches 3 et 8, aucun CSV). `ExcNodeList=margpu021` posé sur les 58 tâches en
+attente, tâches 3 et 8 resoumises en **580899**. Sans cette sonde, le créneau fantôme aurait
+consommé une tâche toutes les 5 s et fait « finir » l'array en quelques minutes.
+
+**Ce que le pilote peut conclure** : l'accuracy **absolue** (référence : l'écart d'archi
+`grow_shallow − grow_deep`, +0.108). **Pas** l'endpoint `grow − fix` — MDE +0.0486 à n=9
+contre un effet visé de +0.0123. Si `reg` bouge l'accuracy, il faudra **relancer `grow − fix`
+par-dessus**, une fois le bras sorti du régime de mémorisation : c'est la seule condition où
+la question de la croissance a un sens.
+
+Grille triée par **graine** : les 24 premières cellules sont le plan complet à la graine 0.
+
+### Lecture graine 0 (24/24 cellules, n=9 sujets, 1 graine) — `w1_analysis.py`
+
+**Accuracy absolue** (sessions moyennées, appariée par sujet) :
+
+| bras | align | reg | w1=8 | w1=16 | w1=32 |
+|---|---|---|---|---|---|
+| grow_deep | euclidean | off | 0.4385 | 0.4562 | 0.4408 |
+| grow_deep | euclidean | **ON** | 0.4153 | 0.4328 | 0.4643 |
+| fix_deepeeg | euclidean | off | 0.4330 | 0.4605 | 0.4565 |
+| fix_deepeeg | euclidean | **ON** | 0.3944 | 0.4381 | 0.4669 |
+| grow_deep | none | off | 0.4292 | 0.4311 | 0.4444 |
+| grow_deep | none | **ON** | 0.4089 | 0.4111 | 0.4186 |
+| fix_deepeeg | none | off | 0.4161 | 0.4387 | 0.4416 |
+| fix_deepeeg | none | **ON** | 0.4113 | 0.4215 | 0.4356 |
+
+**Facteur reg — négatif.** 10 des 12 contrastes appariés `reg − noreg` sont négatifs
+(moyenne −0.014). Trois IC95 excluent zéro, **les trois du côté négatif** (−0.023, −0.026,
+−0.039). Aucun contraste positif n'est significatif. La régularisation ne sort pas le bras
+du régime de mémorisation : elle le dégrade, surtout à w1 étroit.
+
+**Facteur w1 — positif mais petit.** 6 contrastes sur 16 excluent zéro, tous positifs. Le
+plus gros est `fix_deepeeg / eucl / reg : w32 − w8 = +0.0726 [+0.034, +0.106]` — mais son
+point de départ (0.3944) est **la pire cellule de la table** : c'est le trou creusé par reg
+qu'on rebouche, pas du terrain gagné. À reg off, le même contraste ne vaut que +0.0235.
+
+**Endpoint.** Meilleure cellule toutes conditions confondues : **0.4669** ; meilleure sans
+reg : 0.4605. Écart +0.006 — rien. Ni la largeur w1 ni la régularisation ne rattrapent
+l'écart d'architecture de **+0.108**. La condition préenregistrée (« si `reg` bouge
+l'accuracy, relancer `grow − fix` par-dessus ») **n'est pas déclenchée**.
+
+**`grow − fix`** : 12 contrastes, moyenne −0.002, un seul IC exclut zéro (−0.017). MDE
+0.018–0.054 contre un effet visé de +0.0123 → **sous-puissant, à ne pas lire comme un nul**.
+
+À refaire sur les 3 graines quand l'array est fini : moyenner les graines réduit la sd et
+donc le MDE ; n reste 9 (le sujet est l'unité).
+
+## 10/09 10h30 UTC — 578293 : pilote goulot TERMINÉ, issue (b)
+
+36/36 cellules, ~2 h de mur (cellule ≈ 3 à 8 min selon le niveau, mesurée en direct).
+**Intégrité** : 648 lignes = 36 × 18, un seul `eegrow_sha=c34750c0fadc`, 9 sujets × 2
+sessions × 3 seeds partout, aucune cellule fantôme.
+
+**Endpoint (accuracy absolue, appariée par sujet, seeds et sessions moyennées, n=9)** :
+
+| bras | align | w2=8 | w2=16 | w2=32 | amplitude |
+|---|---|---|---|---|---|
+| grow_deep | none | 0.4214 | 0.4193 | 0.4309 | 0.0116 |
+| fix_deepeeg | none | 0.4216 | 0.4181 | 0.4196 | 0.0035 |
+| grow_deep | euclidean | 0.4349 | 0.4525 | 0.4579 | 0.0230 |
+| fix_deepeeg | euclidean | 0.4266 | 0.4388 | 0.4399 | 0.0133 |
+
+Élargir w2 de 8 à 32 (×4 en largeur, ×3.3 en paramètres) déplace l'accuracy de
+**+0.023 au mieux**, contre l'ordre de grandeur de référence **+0.108** inscrit dans le
+sbatch. Là où ça bouge (euclidean), **les deux bras montent** : fix +0.013, grow +0.023.
+→ **issue (b)** de la pré-inscription : le goulot w2=8 n'est pas la contrainte. Le nul
+sur n=324 est le résultat, et devient un mécanisme à écrire.
+
+**grow − fix, famille de 6, Holm** : rien ne survit. Le plus fort est
+`euclidean w16` +0.0138, p brut 0.024, **p Holm 0.145**. Ordre : eucl-w16 (.024),
+eucl-w32 (.080), none-w32 (.159), eucl-w8 (.227), none-w16 (.790), none-w8 (.973).
+
+**Note de puissance, pour l'étage 2.** Le sd apparié observé ici est de 0.013 à 0.027,
+pas les 0.052 pré-enregistrés — parce qu'on moyenne 3 seeds × 2 sessions avant de
+tester (Spearman-Brown, cf. `icc-single-vs-mean`). MDE réalisé ≈ 0.014 à 0.029. C'est
+une information de **planification** pour dimensionner l'étage 2 ; recalculer le MDE sur
+le sd des mêmes données ne rétro-autorise pas à lire l'endpoint grow − fix sur n=9.
+
 ## 10/09 08h36 — 578293 : pilote goulot, RESOUMIS (578248 mort en 60 s)
 
 **578248 : 36/36 cellules FAILED**, toutes sur
