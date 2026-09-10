@@ -1,0 +1,36 @@
+# eval  dataset  model  seed  align
+#
+# 18 cellules : grow_deep contre bd_deep4 A BUDGET PLEIN, sur bnci2014_001
+# within_session -- exactement la cellule ou le workbook publie annonce le plus gros
+# gain de la croissance (+0.133) et ou ce gain est un artefact.
+#
+# POURQUOI `fix_deepeeg` EST DANS L'ARRAY ALORS QUE LA QUESTION EST grow VS bd
+# ----------------------------------------------------------------------------
+# Sans lui, `grow_deep - bd_deep4` est un nombre qu'on ne peut pas decomposer. Avec
+# lui, il se coupe en deux termes qui ne disent pas la meme chose :
+#
+#   grow_deep - bd_deep4  =  (grow_deep - fix_deepeeg)  +  (fix_deepeeg - bd_deep4)
+#                                  terme de CROISSANCE      terme d'ARCHITECTURE
+#
+# Le second n'est PAS un terme de codebase, contrairement a ce que dit le rapport
+# perf : fix_deepeeg fait 10 484 parametres contre 284 479 pour bd_deep4, et 2 etages
+# contre 4. Les trois bras doivent tourner dans le MEME array pour que la
+# decomposition soit appariee sujet par sujet.
+within_session bnci2014_001 grow_deep   1 none
+within_session bnci2014_001 fix_deepeeg 1 none
+within_session bnci2014_001 bd_deep4    1 none
+within_session bnci2014_001 grow_deep   2 none
+within_session bnci2014_001 fix_deepeeg 2 none
+within_session bnci2014_001 bd_deep4    2 none
+within_session bnci2014_001 grow_deep   3 none
+within_session bnci2014_001 fix_deepeeg 3 none
+within_session bnci2014_001 bd_deep4    3 none
+within_session bnci2014_001 grow_deep   1 euclidean
+within_session bnci2014_001 fix_deepeeg 1 euclidean
+within_session bnci2014_001 bd_deep4    1 euclidean
+within_session bnci2014_001 grow_deep   2 euclidean
+within_session bnci2014_001 fix_deepeeg 2 euclidean
+within_session bnci2014_001 bd_deep4    2 euclidean
+within_session bnci2014_001 grow_deep   3 euclidean
+within_session bnci2014_001 fix_deepeeg 3 euclidean
+within_session bnci2014_001 bd_deep4    3 euclidean
