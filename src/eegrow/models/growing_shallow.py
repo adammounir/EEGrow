@@ -16,6 +16,35 @@ identical to braindecode, as fixed modules.
 
 braindecode's ShallowFBCSPNet stays the reference baseline: we simply copy its
 weights (`load_braindecode_weights`), which also lets us check equivalence.
+
+READOUT ABLATION (`readout`) -- added 10/09/2026, DEFAULT UNCHANGED
+------------------------------------------------------------------
+`Square -> AvgPool -> SafeLog` is not three arbitrary nonlinearities: mean-of-squares
+over a window IS the variance of the spatially filtered signal, so the tail computes a
+log band-power. Motor imagery is an ERD/ERS phenomenon -- the discriminative quantity
+is the *power* of mu/beta, a quadratic functional of the signal -- so ShallowFBCSPNet
+is FBCSP written as layers, and the statistic it must estimate is built into the
+architecture. A ReLU-family tail (ELU + MaxPool) has to approximate x^2 piecewise, which
+costs units and trials.
+
+That is the standing explanation for the +0.108 gap to `grow_deep` (measured on
+bnci2014_001, n=9): not depth, not width -- the missing readout. The w1 pilot (580878)
+eliminated the two alternatives on that arm, capacity (w1 8->32 buys only +0.0235) and
+regularisation (dropout+norm *hurt*, 10/12 paired contrasts negative).
+
+This knob tests it on the arm we trust, one factor at a time and with the pool geometry
+held fixed, so parameter count and final_conv_length are constant across settings:
+
+    power   : Square  -> AvgPool -> SafeLog     braindecode, the default
+    nolog   : Square  -> AvgPool -> Identity    keeps the variance, drops the log
+    generic : ELU     -> MaxPool -> Identity    the ReLU-family readout
+
+`nolog` sits in between on purpose: log matters for its own reason (band power is
+heavy-tailed, and log turns the multiplicative ERD into an additive shift), so a single
+grouped ablation could not say whether the quadratic or the compression carries the
+effect -- the mistake the grouped `reg` factor made in the w1 pilot. The prediction
+being tested is that `generic` collapses towards grow_deep's accuracy. If it does not,
+the explanation is wrong and the gap is elsewhere.
 """
 
 from __future__ import annotations
@@ -51,6 +80,10 @@ class GrowingShallowFBCSPNet(SequentialGrowingModel):
     batch_norm_alpha : see ShallowFBCSPNet.
     final_conv_length : int | "auto"
         Classifier kernel length. "auto" => computed by a dry run.
+    readout : {"power", "nolog", "generic"}
+        Which readout to put between conv_spat and the classifier. "power" is
+        braindecode's and the default; the other two are the ablation. See the module
+        docstring for what each one computes and why.
     """
 
     def __init__(
@@ -67,6 +100,7 @@ class GrowingShallowFBCSPNet(SequentialGrowingModel):
         final_conv_length: int | str = "auto",
         drop_prob: float = 0.5,
         batch_norm_alpha: float = 0.1,
+        readout: str = "power",
         device: torch.device | str | None = None,
     ) -> None:
         super().__init__(in_features=n_chans, out_features=n_outputs, device=device)
@@ -128,11 +162,34 @@ class GrowingShallowFBCSPNet(SequentialGrowingModel):
         )
 
         # --- fixed tail: strictly braindecode's order ------------------------
+        # `readout` swaps ONLY the three modules of the band-power readout; the pool
+        # geometry (kernel, stride) is held fixed, so final_conv_length and the whole
+        # parameter count are identical across the three settings. The only thing that
+        # changes is the *function* computed between conv_spat and the classifier.
+        self.readout = readout
+        if readout == "power":                      # braindecode, the default
+            conv_nonlin: nn.Module = Square()
+            pool: nn.Module = nn.AvgPool2d(kernel_size=(pool_time_length, 1),
+                                           stride=(pool_time_stride, 1))
+            pool_nonlin: nn.Module = SafeLog()
+        elif readout == "nolog":                    # keep the variance, drop the log
+            conv_nonlin = Square()
+            pool = nn.AvgPool2d(kernel_size=(pool_time_length, 1),
+                                stride=(pool_time_stride, 1))
+            pool_nonlin = nn.Identity()
+        elif readout == "generic":                  # the ReLU-family readout
+            conv_nonlin = nn.ELU()
+            pool = nn.MaxPool2d(kernel_size=(pool_time_length, 1),
+                                stride=(pool_time_stride, 1))
+            pool_nonlin = nn.Identity()
+        else:
+            raise ValueError(
+                "readout must be 'power', 'nolog' or 'generic', got %r" % (readout,)
+            )
         self.bnorm = nn.BatchNorm2d(n_filters_spat, momentum=batch_norm_alpha, affine=True)
-        self.conv_nonlin = Square()
-        self.pool = nn.AvgPool2d(kernel_size=(pool_time_length, 1),
-                                 stride=(pool_time_stride, 1))
-        self.pool_nonlin = SafeLog()
+        self.conv_nonlin = conv_nonlin
+        self.pool = pool
+        self.pool_nonlin = pool_nonlin
         self.drop = nn.Dropout(p=drop_prob)
         self.to(self.device)
 
