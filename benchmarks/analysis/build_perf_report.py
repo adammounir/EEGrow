@@ -46,6 +46,12 @@ DPI = 110
 #: both, and `alignment_effect` makes the choice itself the variable.
 BASE_ALIGN = "none"
 
+#: L'alignement de la figure de tete. Euclidean alignment plutot que brut : c'est le
+#: pretraitement sous lequel la campagne se lit, et le seul que la figure `headline_ds`
+#: dessine. `BASE_ALIGN` reste le brut pour toutes les figures de diagnostic en dessous,
+#: qui ont ete posees sur lui.
+HEADLINE_ALIGN = "easubject"
+
 #: The twin report. Written down so each page names the other: a reader who arrives at
 #: "growth is worth +0.005" needs the page that says what the mechanism was doing, and a
 #: reader who arrives at "the line search refuses 65 % of its proposals" needs the page
@@ -95,12 +101,18 @@ def main() -> None:
 
     jobs: list[tuple[str, str, callable]] = [
         ("coverage", "What the campaign measured", lambda: pf.coverage(sc)),
+        ("headline_ds", "grow − bd, dataset par dataset — Euclidean alignment",
+         lambda: pf.headline_by_dataset(subj, HEADLINE_ALIGN)),
     ]
-    for al in aligns:
-        sfx = "_ea" if al != "none" else ""
-        jobs.append((f"decomposition{sfx}",
-                     f"grow − bd, decomposed — {pf.ALIGN_LABEL[al]}",
-                     lambda al=al: pf.decomposition(subj, al)))
+    # Seule la version EA de la decomposition est gardee, et elle passe SOUS la figure
+    # ci-dessus : c'est la piece d'archive qui dit d'ou vient le terme noir, pas la
+    # figure qu'on lit. La version brute est retiree du rapport (09/09) -- deux
+    # decompositions cote a cote invitaient a comparer les deux alignements, ce qui
+    # n'est la question d'aucune des deux.
+    if HEADLINE_ALIGN in aligns:
+        jobs.append(("decomposition_ea",
+                     f"grow − bd, decomposed — {pf.ALIGN_LABEL[HEADLINE_ALIGN]}",
+                     lambda: pf.decomposition(subj, HEADLINE_ALIGN)))
     jobs += [
         ("power", "Effect against minimum detectable effect",
          lambda: pf.power(subj, BASE_ALIGN)),
@@ -182,6 +194,7 @@ def main() -> None:
 #: one docstring, so the mapping is written once here rather than parsed out of the name.
 SRC = {"coverage": "coverage", "decomposition": "decomposition",
        "decomposition_ea": "decomposition", "power": "power",
+       "headline_ds": "headline_by_dataset",
        "seed_noise": "seed_noise", "decomp_ds": "decomposition_by_dataset",
        "subject_delta": "subject_delta", "dumbbell": "dumbbell",
        "pareto_subj": "pareto_subjects", "chance_map": "chance_map",

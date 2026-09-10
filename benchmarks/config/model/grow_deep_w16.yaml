@@ -1,0 +1,30 @@
+# PILOTE GOULOT, niveau w2=16. Voir grow_deep.yaml pour l'arm de reference (w2=8).
+#
+# Pourquoi ce fichier existe. `grow_deep` - `fix_deepeeg` est un nul borne : +0.0034
+# [-0.0022, +0.0091] sur n=324 sujets, within_session, align=none, contre +0.0123
+# [+0.0075, +0.0172] pour la paire shallow au meme n. Ce n'est pas un defaut de
+# puissance -- le MDE de la paire deep vaut 0.0081, et l'effet shallow est detecte a
+# p<1e-3 sur les memes sujets.
+#
+# L'hypothese que ce pilote teste. Ce qui grossit dans GrowingDeepEEGNet est la fan-in
+# de conv2b (= la fan-out de conv2a). Sa SORTIE reste w2, et w2=8 dans la campagne :
+# la jonction grossit de 8 a 32 puis se deverse dans un goulot de 8 canaux, qui est
+# aussi tout ce que le classifieur voit. Si la croissance ne sert a rien sur cette
+# architecture parce qu'elle grossit derriere un goulot, alors elargir w2 doit faire
+# apparaitre l'effet ; si l'effet reste nul a w2=32, l'hypothese est fausse et le nul
+# est le resultat.
+#
+# Le facteur de croissance est tenu constant a 4x (target_w2 = 4 * w2, et w2_in vaut
+# w2 par defaut) pour que les trois niveaux ne different que par le goulot : la
+# jonction fait 8 -> 32 a w2=8, 16 -> 64 ici, 32 -> 128 a w2=32. `fix_deepeeg_w16` est le jumeau gele a
+# la meme geometrie : l'endpoint declare est grow - fix a chaque niveau, JAMAIS
+# grow - bd_deep4, qui compare deux architectures (2 etages contre les 4 de Deep4Net).
+kind: growing
+arch: GrowingDeepEEGNet
+label: grow_deep_w16
+needs_sfreq: false
+grow_every: 5
+module_kwargs:
+  w1: 8
+  w2: 16
+  target_w2: 64

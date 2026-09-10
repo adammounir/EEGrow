@@ -1,0 +1,20 @@
+# Controle gele du PILOTE GOULOT, niveau w2=16. Jumeau de `grow_deep_w16`.
+#
+# Meme classe, meme geometrie finale, sans croissance : `w2_in: 64` sans `target_w2`
+# construit directement le 8 -> 64 -> 16 que grow_deep_w16 atteint en croissant, donc
+# `_can_grow` est False, `_growable_layers` est vide et le callback de croissance est
+# un no-op. C'est ce qui rend la paire interpretable : elle ne differe que par la
+# croissance, pas par la largeur.
+#
+# Ce jumeau doit bouger a CHAQUE niveau du pilote. Elargir w2 sur le seul bras
+# growing donnerait un plus gros chiffre et un controle casse -- c'est exactement la
+# faute que ce pilote existe pour ne pas commettre.
+kind: growing
+arch: GrowingDeepEEGNet
+label: fix_deepeeg_w16
+needs_sfreq: false
+grow_every: 5      # sans effet (gele), garde pour que la forme du config colle a l'arm
+module_kwargs:
+  w1: 8
+  w2: 16
+  w2_in: 64

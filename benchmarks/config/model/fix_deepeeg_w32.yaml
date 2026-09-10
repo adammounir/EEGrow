@@ -1,0 +1,11 @@
+# Controle gele du PILOTE GOULOT, niveau w2=32. Jumeau de `grow_deep_w32`.
+# Voir fix_deepeeg_w16.yaml pour pourquoi le jumeau bouge a chaque niveau.
+kind: growing
+arch: GrowingDeepEEGNet
+label: fix_deepeeg_w32
+needs_sfreq: false
+grow_every: 5      # sans effet (gele)
+module_kwargs:
+  w1: 8
+  w2: 32
+  w2_in: 128

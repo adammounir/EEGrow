@@ -1,0 +1,15 @@
+# PILOTE GOULOT, niveau w2=32. Voir grow_deep_w16.yaml pour le raisonnement complet.
+#
+# Niveau haut du pilote : le classifieur voit 32 canaux au lieu des 8 de la campagne,
+# et la jonction grossit de 32 a 128 (meme facteur 4x qu'aux deux autres niveaux). Si l'effet de croissance n'apparait pas ici, il
+# n'apparait pas -- w2=32 met deja cette architecture a 27 556 parametres a l'init,
+# soit plus que ce que `grow_deep` atteignait EN FIN de croissance (8 274 medians).
+kind: growing
+arch: GrowingDeepEEGNet
+label: grow_deep_w32
+needs_sfreq: false
+grow_every: 5
+module_kwargs:
+  w1: 8
+  w2: 32
+  target_w2: 128

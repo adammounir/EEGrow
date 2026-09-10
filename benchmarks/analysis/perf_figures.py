@@ -311,6 +311,115 @@ def decomposition_by_dataset(subj: pd.DataFrame, arch: str, evaluation: str,
                    f"{ALIGN_LABEL.get(align_tag, align_tag)}{note}")
 
 
+#: Architectures, best first. Not `TRIPLES` order and not alphabetical: this is the
+#: order the headline actually comes out in, and a reader who scans a figure top to
+#: bottom should meet the arms in that order rather than have to sort them by eye.
+HEADLINE_ARCH_ORDER = ["shallow", "sccnet", "deep"]
+
+
+def headline_by_dataset(subj: pd.DataFrame,
+                        align_tag: str = "easubject") -> plt.Figure | None:
+    """``grow − bd`` alone, every dataset shown, three architectures on one axis.
+
+    :func:`decomposition` answers "how much of the headline is growth", which needs the
+    two extra terms and can only be asked where the fixed control exists. This answers a
+    different question -- **is the headline the same everywhere** -- and for that the
+    decomposition is noise: three terms x three architectures x twelve datasets is a
+    hundred intervals nobody reads. Only the black term survives here.
+
+    Each architecture block carries one row per dataset plus a **pooled** row in bold.
+    The pooled row is not a summary of the rows above it unless they agree, and the
+    point of drawing both is to make disagreement visible: a mean of +0.03 built from
+    +0.09 and −0.03 is a statement about no dataset in particular.
+
+    A dataset whose *braindecode arm never beat chance* is drawn faded and hatched, and
+    is excluded from the pooled interval. A delta over a baseline sitting at chance is
+    arithmetic on noise -- the v5 audit found the single largest reported growth gain
+    was exactly that.
+    """
+    sel = subj[subj.align_tag == align_tag]
+    archs = [a for a in HEADLINE_ARCH_ORDER if a in set(sel.arch)]
+    if not archs:
+        return None
+    evals = [e for e in EVAL_ORDER if e in set(sel["eval"])]
+
+    # One pass to lay out the rows, so the three panels share a y axis exactly: a
+    # dataset absent from cross-session must still occupy its row, or the reader
+    # compares two different orderings side by side without being told.
+    layout, y, ticks, labels, bold, heads = [], 0.0, [], [], [], []
+    for arch in archs:
+        bd, _, grow = TRIPLES[arch]
+        got = perf_io.paired(sel[sel["eval"].isin(evals)], grow, bd)
+        datasets = [d for d in DATASET_ORDER if d in set(got.dataset)]
+        heads.append((y + 0.9, arch))
+        for ds in datasets:
+            layout.append((y, arch, ds))
+            ticks.append(y), labels.append(f"  {ds}"), bold.append(False)
+            y -= 1.0
+        layout.append((y, arch, None))                       # la ligne « tous »
+        ticks.append(y), labels.append(f"  {arch} — tous"), bold.append(True)
+        y -= 2.0
+
+    fig, axes = plt.subplots(1, len(evals), figsize=(13.6, 0.30 * len(ticks) + 2.6),
+                             sharey=True, sharex=True)
+    for ax, ev in zip(np.atleast_1d(axes), evals):
+        for yy, arch, ds in layout:
+            bd, _, grow = TRIPLES[arch]
+            g = perf_io.paired(sel[sel["eval"] == ev], grow, bd)
+            if g.empty:
+                continue
+            suspect = {d for d, sub in g.groupby("dataset")
+                       if float(np.mean(sub.b_above < 0.5)) > 0.5}
+            g = g[g.dataset == ds] if ds else g[~g.dataset.isin(suspect)]
+            if len(g) < 2:
+                continue
+            r = perf_io.test(g.delta.to_numpy())
+            bad = ds in suspect
+            col = TERM_COLOR["total"]
+            ax.errorbar(r["mean"], yy,
+                        xerr=[[max(r["mean"] - r["lo"], 0)],
+                              [max(r["hi"] - r["mean"], 0)]],
+                        fmt=ARCH_MARKER.get(arch, "o"), ms=7 if ds is None else 5,
+                        capsize=2.5, lw=2.0 if ds is None else 1.3, color=col,
+                        alpha=0.30 if bad else 1.0,
+                        mfc=col if (ds is None or r["lo"] * r["hi"] > 0) else "white",
+                        mew=1.4, zorder=3)
+            if bad:
+                ax.axhspan(yy - 0.42, yy + 0.42, facecolor="#a51f18", alpha=0.06,
+                           zorder=0, hatch="///", edgecolor="#a51f18", lw=0)
+            if ds is None:
+                ax.text(0.985, yy, f"{r['n_win']}/{r['n']}", transform=
+                        ax.get_yaxis_transform(), ha="right", va="center",
+                        fontsize=7, color=col, fontweight="bold")
+        ax.axvline(0, color="#455a64", lw=1)
+        ax.set_title(EVAL_LABEL[ev], fontsize=10)
+        ax.grid(axis="x", alpha=0.25)
+    # Un seul libelle d'axe, sous le panneau du milieu : les trois axes sont partages,
+    # donc le repeter trois fois dit trois fois la meme chose et vole trois lignes.
+    np.atleast_1d(axes)[len(evals) // 2].set_xlabel(
+        "Δ score  (grow − bd, moyenne par sujet, bootstrap 95 %)")
+    a0 = np.atleast_1d(axes)[0]
+    a0.set_yticks(ticks)
+    a0.set_yticklabels(labels, fontsize=8, family="monospace")
+    for lab, b in zip(a0.get_yticklabels(), bold):
+        lab.set_fontweight("bold" if b else "normal")
+        lab.set_color("#12171c" if b else "#546e7a")
+    for yy, arch in heads:
+        # Encre, pas la couleur du bras : ces trois mots sont des intertitres, et une
+        # couleur d'arme les ferait lire comme une legende.
+        a0.text(-0.005, yy, arch.upper(), transform=a0.get_yaxis_transform(),
+                ha="right", va="center", fontsize=10.5, fontweight="bold",
+                color="#12171c")
+    a0.set_ylim(y + 1.2, 1.8)
+    return _finish(
+        fig, "grow − bd, dataset par dataset — la seule ligne qui compte",
+        f"{ALIGN_LABEL.get(align_tag, align_tag)} · architectures du meilleur au moins "
+        "bon · point plein = l'intervalle exclut zéro · la ligne « tous » est le "
+        "combiné sur les datasets sains, et la fraction à sa droite est le nombre de "
+        "sujets sur lesquels la croissance gagne · lignes hachées : le bras braindecode "
+        "n'y a jamais dépassé la chance, donc l'écart n'y veut rien dire")
+
+
 def subject_delta(subj: pd.DataFrame, arch: str, evaluation: str,
                   align_tag: str = "none") -> plt.Figure | None:
     """Every subject's growth term, sorted -- the spread the mean hides.
