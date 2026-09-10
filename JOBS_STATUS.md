@@ -1,5 +1,281 @@
 # Jobs en cours
 
+## 10/09 08h25 — 578248 : pilote goulot sur les deux bras deep
+
+**36 cellules, bnci2014_001 within_session, partition `gpu`, A100 (margpu010/011),
+array bridée à %4.** Branche `exp/deep-bottleneck`, déployée @ 3b10e09. Résultats dans
+`benchmarks/results_deepbottleneck/` — répertoire dédié parce que le niveau w2=8
+réutilise les labels `grow_deep` / `fix_deepeeg` et écraserait la campagne.
+
+**Pourquoi.** `grow_deep − fix_deepeeg` = **+0.0034 [−0.0022, +0.0091]** sur n=324
+sujets (within_session, align=none), contre **+0.0123 [+0.0075, +0.0172]** pour la
+paire shallow au même n, MDE 0.0081. Nul borné, pas un manque de puissance. Ce qui
+grossit dans `GrowingDeepEEGNet` est la fan-in de conv2b ; sa sortie reste `w2`, et
+`w2=8` dans la campagne. La jonction grossit 8 → 32 puis se déverse dans un goulot de
+8 canaux, qui est aussi tout ce que le classifieur voit.
+
+**Design.** w2 ∈ {8, 16, 32}, facteur de croissance tenu à 4× (target = 4·w2), et le
+jumeau gelé bouge à chaque niveau (`fix_deepeeg_wNN` suit `grow_deep_wNN`) — sinon la
+paire diffère par la croissance ET la largeur. Le niveau w2=8 est relancé plutôt que
+repris de `perf_final/` : il avait tourné sur turing, le pilote tourne sur ampere, et
+aucune paire ne doit traverser une classe de carte.
+
+**Ce que ça peut conclure.** Pas l'endpoint : MDE **+0.0486** à n=9 contre un effet
+visé de +0.0123. Le pilote teste l'étage en amont — est-ce que l'accuracy **absolue**
+bouge avec w2 (ordre de grandeur attendu si le goulot est réel : +0.108, l'écart
+d'architecture `grow_shallow − grow_deep`). Si oui → étage 2 sur cho2017 +
+physionetmi (n=161, MDE +0.0115) pour l'endpoint. Si non → le nul sur n=324 **est** le
+résultat, et devient un mécanisme : la croissance paie quand la jonction growable est
+le goulot de capacité (shallow), pas sinon (deep, sccnet).
+
+**Attention en lisant les figures existantes.** `grow_deep` vs `bd_deep4` compare deux
+architectures, pas la croissance — `GrowingDeepEEGNet` fait 2 étages, Deep4Net en fait
+4 (25/50/100/200). Le code le dit à `growing_deepeeg.py:71` et `final_grid.py:176`. Le
+contrôle est `fix_deepeeg`.
+
+**Encore en attente de décision.** `543697_0` (motif_dxr) est toujours PD en
+`DependencyNeverSatisfied` — job fantôme, jamais annulé.
+
+## 06/09 15h50 — yang2025 : gate rouge sur UN sujet, réparé
+
+Le patch MOABB tient : 51 sujets chauffés en 36,9 min, ~45 s chacun (contre 1316 s
+pour sub-1 avant patch, où l'essentiel était la réextraction des 65,6 Go). Le cache
+pèse 20 Go et compte 150 entrées valides.
+
+Mais `stream_rc=1 gate_rc=1` :
+
+    yang2025   OK=150   MANQUE=1   MENSONGE=0
+        MANQUE: sub-40 (aucune session)
+    [40/51] sub-40  16.7s  ÉCHEC ValueError: Invalid Annotation description(s)
+                                  {'1', '2'} are not present in data
+
+**Cause.** `sub-040/ses-03/eeg/data.bdf` faisait 14680064 octets, soit **14 MiB
+pile**, quand la médiane des 186 fichiers est 438 Mo. Une taille ronde au bit près
+n'est pas une fin de fichier légitime : c'est une écriture coupée sur frontière de
+buffer. mtime 14h48 = l'instant où on a annulé 542617/542618, dont l'`extractall`
+écrivait ce fichier. MNE déduit alors la durée de la taille, les 205 annotations
+tombent hors plage, il ne reste aucun événement, et l'epoching lève.
+
+**Ce n'était donc pas la source.** Le zip de 65,6 Go était intact ; `repair_yang_sub40.py`
+(job 543489, 6 s) a réextrait ce seul membre : 14,7 Mo → **421,6 Mo**. Le script
+extrait dans un `.part` et ne remplace qu'après contrôle de taille, pour qu'une
+seconde interruption ne puisse pas recréer un tronqué en place.
+
+**Ce que la porte a bien fait.** Elle a refusé au lieu d'avertir, et le
+`--purge-raw-at-end` s'est auto-annulé (« PURGE FINALE REFUSÉE : des sujets ont
+échoué, le brut reste »). Sans ça le zip partait, et réparer sub-40 aurait coûté un
+retéléchargement de 65,6 Go. Cf. `gates-must-refuse-not-warn`.
+
+**Chaîne relancée** : 543489 (réparation, COMPLETED) → `afterok` → **543544** (chauffe,
+qui saute les 50 sujets en cache) → `aftercorr` → **543545** (D×R). 543231 annulé, sa
+dépendance n'était plus satisfiable.
+
+| job | dataset | état 15h50 | ETA UTC |
+|---|---|---|---|
+| 543544_1 | yang2025 chauffe | R, 50/51 déjà en cache | ~16h00 |
+| 543545_1 | yang2025 D×R | PD (Dependency) | — |
+| 541962_0 | stieger2021 chauffe | R, 27/62 | ~21h25 |
+| 541963_0 | stieger2021 D×R | PD (Dependency) | — |
+
+**Correction d'ETA sur stieger.** Les sujets ≤23 avaient 7 fichiers bruts (~490 s) ;
+à partir de sub-24 ils en ont 11 (~610 s). Fin de chauffe repoussée de 20h15 à
+~21h25 UTC. Quota 663 G, pente ~33 G/h nette du purge incrémental → atterrissage
+prévu vers 860 G sur 1024.
+
+`COST` propres : 9 datasets (brandl2020 à retenir à **133,0 s**, pas les 197,1 s de la
+ligne contendue). zhou2020 : `AUCUN CSV`, toujours en attente de l'arbitrage d'Adam
+(géométrie construite sur le premier sujet, montages 41 et 26 mélangés).
+
+## 06/09 11h20 — QUOTA DÉBLOQUÉ (1024 → 753 G), CAMPAGNE RELANCÉE
+
+Adam AFK, relance autonome. **271 G libres.**
+
+### Ce qui a été rendu
+
+| quoi | volume | pourquoi c'était sûr |
+|---|---|---|
+| `brainbert/btb` | 138 G | décompression de `btb_raw`, se refait par `unzip`, **sans re-télécharger** les 130 Go |
+| brut zhou2020, chang2025, brandl2020, dreyer2023b | 133 G | `check_cache` vert AVANT suppression (job 541957 : `0 MANQUE, 0 MENSONGE`) |
+
+`btb_raw/` (137 G), les poids `stft_large_pretrained.pth`, `popt_pipeline.py`, les
+sbatch PopT et `results/results.csv` sont **intacts**. Arbitrage d'Adam : `btb/`
+seul, pas `btb_raw/`.
+
+### Chaîne relancée
+
+| dataset | warm | D×R | note |
+|---|---|---|---|
+| forenzo2023 | 541959 | 541960 | 44/47, il ne manque que sub-23/24/25 ; brut déjà sur disque |
+| — | 541961 | — | `afterok:541959` → rend les **158 G** de brut forenzo, le plus gros poste de l'arbre |
+| stieger2021 | 541962 | 541963 | reprend à 120/184, suppression au fil de l'eau |
+| yang2025 | 541964 | 541965 | `afterok:541961` : ne démarre qu'avec ~430 G devant lui |
+| brandl2020 | — | 541966 | mesure de coût **refaite au propre** |
+
+### Pourquoi brandl2020 est relancé alors que son cache est vert
+
+Sa ligne `COST` était fausse. `EEGROW_CUDA_FRACTION=0.30` × 3 shards = plafond de
+3,17 GiB sur une carte de 10,58 : 4 fits sur 48 sont morts en
+`torch.OutOfMemoryError`, et les 197 s de médiane sont de la **contention**, pas un
+coût — le log montre les fits de fin à 74 s et 118 s, dans la fourchette des autres
+datasets. Relancé en `N_SHARDS=1 EEGROW_CUDA_FRACTION=0.9`, sur un répertoire neuf
+(l'ancien est dans `dxr_motif/brandl2020_contended/`) pour que la médiane ne mélange
+pas fits contendus et fits propres. ~48 fits × ~90 s ≈ 72 min en série.
+
+**Mesuré à 11h46, shard unique** : fits à **124–137 s**, très réguliers, aucun OOM.
+Le facteur de contention est donc **1,5** (197 s → ~130 s), et non « 3 à 10 » comme
+écrit ici plus tôt. L'erreur était de supposer que brandl devait ressembler aux
+20–57 s des autres datasets : avec 63 électrodes, 1125 points et une croissance qui
+sature à 107 442 paramètres, **brandl2020 est intrinsèquement le dataset cher de la
+campagne**. Dimensionner `motif_probe` sur ~130 s/fit pour lui, pas sur 40.
+Cf. [[cell-cost-must-be-measured-live]] : la seule mesure valable est prise sur le
+dataset lui-même, et une transposition depuis les autres se serait trompée d'un
+facteur 3 dans le sens du sous-dimensionnement.
+
+### 12h45 — forenzo OK, yang2025 remort sur une limite qui n'est PAS le quota d'espace
+
+`COST forenzo2023 n_donneurs=25 fits=75 fit_s_median=37.7 fit_s_p90=39.5` — rc=0,
+75 CSV, D×R bouclé en 17,9 min. **8 lignes `COST` propres sur 11.**
+
+yang2025 a re-échoué à 11h49 (`stream_rc=3 gate_rc=1`), et cette fois le diagnostic
+du 06/09 matin ne s'applique pas :
+
+```
+=== yang2025  51 sujets  quota_libre=420G
+[1/51] sub-1   489.1s ÉCHEC OSError: [Errno 122] Disk quota exceeded
+```
+
+**420 G libres au démarrage, 419 G encore libres 3 min avant l'échec.** Écarté par
+la mesure : quota espace user (604 G/1024), quota groupe `tau` (aucun), inodes (2 %
+de 5,3 G), filesystem (4,6 To libres), home (46 G libres), et `TMPDIR=/tmp` qui est
+un **tmpfs de 252 G avec 248 G libres** sur marg003.
+
+Deux hypothèses déjà réfutées à la mesure (extraction sous `$HOME`, puis `/tmp`
+saturé). **Ne pas en formuler une troisième sans la trace** — job **542077**
+(`diag_yang.py`) rejoue sub-1 avec `traceback.print_exc()`, la chaîne
+`__cause__/__context__` avec `errno` et `filename`, et un échantillonnage `quota -s`
+toutes les 30 s. Cf. [[cell-cost-must-be-measured-live]].
+
+Le brut yang2025 (104 G : l'archive de 65,6 G + son extraction) est **intact** —
+`stream_rc=3` est l'abandon propre, il ne détruit rien.
+
+#### 13h22 — répondu par la mesure : yang2025 se décompresse en place, sans fin visible
+
+```
+[du 13:16:35] 122G  mne_data/MNE-yang2025-data     [quota] 615G
+[du 13:22:18] 148G  mne_data/MNE-yang2025-data     [quota] 642G
+              4.0K  moabb_cache/MNE-BIDS-yang2025
+               32K  /tmp
+```
+
+**~4,5 G/min dans `mne_data`.** Ni le home, ni le tmpfs, ni un quota caché : le
+`quota_libre=420G` du démarrage est un instantané pris **avant** que l'expansion ne
+commence. yang2025 demande beaucoup plus que ses 104 G apparents, et c'est pour ça
+que le job va plus loin quand il y a plus de place devant lui (8 min à 11h40,
+>18 min à 13h22) — le symptôme suit l'espace disponible, pas une limite fixe.
+
+**Conséquence de conception : la suppression au fil de l'eau ne peut rien pour
+yang2025.** `warm_stream.py` refuse (à raison) d'effacer un fichier réclamé par 51
+sujets, donc l'archive de 65,6 G **et** son extension coexistent forcément. C'est le
+seul dataset des 11 où le pic n'est pas bornable par le protocole.
+
+Garde-fou posé pendant la mesure : `scancel 542176` si le quota atteint 940 G/1024,
+pour ne pas emporter stieger2021 (541962) après 2 h de travail. Jamais déclenché.
+
+#### 13h50 — RÉSOLU : l'expansion plafonne à 152 G, sub-1 passe
+
+```
+[du 13:22:18] 148G → [du 13:23:19] 152G → [du 13:23:50] 152G
+OK
+```
+
+**Coût d'extraction unique, désormais payé.** yang2025 pèse 152 G de brut (archive
+65,6 G + extension ~86 G) et n'augmente plus ; les 50 sujets restants n'ont plus
+qu'à lire. Les deux échecs `EDQUOT` étaient la même chose vue deux fois : une
+expansion en cours contre un quota déjà entamé, pas une limite exotique.
+
+Relancé en **542617** (warm) → **542618** (D×R), avec `EXTRA=--purge-raw-at-end` :
+c'est le seul dataset dont le brut ne peut pas être rendu au fil de l'eau, donc il
+est rendu à la fin, sous réserve de la porte. 541965 (never-satisfied) annulé.
+
+#### stieger2021, cadence mesurée
+
+17/62 à 13h48, 670–785 s par sujet, 97 G rendus au fil de l'eau, `quota_libre`
+stable à ~383 G. 45 sujets restants × ~730 s ≈ **9 h** → fin vers 22h50 UTC, dans
+son mur de 2 jours.
+
+#### 14h50 — LA VRAIE CAUSE : bug MOABB, l'archive est réextraite à CHAQUE sujet
+
+Mesuré sur le process vivant (marg001, pid 2295686, `/proc/<pid>/io`) :
+
+```
+fichier ouvert : WBCIC_SHU_Motor_Imagery_dataset.zip
+read_bytes  : 168 Go        write_bytes : 251 Go        en 57 min
+wchan       : folio_wait_bit_common
+```
+
+251 Go écrits pour une archive de 65,6 Go, quota inchangé de 5 G : il décompresse,
+écrase, recommence. `moabb/datasets/yang2025.py:347` :
+
+```python
+subj_str = f"sub-{subject:03d}"
+existing = list(basepath.rglob(f"*{subj_str}*data.bdf"))   # ne matche JAMAIS
+...
+if zip_path.exists() and not existing:
+    zf.extractall(str(basepath))                            # donc a chaque sujet
+```
+
+`rglob` sans séparateur teste le **nom du fichier**. Les 186 fichiers s'appellent
+tous exactement `data.bdf` ; le sujet est un composant de répertoire
+(`.../sub-001/ses-01/eeg/data.bdf`). `existing` est donc vide par construction.
+Extrapolé : **~3,3 To écrits** sur un NFS partagé déjà à 91 % pour un seul dataset.
+
+**Corrigé** dans l'env (`.bak` à côté), remplacé par un test sur les composants de
+chemin : `[p for p in basepath.rglob("data.bdf") if subj_str in p.parts]`. Vérifié
+en job 543227 : `0.19s` par sujet au lieu de 15-22 min, **0,0 Mo écrit**.
+
+**À remonter en amont** — c'est un vrai bug MOABB, pas une particularité locale, et
+n'importe qui utilisant Yang2025 écrit 3,3 To sans le savoir. Rien n'a été ouvert :
+aucune action publique sans l'accord d'Adam. Cf. [[ask-before-public-pr-actions]].
+
+Relancé en **543230** (warm) → **543231** (D×R).
+
+#### brandl2020 : mesure propre obtenue
+
+```
+COST brandl2020 n_donneurs=16 fits=48 fit_s_median=133.0 fit_s_p90=141.7 device=cuda
+=== brandl2020 DONE rc=0 csv=48        (shard done in 118.0 min)
+```
+
+48 fits sur 48, aucun OOM. Contendu 197,1 → propre 133,0 : **facteur 1,48**.
+**8 lignes `COST` propres sur 11** (chang2025, dreyer2023b, guttmannflury2025_me,
+guttmannflury2025_mi, hefmiich2025, kumar2024, forenzo2023, brandl2020).
+
+### Reste à arbitrer par Adam
+
+**zhou2020 est cassé, et ce n'est pas un problème de données** (son cache est vert,
+137 entrées). `donor_receiver.py:206` dérive `n_chans` du **premier sujet** et
+réutilise cette géométrie pour toutes les paires donneur/receveur :
+
+```
+RuntimeError: Calculated padded input size per channel: (1226 x 26).
+Kernel size: (1 x 41). Kernel size can't be greater than actual input size
+```
+
+41 électrodes attendues, 26 présentes. Les dix autres datasets ont un montage
+constant, zhou2020 non. Deux issues, qui ne disent pas la même chose du résultat :
+restreindre au sous-ensemble commun d'électrodes, ou sortir zhou2020 de la campagne.
+Transférer un donneur vers un receveur d'un autre montage n'a pas de sens sans
+alignement — c'est un choix scientifique, pas une correction de bug. **Non relancé.**
+
+### Leçon de venue
+
+Le premier `du -sh /scratch/amounir/*` est parti **sur la frontale** : 623 k inodes
+sur un NFS partagé, tué en cours. Les scans et les `rm` de cette session sont
+repassés en jobs `normal` (541954-541958). `squeue`/`quota`/`grep` de logs restent
+sans conséquence sur la frontale ; un parcours récursif, non.
+
+---
+
 ## 06/09 — LA CAMPAGNE EST ARRÊTÉE : quota /scratch de 1 To saturé
 
 **Ce n'était pas le débit, c'était le quota.** `quota -s` : 1024 G utilisés sur
@@ -47,7 +323,34 @@ effaçant le brut de chaque sujet dès ses epochs cachés. L'empreinte de pointe
 quelques sujets au lieu de 345 G. yang2025 reste le cas dur — **fichier unique de
 65,6 Go**, indivisible.
 
-**EN ATTENTE DE L'ARBITRAGE D'ADAM** : rien n'est effacé pour l'instant.
+### Fait le 06/09, après arbitrage d'Adam
+
+**Purge de 235 G** (quota 1024 G → 789 G). Gardée par `check_cache` : les 13 datasets
+concernés ont été vérifiés **0 MANQUE, 0 MENSONGE** avant qu'un octet soit effacé.
+Effacés : `MNE-{lee2019-mi,schirrmeister2017,guttmannflury2025,guttmannflury2025-mi,
+guttmannflury2025-me,kumar2024,gigadb,Dreyer2023A,eegfnirs,weibo-2014,hefmiich2025,
+bnci}-data`. `eegbci` et `liu2024` conservés (2,8 G, pas de config à vérifier — pas la
+peine de risquer pour ça).
+
+**Le plancher corrigé** (`motif_warm.sbatch`) : il lit `quota(1)`, plus `df`. Et
+`warm_cache.py` interrompt la chauffe sur EDQUOT/ENOSPC au lieu de les avaler sujet par
+sujet, et remonte l'échec dans son code de sortie.
+
+**Jobs relancés** :
+- `541266` / `541267` — warm + D×R des 5 datasets au cache troué (5,6,7,9,10). chang2025
+  et dreyer2023b déjà chauffés, D×R en cours.
+- `541276` / `541277` — stieger2021 en **flux** (`motif_warm_stream.sbatch`).
+- `541278` / `541279` — yang2025 en flux + `--purge-raw-at-end`.
+- `539161` annulé (7 tâches `DependencyNeverSatisfied`).
+
+**Le piège de `warm_stream.py`, à ne pas réintroduire.** La garde de suppression a
+d'abord lu le **nom de fichier** (« effacer si le basename contient l'identifiant du
+sujet »). Testée sur les 287 `.mat` réels de stieger2021 *avant* tout effacement :
+**570 revendications pour 287 fichiers**, parce que le numéro de **session** matche le
+même motif — le sujet 1 réclamait `S2_Session_1.mat`. Lancée, elle effaçait le brut de
+61 autres sujets. Remplacée par une carte `fichier -> sujets` et un **retard d'un
+sujet** (le brut du sujet i ne part qu'une fois i+1 chauffé), avec 6 tests dans
+`benchmarks/tests/test_warm_stream.py` qui fixent les deux topologies.
 
 ## 05/09 16h40 — le pôle série était stieger2021, corrigé par 539433
 
@@ -4313,3 +4616,49 @@ pic chanceux précoce.
 `selection_monitor` et `patience` sont des knobs **globaux**. Un effet de sélection ici
 est un résultat sur le protocole du benchmark, pas un patch sur un modèle — et il
 invalide les cellules deep de v5, qu'il faudra relancer.
+
+## 06/09 ~17h — sonde motif soumise (543826) + jumeau `shipped` LU
+
+**543826 — `motif_probe`, array 0-23, LES 24 TÂCHES DÉMARRÉES D'EMBLÉE, 0 en attente.**
+La moitié manquante de la campagne prévalence : les 8 matrices D×R complètes n'étaient
+pas lisibles sans un `restored_probe`/`acc_probe` par sujet à k>=15 (porte G1). Les
+`restored_epoch` des CSV D×R ne s'y substituent pas, ils sont à k=3.
+
+Dimensionnement : 27,8 GPU·h, cellule la plus longue = brandl2020 à 2,4 h, donc
+**wall clock ~2,5 h** et non une nuit. Découpage en 24 tâches `--gres=gpu:1` (une
+cellule = une graine d'un dataset = un processus sur une carte) plutôt qu'en 8
+allocations de 3 cartes : 31 cartes utilisables étaient libres mais seulement 5 nœuds
+avaient 3 cartes libres, donc l'allocation par nœud aurait fait la queue. Réparties sur
+11 nœuds : margpu006/007/009/010/011/012/017/018/019/028. Claims vérifiés : 24 pris,
+24 distincts, 3 par dataset.
+
+Ce qui autorise le découpage : `gap` est une DIFFÉRENCE entre deux règles calculées sur
+LES MÊMES fits, donc un effet de classe de carte s'annule dans la soustraction. C'est ce
+qui rend l'homogénéité matérielle de `fresh_probe.sbatch` non portante ici.
+
+**Périmètre arrêté à 8 datasets, et le motif est arithmétique.** `stieger2021`,
+`yang2025` (en cours) et `zhou2020` (0 CSV) sont hors lecture. Les attendre porterait n
+de 13 à 15 et FERAIT BAISSER la puissance du test de signe (0.58 -> 0.46 : le seuil de
+rejet saute de 10/13 à 12/15). Addendum daté écrit dans `PREREG_motif_prevalence.md`
+AVANT la soumission, règle d'arrêt = « ce qui est complet au 6 septembre », indépendante
+de tout résultat.
+
+**Jumeau `shipped` LU — il dormait terminé depuis le 04/09.**
+`benchmarks/analysis/shipped_twin_readout.py` + `shipped_flips.py`, sorties dans
+`benchmarks/analysis/shipped_twin/`. 542 cellules appariées sur 558 (restriction à
+`align=none` : `results_final` porte aussi `euclidean`, pas `results_shipped`).
+
+- **16 changements de vainqueur sur 30 (eval × dataset)**, dont 8/12 en within_session.
+- tau de Kendall médian +0.75 ; 85 inversions de paires sur 710.
+- Qualification (une inversion entre deux bras indiscernables est du bruit) :
+  **42 cosmétiques + 34 matérielles + 9 DURES**. Les 9 dures sont les paires où les
+  DEUX protocoles établissent un ordre et s'affirment le contraire.
+- Le delta apparié (unité = le sujet) est **hétérogène entre bras**, et c'est le
+  mécanisme : bd_deep4 +0.0594 en cross_session contre bd_sccnet +0.0100. Le protocole
+  ne décale pas tous les bras également, il pénalise ceux qui convergent lentement.
+- 6 des 9 inversions dures impliquent bd_deep4 vs fix_deepeeg/grow_deep — corroboré
+  indépendamment par [[deep4-instability]] (bd_deep4 scoré à l'époque 4).
+
+**Réserve à porter dans le papier** : les inversions dures sont sur n=9 à n=14 sujets,
+où le bootstrap percentile sous-couvre. Les 6 liées à deep4 ont un mécanisme connu, les
+3 autres (grow_sccnet sur BNCI2014-002 / BNCI2015-001) n'en ont pas encore.
