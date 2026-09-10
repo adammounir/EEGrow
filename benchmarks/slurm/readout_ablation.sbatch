@@ -148,11 +148,17 @@ PROBE_RC=$?
 # defaut est PAR CARTE et pas par noeud, et la sonde rend la main en 5 s -- un creneau
 # fantome peut donc "finir" tout un array en quelques minutes, tout en echecs. Plafond
 # a 5 remises, au-dela on sort en 90 et ca redevient visible dans sacct.
+# LA CIBLE EST LA TACHE, PAS L'ARRAY. Mesure du 10/09 sur 581692 : avec
+# `${SLURM_JOB_ID}`, une seule tache tombee sur un creneau fantome a remis en file LES 18
+# -- scontrol a repondu "581692_0-6,8,10-11,13,17: No error". C'est auto-destructeur a
+# deux titres : le compteur de restart monte pour tout le monde donc le plafond de 5 tue
+# l'array entier, et une tache saine a 3 h d'entrainement se fait tuer par le creneau
+# fantome d'une voisine. La forme `<array>_<task>` ne vise que l'appelante.
 if [ $PROBE_RC -ne 0 ]; then
   if [ "${SLURM_RESTART_COUNT:-0}" -lt 5 ]; then
     echo "GPU PROBE FAILED (rc=$PROBE_RC) sur $(hostname) -- creneau fantome ou modele" \
          "non conforme, remise en file (essai ${SLURM_RESTART_COUNT:-0}/5)"
-    scontrol requeue "${SLURM_JOB_ID}"
+    scontrol requeue "${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
     exit 90
   fi
   echo "GPU PROBE FAILED (rc=$PROBE_RC) apres 5 remises en file -- abandon de la tache"

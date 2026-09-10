@@ -175,7 +175,10 @@ if [ $PROBE_RC -ne 0 ]; then
   if [ "${SLURM_RESTART_COUNT:-0}" -lt 5 ]; then
     echo "GPU PROBE FAILED (rc=$PROBE_RC) sur $(hostname) -- creneau fantome ou modele" \
          "non conforme, remise en file (essai ${SLURM_RESTART_COUNT:-0}/5)"
-    scontrol requeue "${SLURM_JOB_ID}"
+    # LA CIBLE EST LA TACHE, PAS L'ARRAY : avec `${SLURM_JOB_ID}` une seule tache
+    # fantome a remis en file les 18 de 581692 (mesure du 10/09). Le plafond de 5 tuait
+    # alors l'array entier, et une tache saine se faisait tuer par la voisine.
+    scontrol requeue "${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
     exit 90
   fi
   echo "GPU PROBE FAILED (rc=$PROBE_RC) apres 5 remises en file -- abandon de la tache"
