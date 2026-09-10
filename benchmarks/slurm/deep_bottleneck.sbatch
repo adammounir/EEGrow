@@ -70,6 +70,15 @@ set -uo pipefail
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 ROOT=/scratch/amounir/eegrow_budget
+
+# Le checkout cluster est une COPIE, pas un clone : `git rev-parse` y echoue, donc
+# tree_sha() rend None et chaque ligne de resultat porterait eegrow_sha=None. C'est la
+# perte de tracabilite qui a coute les 1170 cellules v5. deploy_final.sh ecrit le stamp,
+# on le relit ici -- meme mecanique qu'a pack_run.sh:89-90.
+if [ -z "${EEGROW_SHA:-}" ] && [ -r "$ROOT/.eegrow_sha" ]; then
+  export EEGROW_SHA="$(tr -d '[:space:]' < "$ROOT/.eegrow_sha")"
+fi
+
 POINTS=$ROOT/benchmarks/slurm/deep_bottleneck.txt
 LINE=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$POINTS")
 read -r EVAL DS MODEL SEED ALIGN <<< "$LINE"
