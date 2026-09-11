@@ -1,5 +1,48 @@
 # Jobs en cours
 
+## 11/09 — 582872 (plancher singulier) : 8/8, le plancher mord mais l'accuracy ne suit pas
+
+Le job est parti tout seul dans la nuit (les cartes ampere se sont libérées) — pas de
+bascule turing, la classe de carte du contraste est restée homogène. Les 8 cellules ont
+tourné entre 16:57 et 17:36, toutes COMPLETED. Intégrité : **8/8 cellules, 18 lignes
+chacune, un seul `eegrow_sha` (9a9cc03e), `device=cuda`, sujets 1-9, 2 graines, aucune
+manquante.**
+
+**Étage 1 — le mécanisme marche.** Abaisser `MIN_SINGULAR_RATIO` de 0.10 à 1e-6 fait
+exactement ce qu'on lui demande : le réseau garde plus de directions candidates et
+atteint sa largeur cible bien plus souvent.
+
+| bras | cible atteinte @0.10 | cible atteinte @1e-6 | largeur finale moy. |
+|---|---|---|---|
+| `grow_shallow` | 153/180 | **177/180** | 38.5 → 39.8 |
+| `grow_deep_w32` | 130/180 | **160/180** | 115.4 → 120.9 |
+
+L'axe est donc vivant : ce qui suit mesure un effet réel, pas un no-op. (Rappel :
+sur `grow_deep` w2=8, le plancher est inerte par construction — fan-out = 8 candidats
+pour 8 slots, il ne coupe jamais. D'où le choix de ces deux bras-là.)
+
+**Étage 2 — l'endpoint ne bouge pas.** Delta = (1e-6) − (0.10), apparié sujet :
+
+| bras | delta | IC95 sujet | MDE(n=9) | 1e-6 gagne |
+|---|---|---|---|---|
+| `grow_shallow` | −0.0071 | [−0.0163, **+0.0009**] | 0.0135 | 3/9 |
+| `grow_deep_w32` | −0.0106 | [−0.0261, **+0.0061**] | 0.0255 | 3/9 |
+
+Les deux sont non significatifs et sous leur MDE : **on ne peut pas déclarer un nul.**
+Mais la borne haute de l'IC dit quelque chose de plus utile qu'un nul — tout gain
+supérieur à **+0.001** (shallow) et **+0.006** (deep_w32) est exclu. L'hypothèse testée
+était un gain substantiel ; c'est exactement ce que ces bornes écartent.
+
+Lecture : le plancher mord sans déplacer l'accuracy, donc **les directions qu'il refusait
+n'étaient pas des directions utiles**. L'abstention ne coûte rien. Le prior à 1 sujet
+(`grow_shallow.yaml` : 0.690 → 0.552) annonçait au contraire une chute massive — elle
+n'existe pas non plus sur 9 sujets ; ce prior ne mesurait que du bruit inter-sujets
+(sd ≈ 0.17). Analyse de référence : `benchmarks/analysis/nostop_ratio.py`.
+
+Détail à surveiller, pas un résultat : sur `grow_deep_w32` le `restored_epoch` médian
+tombe de 89 à 63.5 à plancher bas. Le réseau grandit plus vite mais apprend
+productivement moins longtemps (cf. `restored-epoch-supersedes-params`).
+
 ## 10/09 (nuit) — PLAN COMPLET (12/12) : le contraste dépend de l'alignement, et c'est la baseline qui bouge
 
 582871 a rendu ses 5 dernières cellules (COMPLETED, 14:19 à 16:23). Intégrité vérifiée :
