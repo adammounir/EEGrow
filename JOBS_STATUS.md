@@ -1,5 +1,57 @@
 # Jobs en cours
 
+## 11/09 — point 3 (sélection de donneurs) : le basculement passe en version soumettable
+
+Analyse locale, aucun GPU. La chaîne XP 3 vivait dans le scratchpad et lisait des
+données tirées du cluster : elle est rapatriée dans le dépôt
+(`benchmarks/analysis/xp3_core.py`, `xp3_tilt.py`, `xp3_figure.py`,
+`benchmarks/analysis/dxr_all/` = les 8 matrices + rankings pour 5,2 Mo). `yang2025` est
+volontairement exclu : sa matrice est partielle. Validation obligatoire passée — le
+noyau rapatrié reproduit les chiffres publiés : `physionetmi` +0.385, combiné sur les
+12 datasets sous porte XP 2 **+0.286 [+0.194, +0.373]**, 13/15 partielles positives
+(p = 0.007).
+
+**Le problème.** La figure affichait « part de forte : 17 % à gauche → 54 % à droite
+(33 % = aucune relation) ». Trois choses y manquaient : aucun IC sur les deux parts, un
+nul de 33 % **supposé** et non mesuré, et rien sur la question qu'un relecteur pose en
+premier — quel dataset porte l'effet ?
+
+**Design.** Unité = le sujet, datasets **fixes** (même convention que `donor_meta.py`) :
+le bootstrap rééchantillonne les sujets *à l'intérieur* de chaque dataset. Toute la
+chaîne est refaite sur chaque rééchantillon — percentile de taille, résidualisation par
+l'accuracy, terciles de qualité — parce que la chaîne est l'estimateur. Le nul est une
+permutation de la qualité *dans* chaque dataset : marges intactes, lien sujet↔qualité
+cassé. Terciles par les rangs et non `pd.qcut`, qui fusionne des bornes sous bootstrap
+et rend des terciles déséquilibrés — le déséquilibre se lirait ensuite comme un
+basculement. 452 sujets, 12 datasets, 4000 bootstraps, 4000 permutations.
+
+| axe | gauche | droite | basculement | nul mesuré | p |
+|---|---|---|---|---|---|
+| brut | 17.4 % [11.9, 24.5] | 54.1 % [46.4, 61.3] | +36.6 pts [+24.4, +47.3] | +0.0 | < 2.5e-4 |
+| **résiduel (l'endpoint)** | **21.5 % [16.8, 29.8]** | **47.7 % [40.8, 56.0]** | **+26.2 pts [+13.7, +36.6]** | −0.0 | < 2.5e-4 |
+
+Le nul par permutation vaut **32.9 % / 32.9 %** : le « 33 % » nominal de la figure était
+juste, mais il est maintenant mesuré et non supposé.
+
+**Aucun dataset ne porte l'effet.** Laisser-un-dehors sur l'axe résiduel : le poolé
+oscille entre **+24.4 et +28.0** pts autour de +26.2 — écart maximal 1.9 pt, y compris
+en retirant `kumar2024` (+67 pts à lui seul, n=18) ou `physionetmi` (n=109). Dataset par
+dataset, le basculement est positif sur 9/12 et **exactement nul sur 3**
+(`forenzo2023`, `brandl2020`, `bnci2014_001`) : à n=9–25 un tiers d'axe ne contient que
+3 à 8 sujets, le découpage en terciles n'a plus le grain pour montrer autre chose. Test
+de signe, égalités écartées (la convention) : **9/9, p = 0.0039** ; égalités comptées
+comme échecs (conservateur) : 9/12, p = 0.146. La rho partielle, qui ne découpe rien,
+est positive sur 11 de ces 12.
+
+**Ce que le chiffre n'est pas.** Le basculement est une version grossière de la rho
+partielle +0.286, pas un résultat indépendant : il découpe la même association en trois
+classes pour la rendre lisible. L'endpoint pré-enregistré reste la rho partielle sur les
+3 datasets déclarés (+0.288) ; le +0.286 sur 12 est une confirmation post-hoc.
+
+Figures : `benchmarks/analysis/figures_xp3/` — `xp3_01_hist` (les deux panneaux, IC et
+nul dans le bandeau), `xp3_02_kde` (la version lissée), `xp3_03_per_dataset` (le
+dataset-par-dataset et le laisser-un-dehors).
+
 ## 11/09 — « la croissance aide les mauvais sujets » : un tiers d'artefact, puis le plancher de chance
 
 Analyse locale (pas de job cluster) : `benchmarks/analysis/rtm_sort_axis.py`, sur
