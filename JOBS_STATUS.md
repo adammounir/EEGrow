@@ -1,5 +1,53 @@
 # Jobs en cours
 
+## 11/09 — « la croissance aide les mauvais sujets » : un tiers d'artefact, puis le plancher de chance
+
+Analyse locale (pas de job cluster) : `benchmarks/analysis/rtm_sort_axis.py`, sur
+`perf_final/scores`, `cross_session` / `align=none`, `grow_deep` contre `bd_deep4`,
+3 graines × 6 datasets, 116 sujets.
+
+**Le problème.** La figure « every subject, both arms » trie les sujets par le score de
+`bd_deep4` puis lit `grow − bd` le long de cet axe. Le score de bd est donc à la fois la
+position ET (au signe près) une moitié du delta : régression vers la moyenne garantie.
+Test : classer avec la graine k, mesurer le delta avec la graine m ≠ k (même delta, même
+niveau de bruit sur l'axe, seule l'indépendance change), moyenné sur les 6 paires.
+
+**Étage 1 — un tiers de la pente est fabriqué par le tri.** Poolé sur 116 sujets, pente en
+points de score par écart-type de bd (négatif = la croissance aide les faibles) :
+NAÏVE **−0.0531** [−0.0640, −0.0396] → INDÉP **−0.0360** [−0.0479, −0.0218]. Artefact
+**32 %**. Part d'artefact par dataset : bnci2014_001 10 %, lee2019_mi 23 %,
+shin2017a **45 %**, zhou2016 61 %. L'effet survit, amputé d'un tiers.
+
+**Étage 2 — le plancher de chance fait plus de dégâts que la régression.** Sujets où
+`bd_deep4` apprend vraiment (score moyen > seuil exact sur les essais cumulés) :
+**shin2017a 5/29**, lee2019_mi 33/54, les autres quasi intacts. Poolé sur les 70 sujets
+restants : INDÉP **−0.0193** [−0.0330, −0.0041] — encore significatif, mais **36 % de la
+pente naïve de départ**.
+
+**Sensibilité qui ne passe pas.** Avec le critère strict (chacune des 6 lignes au-dessus du
+seuil, n=70 → 33), la pente poolée **change de signe** : INDÉP **+0.0155** [−0.0010,
++0.0316]. Le critère strict sélectionne lui-même sur le bruit et n'est pas le bon test,
+mais un reviewer le fera tourner : la conclusion ne survit pas à un changement de
+définition de « ce sujet a un signal ».
+
+**Étage 3 — le déficit global DOUBLE quand on retire les sujets à la chance.**
+`grow − bd`, tous sujets → sujets où bd a appris : lee2019_mi **−0.0343 → −0.0732**
+(n 54→33), shin2017a −0.0175 → −0.0984 (n=5, IC traverse 0), bnci2014_001 −0.0606 →
+−0.0686, les autres inchangés. Le « la croissance n'est pas si loin derrière » reposait en
+partie sur des sujets où la baseline ne décodait rien.
+
+**Comptes de victoires, axe indépendant.** La croissance gagne sur la moitié basse contre
+la moitié haute : bnci2014_001 17 % / 8 %, lee2019_mi 57 % / 19 %, shin2017a 51 % / 29 %,
+bnci2015_001 11 % / 17 %, bnci2014_004 33 % / 33 %. **Les deux seuls datasets où la
+croissance gagne une majorité des sujets faibles sont les deux où la baseline est à la
+chance.**
+
+**Ce qui est publiable.** Pas « la croissance aide les sujets difficiles » (faux : là où la
+baseline apprend, la croissance perd encore sur les faibles). Mais « l'écart se resserre
+quand le sujet est difficile » — interaction de magnitude, pas inversion de signe,
+−0.019 par écart-type après correction des deux confondants. Claim secondaire, jamais
+porteuse.
+
 ## 11/09 — 582872 (plancher singulier) : 8/8, le plancher mord mais l'accuracy ne suit pas
 
 Le job est parti tout seul dans la nuit (les cartes ampere se sont libérées) — pas de
