@@ -76,7 +76,7 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import FunctionTransformer
     from skorch.callbacks import EarlyStopping, EpochScoring
-    from skorch.dataset import ValidSplit
+    from eegrow.training.splits import HoldoutValidSplit
 
     kind = model_cfg["kind"]
     if kind == "growing":
@@ -115,6 +115,8 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
         module_params["module__device"] = device
         callbacks.append(("gromo", GromoGrowth(
             grow_every=model_cfg["grow_every"],
+            # null => the historical (censored) grid; see `scaling_grid` in config.yaml.
+            scaling_grid=train_cfg.get("scaling_grid"),
             # How many neurons a growth step may propose, as a floor relative to the
             # best candidate's singular value. Per-model because the right value is an
             # arm's spectrum shape, not a global constant -- see loop.grow_step.
@@ -189,13 +191,26 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
     # validation resolution alone.
     monitor = str(train_cfg.get("selection_monitor", "valid_loss"))
     lower_is_better = monitor.endswith("loss")
+    # Tie-break: historical `earliest` by default, `latest` for new work -- see
+    # `RestoreBestModel` and the `tie_break` comment in config.yaml.
+    tie_break = str(train_cfg.get("tie_break", "earliest"))
+    # Smoothed selection (`smooth_window`): the fix for both tie edges -- see
+    # `RestoreBestModel` and the `smooth_window` comment in config.yaml.
+    smooth_window = int(train_cfg.get("smooth_window", 1))
+    # Score the selected epoch (historical) or the last one (deep campaign, 13/10): see
+    # `restore_selected` in config.yaml.
+    restore_selected = bool(train_cfg.get("restore_selected", True))
     callbacks.append(("restore", RestoreBestModel(monitor=monitor,
-                                                  lower_is_better=lower_is_better)))
+                                                  lower_is_better=lower_is_better,
+                                                  tie_break=tie_break,
+                                                  smooth_window=smooth_window,
+                                                  swap=restore_selected)))
     callbacks.append(("stop", StopReason()))
     if record_path is not None:
         from eegrow import FitRecorder
         callbacks.append(("record", FitRecorder(
-            record_path, meta={"model": model_cfg.get("label"), "seed": seed})))
+            record_path, meta={"model": model_cfg.get("label"), "seed": seed},
+            save_selected=bool(train_cfg.get("save_selected", False)))))
     # LR schedule, AFTER every instrumentation callback and before EarlyStopping.
     # The position is the same argument as `eps` above: `grad` and `eps` must describe
     # the optimizer that trained the epoch just finished, and stepping the scheduler
@@ -252,6 +267,12 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
         # `AdamEpsDominance` measures whether it actually bites; do not raise it on
         # the strength of the hypothesis alone.
         optimizer__eps=float(train_cfg.get("optimizer_eps", 1e-8)),
+        # Never passed before 14/10, so every historical fit ran under AdamW's own
+        # default -- 0.01 in torch 2.13, read off the `optimizer` stamp of the records
+        # -- while the step-0 PREREG draft said 0. Stated so it cannot drift with a
+        # torch upgrade, and settable because braindecode's Deep4Net recipe asks for
+        # 5e-4 (examples/model_building/plot_bcic_iv_2a_moabb_trial.py).
+        optimizer__weight_decay=float(train_cfg.get("weight_decay", 0.01)),
         max_epochs=int(train_cfg["max_epochs"]),
         batch_size=int(train_cfg["batch_size"]),
         # EEGClassifier defaults to drop_last=True on the *training* iterator. With
@@ -267,7 +288,12 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
         # False keeps the short final batch; BatchNorm tolerates it (a batch of 1 would
         # be the exception, and no split here lands on 8k+1 trials).
         iterator_train__drop_last=False,
-        train_split=ValidSplit(0.2, random_state=seed, stratified=True),
+        # The validation side is exactly ValidSplit(0.2, stratified, seed) as before;
+        # `growth_holdout` > 0 additionally carves the growth line search's trials out
+        # of the TRAINING side, for every arm (decided 13/10, see
+        # eegrow.training.splits and `growth_holdout` in config.yaml).
+        train_split=HoldoutValidSplit(0.2, random_state=seed, stratified=True,
+                                      holdout=float(train_cfg.get("growth_holdout", 0.0))),
         device=device,
         callbacks=callbacks,
         classes=list(range(n_outputs)),

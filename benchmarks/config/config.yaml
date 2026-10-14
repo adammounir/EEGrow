@@ -59,6 +59,49 @@ train:
   # `bd_deep4`. Check the `srun` line before submitting. Do NOT read these defaults as
   # the recommendation; they are the opposite.
   selection_monitor: valid_loss
+  # Which of two tied epochs `RestoreBestModel` keeps. `earliest` is the historical
+  # rule and, like the two knobs above, the losing one: on a quantised valid_acc a
+  # lucky epoch 1-2 sets a plateau the trained net can only tie, so the strict
+  # comparison hands back a barely-trained net (64 % of shin2017a probe fits scored
+  # before epoch 5; 15 % under `latest`). Measured offline on 06/10/2026,
+  # `analysis/restored_tie_rule/`. But `latest` breaks the other edge (07/10): after
+  # memorisation valid_acc re-touches its max to the end, and 23-49 % of fits get
+  # scored in the last 5 epochs. Neither value is the fix; `smooth_window` below is.
+  tie_break: earliest
+  # Select on the centred rolling mean of `selection_monitor` over this many epochs
+  # (odd; 1 = no smoothing, the historical rule). An isolated lucky epoch is diluted by
+  # its neighbours, a trained plateau is not, so both tie edges close at once: W=5 puts
+  # bnci2014_001 at 0 % early / 10 % late (offline 07/10, `smooth_rule.py`; live 13/10,
+  # `restored_tie_rule/live/`: 90/90 fits restore the epoch the offline rule picks,
+  # grow_shallow 0/10 %, bd_deep4 2/19 %, +0.009/+0.013 test acc over `earliest`).
+  # Caveat from the same run: at patience 200 the LAST epoch scores as well or better
+  # (grow_shallow +0.009), so smoothing earns its place as the restored_epoch MEASURE
+  # more than as a performance gain. New work passes `train.smooth_window=5` with the
+  # two overrides above. It does not rescue tiny splits: below n_valid ~ 8 no rule
+  # passes, which is why the deep campaign refuses datasets with n_valid < 16.
+  smooth_window: 1
+  # Whether the net is SCORED at the selected epoch (true, historical) or at its last
+  # epoch (false). The deep campaign passes false (decided 13/10): at patience 200 the
+  # last epoch scores as well or better than any selection on a 46-trial split, and
+  # keeping selection out of the score stops the restored_epoch predictor and the
+  # accuracy it is controlled for from sharing the same validation noise. The
+  # selection still runs and is recorded as `selected_epoch`.
+  restore_selected: true
+  # Save the selected module's weights per fit (`<cell>__fits__selected/<fit_uid>.pt`)
+  # so the selected-epoch score stays recoverable offline when the last epoch is
+  # scored. Any score read from them is exploratory, never the primary endpoint.
+  save_selected: false
+  # Fraction of each fold set aside for the growth line search, carved from the
+  # TRAINING side for every arm (fixed ones just never read it), so all arms train on
+  # the same trials; the validation split is unchanged. 0.0 = historical: the line
+  # search ran on already-trained batches, or on the statistics batches themselves on
+  # 92.7 % of the previous campaign's events. The deep campaign passes 0.1 (decided
+  # 13/10, `analysis/step0_catalogue/line_search_censoring.py`).
+  growth_holdout: 0.0
+  # Line-search amplitudes; null = the historical {0, 0.1, 0.5, 1}, whose top wins on
+  # 97.8-100 % of applied steps (censored). The deep campaign passes
+  # "[0.0,0.25,0.5,1.0,2.0,4.0]" (eegrow.training.loop.WIDE_SCALING_GRID).
+  scaling_grid: null
   stop_monitor: valid_loss
   # Epochs without improvement on `stop_monitor` before the fit ends. null => the
   # historical max(15, max_epochs//10) = 20. Set it >= max_epochs to disable early
@@ -96,6 +139,11 @@ train:
   # the `adam_eps_frac` column on every fit record measures the fraction of
   # coordinates where it actually bites, and that measurement decides.
   optimizer_eps: 1e-8
+  # AdamW weight decay. 0.01 is torch's AdamW default, which is what every fit ran
+  # under before this knob existed (it was never passed; the fit records' `optimizer`
+  # stamp shows 0.01). braindecode's recipe: 0 for ShallowFBCSPNet, 5e-4 for Deep4Net
+  # (examples/model_building/plot_bcic_iv_2a_moabb_trial.py, lines 233-238).
+  weight_decay: 0.01
 
 # MOABB does its own per-fold parallelism off; the sweep parallelises across jobs.
 n_jobs: 1
