@@ -1,0 +1,362 @@
+{
+  "shin2017a": {
+    "bd_shallow": {
+      "gate": {
+        "0": {
+          "refused": true,
+          "reasons": [
+            "missing /scratch/amounir/eegrow_step0bis/step0_results/B/results/within_session/shin2017a/bd_shallow__seed0__fits.jsonl"
+          ],
+          "n_spikes": 0
+        },
+        "1": {
+          "refused": true,
+          "reasons": [
+            "missing /scratch/amounir/eegrow_step0bis/step0_results/B/results/within_session/shin2017a/bd_shallow__seed1__fits.jsonl"
+          ],
+          "n_spikes": 0
+        },
+        "2": {
+          "refused": true,
+          "reasons": [
+            "missing /scratch/amounir/eegrow_step0bis/step0_results/B/results/within_session/shin2017a/bd_shallow__seed2__fits.jsonl"
+          ],
+          "n_spikes": 0
+        }
+      },
+      "n_spikes": 0,
+      "status": "gate refused: relaunch, criteria NOT read",
+      "passes": null
+    },
+    "bd_deep4": {
+      "gate": {
+        "0": {
+          "refused": true,
+          "reasons": [
+            "missing /scratch/amounir/eegrow_step0bis/step0_results/B/results/within_session/shin2017a/bd_deep4__seed0__fits.jsonl"
+          ],
+          "n_spikes": 0
+        },
+        "1": {
+          "refused": true,
+          "reasons": [
+            "missing /scratch/amounir/eegrow_step0bis/step0_results/B/results/within_session/shin2017a/bd_deep4__seed1__fits.jsonl"
+          ],
+          "n_spikes": 0
+        },
+        "2": {
+          "refused": true,
+          "reasons": [
+            "missing /scratch/amounir/eegrow_step0bis/step0_results/B/results/within_session/shin2017a/bd_deep4__seed2__fits.jsonl"
+          ],
+          "n_spikes": 0
+        }
+      },
+      "n_spikes": 0,
+      "status": "gate refused: relaunch, criteria NOT read",
+      "passes": null
+    },
+    "grow_shallow": {
+      "gate": {
+        "0": {
+          "refused": true,
+          "reasons": [
+            "missing /scratch/amounir/eegrow_step0bis/step0_results/B/results/within_session/shin2017a/grow_shallow__seed0__fits.jsonl"
+          ],
+          "n_spikes": 0
+        },
+        "1": {
+          "refused": true,
+          "reasons": [
+            "missing /scratch/amounir/eegrow_step0bis/step0_results/B/results/within_session/shin2017a/grow_shallow__seed1__fits.jsonl"
+          ],
+          "n_spikes": 0
+        },
+        "2": {
+          "refused": true,
+          "reasons": [
+            "missing /scratch/amounir/eegrow_step0bis/step0_results/B/results/within_session/shin2017a/grow_shallow__seed2__fits.jsonl"
+          ],
+          "n_spikes": 0
+        }
+      },
+      "n_spikes": 0,
+      "status": "gate refused: relaunch, criteria NOT read",
+      "passes": null
+    },
+    "grow_deep4": {
+      "gate": {
+        "0": {
+          "refused": true,
+          "reasons": [
+            "missing /scratch/amounir/eegrow_step0bis/step0_results/B/results/within_session/shin2017a/grow_deep4__seed0__fits.jsonl"
+          ],
+          "n_spikes": 0
+        },
+        "1": {
+          "refused": true,
+          "reasons": [
+            "missing /scratch/amounir/eegrow_step0bis/step0_results/B/results/within_session/shin2017a/grow_deep4__seed1__fits.jsonl"
+          ],
+          "n_spikes": 0
+        },
+        "2": {
+          "refused": true,
+          "reasons": [
+            "missing /scratch/amounir/eegrow_step0bis/step0_results/B/results/within_session/shin2017a/grow_deep4__seed2__fits.jsonl"
+          ],
+          "n_spikes": 0
+        }
+      },
+      "n_spikes": 0,
+      "status": "gate refused: relaunch, criteria NOT read",
+      "passes": null
+    }
+  },
+  "physionetmi": {
+    "bd_shallow": {
+      "gate": {
+        "0": {
+          "refused": false,
+          "reasons": [],
+          "n_fits": 545,
+          "n_spikes": 0,
+          "spiked_fit_uids": [],
+          "gpu_uuids": [
+            "99b3ec31-f952-d974-9524-620467e2854f"
+          ]
+        },
+        "1": {
+          "refused": false,
+          "reasons": [],
+          "n_fits": 545,
+          "n_spikes": 0,
+          "spiked_fit_uids": [],
+          "gpu_uuids": [
+            "084d2838-5db7-413f-6e8d-d62d77b4d710"
+          ]
+        },
+        "2": {
+          "refused": false,
+          "reasons": [],
+          "n_fits": 545,
+          "n_spikes": 0,
+          "spiked_fit_uids": [],
+          "gpu_uuids": [
+            "fe287483-9aa2-7ee2-0b55-1b6530f8a6ba"
+          ]
+        }
+      },
+      "n_spikes": 0,
+      "departure": {
+        "median_first_batch_loss": 0.9873652458190918,
+        "excess_nat": 0.2942180652591465,
+        "refusing": false
+      },
+      "optimum": {
+        "status": "read",
+        "n": 1635,
+        "frac_early": 0.2819571865443425,
+        "frac_late": 0.0030581039755351682,
+        "refused": true
+      },
+      "status": "read",
+      "passes": false
+    },
+    "bd_deep4": {
+      "gate": {
+        "0": {
+          "refused": false,
+          "reasons": [],
+          "n_fits": 545,
+          "n_spikes": 0,
+          "spiked_fit_uids": [],
+          "gpu_uuids": [
+            "ca6936c4-c3de-8ead-f27c-f456442406c3"
+          ]
+        },
+        "1": {
+          "refused": false,
+          "reasons": [],
+          "n_fits": 545,
+          "n_spikes": 0,
+          "spiked_fit_uids": [],
+          "gpu_uuids": [
+            "fc009067-0d0d-719e-a56c-a304343a3f23"
+          ]
+        },
+        "2": {
+          "refused": false,
+          "reasons": [],
+          "n_fits": 545,
+          "n_spikes": 0,
+          "spiked_fit_uids": [],
+          "gpu_uuids": [
+            "8feb9b7c-248a-7680-1c9a-87f850cf36b0"
+          ]
+        }
+      },
+      "n_spikes": 0,
+      "departure": {
+        "median_first_batch_loss": 1.0667465925216675,
+        "excess_nat": 0.3735994119617222,
+        "refusing": false
+      },
+      "optimum": {
+        "status": "read",
+        "n": 1635,
+        "frac_early": 0.1724770642201835,
+        "frac_late": 0.009785932721712538,
+        "refused": false
+      },
+      "status": "read",
+      "passes": true
+    },
+    "grow_shallow": {
+      "gate": {
+        "0": {
+          "refused": false,
+          "reasons": [],
+          "n_fits": 545,
+          "n_spikes": 0,
+          "spiked_fit_uids": [],
+          "gpu_uuids": [
+            "cdfb9628-55af-2fcc-e5df-7893c9df44de"
+          ]
+        },
+        "1": {
+          "refused": false,
+          "reasons": [],
+          "n_fits": 545,
+          "n_spikes": 0,
+          "spiked_fit_uids": [],
+          "gpu_uuids": [
+            "3656ec76-9656-e7e1-6392-a383e915dc4f"
+          ]
+        },
+        "2": {
+          "refused": false,
+          "reasons": [],
+          "n_fits": 545,
+          "n_spikes": 0,
+          "spiked_fit_uids": [],
+          "gpu_uuids": [
+            "e94942a4-4dec-47fd-a6ad-1a0cf3280f92"
+          ]
+        }
+      },
+      "n_spikes": 0,
+      "departure": {
+        "median_first_batch_loss": 0.7550213932991028,
+        "excess_nat": 0.0618742127391575,
+        "refusing": false
+      },
+      "optimum": {
+        "status": "read",
+        "n": 1635,
+        "frac_early": 0.13944954128440368,
+        "frac_late": 0.003669724770642202,
+        "refused": false
+      },
+      "growth": {
+        "selection": {
+          "n_applied": 10535,
+          "frac_kept_all": 0.0,
+          "median_proposed_per_place": 5.2,
+          "refused": false
+        },
+        "spectrum": {
+          "median_decades": 3.0429690733931802,
+          "refused": false
+        },
+        "target": {
+          "frac_reached": 0.9914373088685016,
+          "refused": false
+        },
+        "calendar": {
+          "frac_all_early": 0.0012277470841006752,
+          "refused": false
+        },
+        "censoring": {
+          "frac_top": 0.018604651162790697,
+          "refused": false
+        }
+      },
+      "status": "read",
+      "passes": true
+    },
+    "grow_deep4": {
+      "gate": {
+        "0": {
+          "refused": false,
+          "reasons": [],
+          "n_fits": 545,
+          "n_spikes": 0,
+          "spiked_fit_uids": [],
+          "gpu_uuids": [
+            "ab332f89-1fc0-1fa5-3f0a-28d6776a20dc"
+          ]
+        },
+        "1": {
+          "refused": false,
+          "reasons": [],
+          "n_fits": 545,
+          "n_spikes": 0,
+          "spiked_fit_uids": [],
+          "gpu_uuids": [
+            "ea68b40d-befd-586e-bf55-92d85245411c"
+          ]
+        },
+        "2": {
+          "refused": false,
+          "reasons": [],
+          "n_fits": 545,
+          "n_spikes": 0,
+          "spiked_fit_uids": [],
+          "gpu_uuids": [
+            "8d30731f-d80a-99ac-daf2-c18d1b716098"
+          ]
+        }
+      },
+      "n_spikes": 0,
+      "departure": {
+        "median_first_batch_loss": 1.0634697675704956,
+        "excess_nat": 0.3703225870105503,
+        "refusing": false
+      },
+      "optimum": {
+        "status": "read",
+        "n": 1635,
+        "frac_early": 0.07155963302752294,
+        "frac_late": 0.00672782874617737,
+        "refused": false
+      },
+      "growth": {
+        "selection": {
+          "n_applied": 10982,
+          "frac_kept_all": 0.0,
+          "median_proposed_per_place": 3.6666666666666665,
+          "refused": false
+        },
+        "spectrum": {
+          "median_decades": 2.2528530309798933,
+          "refused": false
+        },
+        "target": {
+          "frac_reached": 0.999388379204893,
+          "refused": false
+        },
+        "calendar": {
+          "frac_all_early": 0.0,
+          "refused": false
+        },
+        "censoring": {
+          "frac_top": 0.07557821890366054,
+          "refused": false
+        }
+      },
+      "status": "read",
+      "passes": true
+    }
+  }
+}
