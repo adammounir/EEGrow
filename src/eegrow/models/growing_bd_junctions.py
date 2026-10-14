@@ -32,9 +32,10 @@ network IS the braindecode model). Junctions read in the braindecode 1.7.0 sourc
     dropout -> linear2``, hidden 72 (``dim_feedforward == d_model`` in MSVTNet). The
     layer's fused fast path reads ``linear1.weight`` directly, so it is switched off
     (``activation_relu_or_gelu = 0``): the slow path is the same function, op by op.
-``GrowingEEGNeX``
+``GrowingEEGNeXJunction``
     ``junction=1``: ``block_1[1] Conv(1, 8, (1, 64)) -> BN -> block_2[0] Conv(8, 32)``,
-    hidden 8; ``junction=2``: ``block_4[0] Conv(64, 32, dil 2) -> BN -> block_5[0]
+    hidden 8 -- REFUSED, its kernel-64 "same" padding is asymmetric (31/32) and
+    gromo's im2col takes a symmetric int padding; ``junction=2``: ``block_4[0] Conv(64, 32, dil 2) -> BN -> block_5[0]
     Conv(32, 8, dil 4)``, hidden 32. Growing a junction IN PLACE leaves every other
     width, and so the fixed tail, braindecode's: the reason ``grow_eegnex`` was not
     width-matched (its knob ``filter_1`` also sized the tail) does not apply.
@@ -87,16 +88,38 @@ def _growing_bn(bn: nn.BatchNorm2d, width: int) -> GrowingBatchNorm2d:
                               track_running_stats=bn.track_running_stats)
 
 
+def _int_padding(conv: nn.Conv2d) -> tuple[int, int]:
+    """``padding="same"`` as the symmetric int padding gromo's im2col needs.
+
+    PyTorch pads ``dilation * (kernel - 1)`` in total per axis, the odd unit on the
+    right. Only an even total is symmetric, so only then is there an int equivalent.
+    """
+    if not isinstance(conv.padding, str):
+        return tuple(conv.padding)
+    if conv.padding != "same":
+        raise ValueError(f"padding={conv.padding!r} not supported")
+    out = []
+    for k, d in zip(conv.kernel_size, conv.dilation):
+        total = d * (k - 1)
+        if total % 2:
+            raise ValueError(
+                f"padding='same' with kernel {conv.kernel_size} dilation {conv.dilation} "
+                f"is asymmetric ({total // 2}/{total - total // 2}); gromo's im2col "
+                "takes a symmetric int padding only, so this junction cannot grow")
+        out.append(total // 2)
+    return tuple(out)
+
+
 def _conv_pair(c1: nn.Conv2d, c2: nn.Conv2d, mid: nn.Module, *, start, target,
                hw_in, hw_mid, device, name):
     first = Conv2dGrowingModule(
         in_channels=c1.in_channels, out_channels=start, kernel_size=c1.kernel_size,
-        stride=c1.stride, padding=c1.padding, dilation=c1.dilation,
+        stride=c1.stride, padding=_int_padding(c1), dilation=c1.dilation,
         use_bias=c1.bias is not None, post_layer_function=mid, previous_module=None,
         allow_growing=False, input_size=hw_in, name=f"{name}.first", device=device)
     second = Conv2dGrowingModule(
         in_channels=start, out_channels=c2.out_channels, kernel_size=c2.kernel_size,
-        stride=c2.stride, padding=c2.padding, dilation=c2.dilation,
+        stride=c2.stride, padding=_int_padding(c2), dilation=c2.dilation,
         use_bias=c2.bias is not None, post_layer_function=nn.Identity(),
         previous_module=first, allow_growing=target > start, input_size=hw_mid,
         target_in_channels=target, name=f"{name}.second", device=device)
@@ -298,13 +321,19 @@ class GrowingMSVTNet(JunctionGrowingModel):
                      ((self.pair.first, "linear1"), (self.pair.second, "linear2")))
 
 
-class GrowingEEGNeX(JunctionGrowingModel):
-    """braindecode EEGNeX with one of its two conv -> BN -> conv junctions growable."""
+class GrowingEEGNeXJunction(JunctionGrowingModel):
+    """braindecode EEGNeX with one of its two conv -> BN -> conv junctions growable.
+
+    Not ``GrowingEEGNeX``: that name is the historical arm (``growing_eegnex.py``),
+    which grows ``filter_1`` and so also resizes the tail. Junction 1 (kernel 64,
+    padding "same" = 31/32) is asymmetric and REFUSED at construction; junction 2
+    (kernel 16, dilations 2 and 4, padding 15/15 and 30/30) is exact.
+    """
 
     _SITES = {1: ("block_1", 1, "block_2", 0), 2: ("block_4", 0, "block_5", 0)}
 
-    def __init__(self, n_chans: int, n_outputs: int, n_times: int, *, junction: int = 1,
-                 start_width: int = 2, target_width: int | None = None, device=None,
+    def __init__(self, n_chans: int, n_outputs: int, n_times: int, *, junction: int = 2,
+                 start_width: int = 4, target_width: int | None = None, device=None,
                  **bd_kwargs) -> None:
         super().__init__(in_features=n_chans, out_features=n_outputs, device=device)
         self.net = EEGNeX(n_chans=n_chans, n_outputs=n_outputs, n_times=n_times,
@@ -323,7 +352,7 @@ class GrowingEEGNeX(JunctionGrowingModel):
         self._finish(start=start_width, target=target)
 
     @torch.no_grad()
-    def load_braindecode_weights(self, bd: EEGNeX) -> "GrowingEEGNeX":
+    def load_braindecode_weights(self, bd: EEGNeX) -> "GrowingEEGNeXJunction":
         b1, i1, b2, i2 = self._SITES[self.junction]
         own = dict(bd.state_dict())
         for dst, key in ((self.pair.first, f"{b1}.{i1}"), (self.pair.second, f"{b2}.{i2}")):

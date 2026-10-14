@@ -13,7 +13,7 @@ import torch
 from braindecode.models import CTNet, ContraWR, EEGConformer, EEGNeX, MSVTNet, TIDNet
 
 from eegrow.models.growing_bd_junctions import (GrowingContraWR, GrowingCTNet,
-                                                GrowingEEGConformer, GrowingEEGNeX,
+                                                GrowingEEGConformer, GrowingEEGNeXJunction,
                                                 GrowingMSVTNet, GrowingTIDNet)
 from eegrow.training.loop import grow_step
 
@@ -31,13 +31,11 @@ VARIANTS = {
     "ctnet_b0": (GrowingCTNet, CTNet, dict(block=0), {}),
     "msvtnet_b0": (GrowingMSVTNet, MSVTNet, dict(block=0), {}),
     "msvtnet_b1": (GrowingMSVTNet, MSVTNet, dict(block=1), {}),
-    "eegnex_j1": (GrowingEEGNeX, EEGNeX, dict(junction=1), {}),
-    "eegnex_j2": (GrowingEEGNeX, EEGNeX, dict(junction=2), {}),
+    "eegnex_j2": (GrowingEEGNeXJunction, EEGNeX, dict(junction=2), {}),
 }
 BD_WIDTH = {"conformer_ffn_b0": 160, "conformer_ffn_b5": 160, "conformer_patch": 40,
             "contrawr_b0": 32, "contrawr_b3": 256, "tidnet_d0": 72, "tidnet_d1": 72,
-            "ctnet_b0": 160, "msvtnet_b0": 72, "msvtnet_b1": 72, "eegnex_j1": 8,
-            "eegnex_j2": 32}
+            "ctnet_b0": 160, "msvtnet_b0": 72, "msvtnet_b1": 72, "eegnex_j2": 32}
 
 
 def _pair(name):
@@ -66,7 +64,7 @@ def test_parity_with_braindecode(name):
 
 
 @pytest.mark.parametrize("name", ["conformer_ffn_b5", "contrawr_b0", "tidnet_d0", "ctnet_b0",
-                                  "msvtnet_b1", "eegnex_j1"])
+                                  "msvtnet_b1", "eegnex_j2"])
 def test_parity_fails_when_the_junction_differs(name):
     g, bd = _pair(name)
     with torch.no_grad():
@@ -123,4 +121,9 @@ def test_exported():
     assert eegrow.GrowingTIDNet is GrowingTIDNet
     assert eegrow.GrowingCTNet is GrowingCTNet
     assert eegrow.GrowingMSVTNet is GrowingMSVTNet
-    assert eegrow.GrowingEEGNeX is GrowingEEGNeX
+    assert eegrow.GrowingEEGNeXJunction is GrowingEEGNeXJunction
+
+
+def test_eegnex_asymmetric_same_padding_junction_is_refused():
+    with pytest.raises(ValueError, match="asymmetric"):
+        GrowingEEGNeXJunction(n_chans=C, n_outputs=K, n_times=T, junction=1)
