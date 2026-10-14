@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from eegrow.alignment import euclidean_align
 from eegrow.convert import GrowableSequential, make_growable
+from eegrow.models.growing_deep4 import GrowingDeep4Net
 from eegrow.models.growing_deepeeg import GrowingDeepEEGNet
 from eegrow.models.growing_eegnex import GrowingEEGNeX
 from eegrow.models.growing_sccnet import GrowingSCCNet
@@ -20,6 +21,7 @@ from eegrow.training.skorch_integration import GromoGrowth
 __all__ = [
     "GrowingShallowFBCSPNet",
     "GrowingDeepEEGNet",
+    "GrowingDeep4Net",
     "GrowingSCCNet",
     "GrowingEEGNeX",
     "make_growable",
