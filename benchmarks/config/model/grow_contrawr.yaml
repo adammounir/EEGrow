@@ -1,0 +1,11 @@
+# ContraWR with the first residual block's conv1 -> bn1 -> ELU -> conv2 growable
+# (étape 1b, EXPLORATORY). Hidden 8 -> 32 = braindecode's width; the BatchNorm in the
+# junction grows with gromo's GrowingBatchNorm2d. Rest braindecode's, unchanged.
+kind: growing
+arch: GrowingContraWR
+label: grow_contrawr
+needs_sfreq: true
+grow_every: 5
+module_kwargs:
+  block: 0
+  start_width: 8

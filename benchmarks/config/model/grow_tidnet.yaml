@@ -1,0 +1,11 @@
+# TIDNet with the bottleneck of the first dense spatial filter growable (étape 1b,
+# EXPLORATORY): Conv1x1 -> BN -> LeakyReLU -> Conv(5, 1), hidden 8 -> 72 = braindecode's
+# width (bottleneck 3 x s_growth 24). Rest braindecode's, unchanged.
+kind: growing
+arch: GrowingTIDNet
+label: grow_tidnet
+needs_sfreq: false
+grow_every: 5
+module_kwargs:
+  block: 0
+  start_width: 8

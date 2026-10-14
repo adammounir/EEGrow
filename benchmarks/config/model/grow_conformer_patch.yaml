@@ -1,0 +1,12 @@
+# EEGConformer with its patch-embedding junction growable (étape 1b, EXPLORATORY):
+# shallownet[0] Conv2d(1, 40, (1, 25)) -> shallownet[1] Conv2d(40, 40, (n_chans, 1)),
+# nothing in between (the ShallowFBCSPNet junction, not fused by CombinedConv).
+# Hidden 8 -> 40 = braindecode's width. Rest of the model braindecode's, unchanged.
+kind: growing
+arch: GrowingEEGConformer
+label: grow_conformer_patch
+needs_sfreq: false
+grow_every: 5
+module_kwargs:
+  junction: patch
+  start_width: 8

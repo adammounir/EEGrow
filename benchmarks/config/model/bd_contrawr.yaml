@@ -1,0 +1,6 @@
+# braindecode reference: ContraWR with its published defaults (twin of grow_contrawr*).
+kind: bd
+arch: ContraWR
+label: bd_contrawr
+needs_sfreq: true
+module_kwargs: {}

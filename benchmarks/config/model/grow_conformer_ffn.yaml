@@ -1,0 +1,15 @@
+# EEGConformer with ONE transformer FFN growable (étape 1b, 14/10/2026, EXPLORATORY):
+# Linear(40, 160) -> GELU -> Dropout -> Linear(160, 40) of transformer block `block`,
+# hidden 8 -> 160 = braindecode's own width (4 x n_filters_time). The other five FFNs,
+# the attention and the residuals are braindecode's, unchanged
+# (src/eegrow/models/growing_bd_junctions.py). Start width 8 / grow_every 5 are the
+# eegrow convention of grow_shallow/grow_deep4, not tuned.
+kind: growing
+arch: GrowingEEGConformer
+label: grow_conformer_ffn
+needs_sfreq: false
+grow_every: 5
+module_kwargs:
+  junction: ffn
+  block: 0
+  start_width: 8

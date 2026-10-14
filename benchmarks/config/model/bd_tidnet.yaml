@@ -1,0 +1,6 @@
+# braindecode reference: TIDNet with its published defaults (twin of grow_tidnet*).
+kind: bd
+arch: TIDNet
+label: bd_tidnet
+needs_sfreq: false
+module_kwargs: {}

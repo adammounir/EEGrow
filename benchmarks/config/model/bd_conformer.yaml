@@ -1,0 +1,6 @@
+# braindecode reference: EEGConformer with its published defaults (twin of grow_conformer*).
+kind: bd
+arch: EEGConformer
+label: bd_conformer
+needs_sfreq: false
+module_kwargs: {}
