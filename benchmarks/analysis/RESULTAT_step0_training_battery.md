@@ -150,3 +150,49 @@ restent acquis tels quels. Options, à arbitrer avec le résultat de la sonde :
    search, ce qui change gromo et `grow_step`.
 3. Accepter `s` au sommet comme une propriété, et retirer le critère de censure. Ce serait
    rejeter un critère après l'avoir lu, ce qui est déconseillé.
+
+## Avenant 2 — LU le 14/10/2026 : les deux bras passent
+
+**Statut de l'avenant : PROPOSÉ par Claude, À RATIFIER PAR ADAM.** Sans ratification, ce qui
+suit est exploratoire, et le refus des deux bras sous l'avenant 1 reste acquis.
+
+Jobs 755332 (batterie, 6/6 COMPLETED, 19 à 34 min) et 755333 (capacité), checkout
+`/scratch/amounir/eegrow_step0_lot3`, code `e6c836e`. Lecture par `step0_gate.py` puis
+`step0_criteria.py` version `35d6234`, figée et poussée avant lecture. Sorties dans
+`step0_read/lot3/`.
+
+**Garde-fou** : 6/6 cellules admises, 90 fits chacune, 0 pic. Grille
+{0 … 64} et `grow_normalization == "match_extending_layer"` vérifiées sur 100 % des
+événements.
+
+| critère | grow_shallow | grow_deep4 |
+|---|---|---|
+| départ (excès sur ln 4, limite) | +0.103 (≤ 0.610) | +0.646 (≤ 0.853) |
+| capacité (médiane de 3 seeds) | 0.0025 | 0.0054 |
+| optimum ≤ 5 / ≥ 195 | 1.5 % / 4.8 % | 0.4 % / 4.1 % |
+| sélection : proposés par place, tout gardé | 6.5, 0 % | 5.5, 0 % |
+| spectre (décades, médiane) | 3.80 | 1.65 |
+| cible atteinte | 100 % | 100 % |
+| calendrier (tout tôt) | 0 % | 0 % |
+| **censure : s au sommet (64), tous sujets** | **0.09 %** | **5.9 %** |
+| **censure, sujets 4 à 9 seuls** | **0.14 %** | **5.9 %** |
+| verdict | **passe** | **passe** |
+
+Pas appliqués : 2 221 (Shallow) et 2 339 (Deep4).
+
+Le libellé « censure s=4 » de `criteria_growing.md` est un texte resté en dur. Le calcul
+utilise bien `grid_top = max(grid) = 64` (`step0_criteria.py`, l. 193).
+
+**Ce que ça dit.**
+- La censure tombe de 98.8 % à 0.09 % (Shallow) et de 81.1 % à 5.9 % (Deep4), bien sous le
+  seuil de 20 %.
+- Elle est la même sur les sujets 4 à 9, qui n'ont pas servi à choisir la grille. Le
+  recouvrement avec les sujets 1 à 3 ne porte donc pas le résultat sur ce dataset. La
+  reconfirmation sur un autre dataset reste requise avant l'étape 2.
+- Aucun autre critère ne se dégrade au-delà de son seuil.
+- Seul mouvement notable : le spectre de Deep4 passe de 3.61 à 1.65 décades. Il reste au-dessus
+  du seuil d'une décade, mais avec moins de marge. Mécanisme non établi ; pas d'interprétation
+  avant une mesure.
+
+**Config gelée, sous réserve de ratification** : config B pour les deux bras, plus
+`growth_normalization=match_extending_layer` et la grille {0, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64}.

@@ -1,0 +1,188 @@
+{
+  "grow_shallow": {
+    "gate": {
+      "0": {
+        "refused": false,
+        "reasons": [],
+        "n_fits": 90,
+        "n_spikes": 0,
+        "spiked_fit_uids": [],
+        "gpu_uuids": [
+          "99b3ec31-f952-d974-9524-620467e2854f"
+        ]
+      },
+      "1": {
+        "refused": false,
+        "reasons": [],
+        "n_fits": 90,
+        "n_spikes": 0,
+        "spiked_fit_uids": [],
+        "gpu_uuids": [
+          "cdfb9628-55af-2fcc-e5df-7893c9df44de"
+        ]
+      },
+      "2": {
+        "refused": false,
+        "reasons": [],
+        "n_fits": 90,
+        "n_spikes": 0,
+        "spiked_fit_uids": [],
+        "gpu_uuids": [
+          "084d2838-5db7-413f-6e8d-d62d77b4d710"
+        ]
+      }
+    },
+    "n_spikes": 0,
+    "status": "read",
+    "departure": {
+      "median_first_batch_loss": 1.489675760269165,
+      "excess_nat": 0.10338139914927447,
+      "refusing": true,
+      "limit": 0.61,
+      "refused": false
+    },
+    "capacity": {
+      "status": "read",
+      "losses": [
+        0.002466847188770771,
+        0.001996719976887107,
+        0.0039665717631578445
+      ],
+      "median": 0.002466847188770771,
+      "refused": false
+    },
+    "optimum": {
+      "status": "read",
+      "n": 270,
+      "frac_early": 0.014814814814814815,
+      "frac_late": 0.04814814814814815,
+      "refused": false
+    },
+    "growth": {
+      "selection": {
+        "n_applied": 2221,
+        "frac_kept_all": 0.0,
+        "median_proposed_per_place": 6.5,
+        "refused": false
+      },
+      "spectrum": {
+        "median_decades": 3.800270118069251,
+        "refused": false
+      },
+      "target": {
+        "frac_reached": 1.0,
+        "refused": false
+      },
+      "calendar": {
+        "frac_all_early": 0.0,
+        "refused": false
+      },
+      "censoring": {
+        "frac_top": 0.0009004952723998199,
+        "refused": false
+      }
+    },
+    "twin": {
+      "arm": "bd_shallow",
+      "refused": false
+    },
+    "censoring_subjects_4_9": {
+      "frac_top": 0.0013633265167007499,
+      "refused": false
+    },
+    "passes": true
+  },
+  "grow_deep4": {
+    "gate": {
+      "0": {
+        "refused": false,
+        "reasons": [],
+        "n_fits": 90,
+        "n_spikes": 0,
+        "spiked_fit_uids": [],
+        "gpu_uuids": [
+          "ca6936c4-c3de-8ead-f27c-f456442406c3"
+        ]
+      },
+      "1": {
+        "refused": false,
+        "reasons": [],
+        "n_fits": 90,
+        "n_spikes": 0,
+        "spiked_fit_uids": [],
+        "gpu_uuids": [
+          "ab332f89-1fc0-1fa5-3f0a-28d6776a20dc"
+        ]
+      },
+      "2": {
+        "refused": false,
+        "reasons": [],
+        "n_fits": 90,
+        "n_spikes": 0,
+        "spiked_fit_uids": [],
+        "gpu_uuids": [
+          "fc009067-0d0d-719e-a56c-a304343a3f23"
+        ]
+      }
+    },
+    "n_spikes": 0,
+    "status": "read",
+    "departure": {
+      "median_first_batch_loss": 2.031904697418213,
+      "excess_nat": 0.6456103362983223,
+      "refusing": true,
+      "limit": 0.853,
+      "refused": false
+    },
+    "capacity": {
+      "status": "read",
+      "losses": [
+        0.007523107808083296,
+        0.005351385101675987,
+        0.003316722810268402
+      ],
+      "median": 0.005351385101675987,
+      "refused": false
+    },
+    "optimum": {
+      "status": "read",
+      "n": 270,
+      "frac_early": 0.003703703703703704,
+      "frac_late": 0.040740740740740744,
+      "refused": false
+    },
+    "growth": {
+      "selection": {
+        "n_applied": 2339,
+        "frac_kept_all": 0.0,
+        "median_proposed_per_place": 5.5,
+        "refused": false
+      },
+      "spectrum": {
+        "median_decades": 1.6459063437335595,
+        "refused": false
+      },
+      "target": {
+        "frac_reached": 1.0,
+        "refused": false
+      },
+      "calendar": {
+        "frac_all_early": 0.0,
+        "refused": false
+      },
+      "censoring": {
+        "frac_top": 0.05857203933304831,
+        "refused": false
+      }
+    },
+    "twin": {
+      "arm": "bd_deep4",
+      "refused": false
+    },
+    "censoring_subjects_4_9": {
+      "frac_top": 0.05947712418300653,
+      "refused": false
+    },
+    "passes": true
+  }
+}
