@@ -1,0 +1,180 @@
+{
+  "grow_shallow": {
+    "gate": {
+      "0": {
+        "refused": false,
+        "reasons": [],
+        "n_fits": 90,
+        "n_spikes": 0,
+        "spiked_fit_uids": [],
+        "gpu_uuids": [
+          "99b3ec31-f952-d974-9524-620467e2854f"
+        ]
+      },
+      "1": {
+        "refused": false,
+        "reasons": [],
+        "n_fits": 90,
+        "n_spikes": 0,
+        "spiked_fit_uids": [],
+        "gpu_uuids": [
+          "cdfb9628-55af-2fcc-e5df-7893c9df44de"
+        ]
+      },
+      "2": {
+        "refused": false,
+        "reasons": [],
+        "n_fits": 90,
+        "n_spikes": 0,
+        "spiked_fit_uids": [],
+        "gpu_uuids": [
+          "084d2838-5db7-413f-6e8d-d62d77b4d710"
+        ]
+      }
+    },
+    "n_spikes": 0,
+    "status": "read",
+    "departure": {
+      "median_first_batch_loss": 1.4817556738853455,
+      "excess_nat": 0.09546131276545489,
+      "refusing": true,
+      "limit": 0.61,
+      "refused": false
+    },
+    "capacity": {
+      "status": "read",
+      "losses": [
+        0.000820106128230691,
+        0.0005316694732755423,
+        0.001173136755824089
+      ],
+      "median": 0.000820106128230691,
+      "refused": false
+    },
+    "optimum": {
+      "status": "read",
+      "n": 270,
+      "frac_early": 0.003703703703703704,
+      "frac_late": 0.10740740740740741,
+      "refused": false
+    },
+    "growth": {
+      "selection": {
+        "n_applied": 2037,
+        "frac_kept_all": 0.0,
+        "median_proposed_per_place": 6.5,
+        "refused": false
+      },
+      "spectrum": {
+        "median_decades": 4.066624050983426,
+        "refused": false
+      },
+      "target": {
+        "frac_reached": 1.0,
+        "refused": false
+      },
+      "calendar": {
+        "frac_all_early": 0.0,
+        "refused": false
+      },
+      "censoring": {
+        "frac_top": 0.9882179675994109,
+        "refused": true
+      }
+    },
+    "twin": {
+      "arm": "bd_shallow",
+      "refused": false
+    },
+    "passes": false
+  },
+  "grow_deep4": {
+    "gate": {
+      "0": {
+        "refused": false,
+        "reasons": [],
+        "n_fits": 90,
+        "n_spikes": 0,
+        "spiked_fit_uids": [],
+        "gpu_uuids": [
+          "ca6936c4-c3de-8ead-f27c-f456442406c3"
+        ]
+      },
+      "1": {
+        "refused": false,
+        "reasons": [],
+        "n_fits": 90,
+        "n_spikes": 0,
+        "spiked_fit_uids": [],
+        "gpu_uuids": [
+          "ab332f89-1fc0-1fa5-3f0a-28d6776a20dc"
+        ]
+      },
+      "2": {
+        "refused": false,
+        "reasons": [],
+        "n_fits": 90,
+        "n_spikes": 0,
+        "spiked_fit_uids": [],
+        "gpu_uuids": [
+          "fc009067-0d0d-719e-a56c-a304343a3f23"
+        ]
+      }
+    },
+    "n_spikes": 0,
+    "status": "read",
+    "departure": {
+      "median_first_batch_loss": 2.055668354034424,
+      "excess_nat": 0.6693739929145333,
+      "refusing": true,
+      "limit": 0.853,
+      "refused": false
+    },
+    "capacity": {
+      "status": "read",
+      "losses": [
+        0.00041986515861935914,
+        0.02670467086136341,
+        0.01589486375451088
+      ],
+      "median": 0.01589486375451088,
+      "refused": false
+    },
+    "optimum": {
+      "status": "read",
+      "n": 270,
+      "frac_early": 0.018518518518518517,
+      "frac_late": 0.05555555555555555,
+      "refused": false
+    },
+    "growth": {
+      "selection": {
+        "n_applied": 2229,
+        "frac_kept_all": 0.0,
+        "median_proposed_per_place": 5.5,
+        "refused": false
+      },
+      "spectrum": {
+        "median_decades": 3.6074550232146683,
+        "refused": false
+      },
+      "target": {
+        "frac_reached": 0.9888888888888889,
+        "refused": false
+      },
+      "calendar": {
+        "frac_all_early": 0.0,
+        "refused": false
+      },
+      "censoring": {
+        "frac_top": 0.8111260655002244,
+        "refused": true
+      }
+    },
+    "twin": {
+      "arm": "bd_deep4",
+      "refused": false
+    },
+    "passes": false
+  }
+}

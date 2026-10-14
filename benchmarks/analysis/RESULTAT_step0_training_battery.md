@@ -79,3 +79,71 @@ Commun aux deux : batch 64, lr constant, 200 époques, dernière époque scorée
   - `GrowingShallowFBCSPNet` hérite de lr 6.25e-4 et wd 0.
 - Les résultats historiques qui comparent quoi que ce soit à `bd_deep4` sont à requalifier
   (point 1).
+
+---
+
+# Avenant 1 (lu le 14/10/2026) : les deux bras en croissance sont REFUSÉS, sur la censure seule
+
+Contexte de la lecture :
+- PREREG : avenant 1, gelé au commit `aa14de1`.
+- Checkout : `/scratch/amounir/eegrow_step0_lot2`.
+- Jobs : 755209 (batterie) et 755210 (capacité).
+- Sorties : `step0_read/lot2/`.
+
+**Garde-fous** : 6/6 cellules admises, avec 90 fits chacune. `grow_holdout == "disjoint"` sur
+100 % des événements, et 0 pic.
+
+| bras | départ (limite) | capacité | optimum ≤5 / ≥195 | sélection : prop./place, tout gardé | spectre | cible | calendrier | **censure (s = 4)** | verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| grow_shallow | +0.095 (≤ 0.610) | 0.0008 | 0.4 % / 10.7 % | 6.5, 0 % | 4.07 déc. | 100 % | 0 % | **98.8 %** | **REFUS** |
+| grow_deep4 | +0.669 (≤ 0.853) | 0.0159 | 1.9 % / 5.6 % | 5.5, 0 % | 3.61 déc. | 98.9 % | 0 % | **81.1 %** | **REFUS** |
+
+Seuil de censure : 20 %. **Tous les autres critères passent** :
+- la sélection est réelle (5,5 à 6,5 candidats par place, et jamais tout gardé) ;
+- le spectre couvre 3,6 à 4,1 décades ;
+- la cible est atteinte sur 99 à 100 % des fits ;
+- la croissance est progressive : époque médiane d'un pas appliqué 20 (Shallow) et 25 (Deep4),
+  avec 6,4 % et 20,5 % d'abstentions.
+
+Pour la première fois, la croissance de Deep4 est fidèle, sélective et atteint sa cible. Elle
+reste refusée parce que la line search ne choisit pas son amplitude.
+
+Conformément au PREREG, **aucun des deux bras ne passe à l'étape 2 sous ce protocole.**
+
+## Pourquoi la censure — analyse EXPLORATOIRE, déclarée après lecture
+
+Elle porte sur les pertes enregistrées à chaque point de la grille (`grow_losses`), pour les
+2 037 pas appliqués de Shallow et les 2 229 de Deep4.
+
+| | grow_shallow | grow_deep4 |
+|---|---|---|
+| perte décroissante sur toute la grille | 96.3 % | 63.7 % |
+| gain relatif de perte entre s = 0 et s = 4 (médiane) | **2.1e-4** | **6.8e-6** |
+| parabole ajustée sans minimum fini (concave ou linéaire) | 98.8 % | 82.0 % |
+| plus grande valeur propre proposée (médiane) | 6.5e-4 | 5.9e-5 |
+
+Sur toute la grille, la perte du held-out est **quasi linéaire en s**, et l'effet est
+minuscule. Les neurones ajoutés arrivent avec une amplitude d'ordre √(valeur propre)
+(1e-2 à 1e-3). Une échelle de 4 laisse donc le réseau dans le régime linéaire du
+développement au premier ordre, où le plus grand `s` gagne par construction. Pour Deep4, 36 %
+des pas ne sont pas monotones : à 7e-6 de gain relatif, la line search lit surtout du bruit
+de held-out (23 essais).
+
+Ce n'est donc pas une grille « un peu trop courte ». Il manque probablement plusieurs ordres de
+grandeur. **Sonde exploratoire lancée** (jobs 755300 et 755301, hors batterie, sans valeur de
+critère) :
+- les deux bras, sujets 1 à 3, seed 0 ;
+- grille {0, 1, 4, 16, 64, 256, 1024, 4096} ;
+- même code et mêmes cartes ;
+- question posée : un optimum intérieur apparaît-il, et à quelle échelle ?
+
+## Décision à prendre (Adam)
+
+La grille {0 ; 0,25 ; 0,5 ; 1 ; 2 ; 4} a été tranchée par Adam le 13/10. La changer est un
+**avenant 2**, sur un nouveau protocole et un nouveau run. Les critères de l'avenant 1 lus ici
+restent acquis tels quels. Options, à arbitrer avec le résultat de la sonde :
+1. Grille logarithmique sur plusieurs décades, si la sonde montre un optimum intérieur.
+2. Amplitude normalisée : mettre les nouveaux neurones à l'échelle des existants avant la line
+   search, ce qui change gromo et `grow_step`.
+3. Accepter `s` au sommet comme une propriété, et retirer le critère de censure. Ce serait
+   rejeter un critère après l'avoir lu, ce qui est déconseillé.
