@@ -117,6 +117,8 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
             grow_every=model_cfg["grow_every"],
             # null => the historical (censored) grid; see `scaling_grid` in config.yaml.
             scaling_grid=train_cfg.get("scaling_grid"),
+            # null => historical, unscaled extensions; see `growth_normalization`.
+            normalization=train_cfg.get("growth_normalization"),
             # How many neurons a growth step may propose, as a floor relative to the
             # best candidate's singular value. Per-model because the right value is an
             # arm's spectrum shape, not a global constant -- see loop.grow_step.

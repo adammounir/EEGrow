@@ -158,3 +158,33 @@ def test_split_survives_sklearn_clone():
     c = clone(net)
     assert c.train_split.holdout == 0.1 and c.train_split.random_state == 3
     assert tuple(dict(c.callbacks)["gromo"].scaling_grid) == WIDE_SCALING_GRID
+
+
+def test_normalized_growth_runs_and_is_recorded(tmp_path):
+    """growth_normalization rescales the extension before the line search, recorded."""
+    from braindecode import EEGClassifier
+
+    torch.manual_seed(0)
+    model = GrowingShallowFBCSPNet(n_chans=C, n_outputs=N_CLASSES, n_times=T,
+                                   n_filters_time=4, n_filters_spat=8,
+                                   target_n_filters_time=40, device="cpu")
+    path = tmp_path / "fits.jsonl"
+    net = EEGClassifier(
+        model, criterion=torch.nn.CrossEntropyLoss, max_epochs=6, batch_size=32,
+        iterator_train__drop_last=False,
+        train_split=HoldoutValidSplit(0.2, stratified=True, random_state=0, holdout=0.1),
+        callbacks=[("gromo", GromoGrowth(grow_every=2, scaling_grid=WIDE_SCALING_GRID,
+                                         normalization="match_extending_layer",
+                                         verbose=False)),
+                   ("record", FitRecorder(path))],
+        device="cpu", classes=list(range(N_CLASSES)), verbose=0)
+    net.fit(*_data())
+    rec = json.loads(path.read_text().strip().splitlines()[-1])
+    ev = [h for h in rec["history"] if "grow_s" in h]
+    assert ev and all(h["grow_normalization"] == "match_extending_layer" for h in ev)
+
+
+def test_normalization_round_trips_clone():
+    from sklearn.base import clone
+    cb = GromoGrowth(normalization="match_extending_layer")
+    assert clone(cb).normalization == "match_extending_layer"

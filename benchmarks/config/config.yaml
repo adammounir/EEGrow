@@ -102,6 +102,12 @@ train:
   # 97.8-100 % of applied steps (censored). The deep campaign passes
   # "[0.0,0.25,0.5,1.0,2.0,4.0]" (eegrow.training.loop.WIDE_SCALING_GRID).
   scaling_grid: null
+  # gromo `normalize_optimal_updates` type applied to a growth step before its line
+  # search, e.g. "match_extending_layer" (each component rescaled to the std of the
+  # layer it extends). null = historical: sqrt(singular value) baked into the new
+  # weights, ~1e-2 amplitude, and the line search stays linear in s (step 0,
+  # addendum 1, RESULTAT_step0_training_battery.md). Exploratory until an addendum.
+  growth_normalization: null
   stop_monitor: valid_loss
   # Epochs without improvement on `stop_monitor` before the fit ends. null => the
   # historical max(15, max_epochs//10) = 20. Set it >= max_epochs to disable early

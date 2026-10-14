@@ -143,7 +143,10 @@ La grille {0 ; 0,25 ; 0,5 ; 1 ; 2 ; 4} a été tranchée par Adam le 13/10. La c
 **avenant 2**, sur un nouveau protocole et un nouveau run. Les critères de l'avenant 1 lus ici
 restent acquis tels quels. Options, à arbitrer avec le résultat de la sonde :
 1. Grille logarithmique sur plusieurs décades, si la sonde montre un optimum intérieur.
-2. Amplitude normalisée : mettre les nouveaux neurones à l'échelle des existants avant la line
+2. **Amplitude normalisée** : gromo fournit déjà `normalize_optimal_updates(normalization_type="match_extending_layer")`.
+   - Cette fonction remet chaque extension à l'écart-type de la couche qu'elle étend (`growing_module.py`, l. 2920).
+   - `eegrow.training.loop.grow_step` ne l'appelle jamais : par défaut, √(valeur singulière) est intégré aux poids (l. 884), d'où l'amplitude ~1e-2.
+   - Aucun changement de gromo n'est nécessaire, seulement un appel avant la line search. La grille {0 … 4} prend alors un sens d'échelle relative.
    search, ce qui change gromo et `grow_step`.
 3. Accepter `s` au sommet comme une propriété, et retirer le critère de censure. Ce serait
    rejeter un critère après l'avoir lu, ce qui est déconseillé.

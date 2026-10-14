@@ -87,6 +87,9 @@ class GromoGrowth(Callback):
         Line-search amplitudes. ``None`` (default) = ``loop.SCALING_GRID``, the
         historical (censored) grid; the deep campaign passes
         ``loop.WIDE_SCALING_GRID``.
+    normalization : str, optional
+        gromo ``normalize_optimal_updates`` type applied before the line search
+        (e.g. ``"match_extending_layer"``). ``None`` (default) = historical, unscaled.
     verbose : bool
 
     Notes
@@ -106,7 +109,8 @@ class GromoGrowth(Callback):
     def __init__(self, grow_every: int = 15, growth_device=None,
                  holdout_frac: float = 0.2, min_holdout_batches: int = 4,
                  min_singular_ratio: float = MIN_SINGULAR_RATIO,
-                 scaling_grid=None, verbose: bool = True):
+                 scaling_grid=None, normalization: str | None = None,
+                 verbose: bool = True):
         self.grow_every = grow_every
         self.growth_device = growth_device
         self.holdout_frac = holdout_frac
@@ -120,6 +124,7 @@ class GromoGrowth(Callback):
                 raise ValueError(
                     f"scaling_grid must be increasing and contain 0.0, got {scaling_grid}")
         self.scaling_grid = scaling_grid
+        self.normalization = normalization
         self.verbose = verbose
         self.done_ = False
 
@@ -201,7 +206,8 @@ class GromoGrowth(Callback):
                            val_loader=val_loader, max_added=max_added,
                            min_singular_ratio=self.min_singular_ratio,
                            scaling_grid=(SCALING_GRID if self.scaling_grid is None
-                                         else self.scaling_grid))
+                                         else self.scaling_grid),
+                           normalization=self.normalization)
         result["holdout_kind"] = holdout_kind
         result["n_select"] = sum(len(b[1]) for b in (val_loader or stats_loader))
         if moved:
@@ -255,6 +261,7 @@ class GromoGrowth(Callback):
         if "holdout_kind" in result:
             record("grow_holdout", result["holdout_kind"])
             record("grow_n_select", result["n_select"])
+        record("grow_normalization", result.get("normalization"))
         record("grow_applied", bool(result["applied"]))
         record("grow_width_after", result["width_after"])
         record("grow_n_proposed", result["n_proposed"])

@@ -224,6 +224,7 @@ class FitRecorder(Callback):
                   "grow_first_order_improvement", "grow_eig_sum",
                   "grow_select_loss", "grow_losses", "grow_param_update_decrease",
                   "grow_eig_proposed", "grow_eig_kept", "grow_holdout", "grow_n_select",
+                  "grow_normalization",
                   "adam_atten_mean", "adam_atten_p05", "adam_eps_frac")
 
     def on_train_end(self, net, X=None, y=None, **kwargs):

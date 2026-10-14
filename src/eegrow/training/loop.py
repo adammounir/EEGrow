@@ -119,7 +119,7 @@ MIN_SINGULAR_RATIO = 0.1
 def grow_step(model, train_loader, device, *, val_loader=None,
               max_added: int | None = None,
               min_singular_ratio: float = MIN_SINGULAR_RATIO,
-              scaling_grid=SCALING_GRID) -> dict:
+              scaling_grid=SCALING_GRID, normalization: str | None = None) -> dict:
     """One gromo growth: stats -> optimal update -> line search -> apply_change.
 
     NB: ``compute_optimal_updates`` relies on ``eigh``, which is NOT implemented on
@@ -243,6 +243,13 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         # keeping the first `keep` is keeping the best `keep`. This also trims the
         # previous layer's matching outputs (sub_select_previous=True) -> hard cap.
         layer.sub_select_optimal_added_parameters(keep_neurons=keep)
+    if normalization is not None:
+        # gromo bakes sqrt(singular value) into the extension weights, so new neurons
+        # arrive at ~1e-2 amplitude and the line search never leaves the linear regime
+        # (step 0, addendum 1: s = 4 wins 81-99 % of steps, loss linear in s). gromo's
+        # own normalisation rescales each component to the std of the layer it extends
+        # BEFORE the line search, so `s` becomes a relative amplitude. None = historical.
+        layer.normalize_optimal_updates(normalization_type=normalization)
     # Read the two diagnostics off the layer NOW: `apply_change`/`delete_update` both
     # clear them, so after the branch below there is nothing left to record.
     diag = _update_diagnostics(layer)
@@ -280,6 +287,7 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         # work; `n_proposed == n_candidates == max_added` means the target is the
         # binding constraint. Distinguishing those two is the whole point of logging it.
         "n_proposed": n_proposed,
+        "normalization": normalization,
         # The untrimmed singular values, next to `n_proposed` they came from.
         "eig_proposed": eig_proposed,
         **diag,
