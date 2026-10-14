@@ -267,7 +267,7 @@ résultat attendu possible. Il sera rapporté tel quel.
 
 ## Avenant 2 — 14/10/2026 : line search à amplitude normalisée, grille 0 → 64
 
-**Statut : PROPOSÉ par Claude, lancé la nuit pour gagner du temps, À RATIFIER PAR ADAM.**
+**Statut : RATIFIÉ par Adam le 14/10/2026** (proposé par Claude, lancé la nuit, ratifié après lecture : la réserve ci-dessous tient).
 Il remplace la grille {0 … 4} tranchée par Adam le 13/10. Si Adam ne le ratifie pas, ses
 résultats sont exploratoires. Les refus de l'avenant 1 restent acquis dans tous les cas.
 

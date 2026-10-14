@@ -153,7 +153,7 @@ restent acquis tels quels. Options, à arbitrer avec le résultat de la sonde :
 
 ## Avenant 2 — LU le 14/10/2026 : les deux bras passent
 
-**Statut de l'avenant : PROPOSÉ par Claude, À RATIFIER PAR ADAM.** Sans ratification, ce qui
+**Statut de l'avenant : RATIFIÉ par Adam le 14/10/2026, après lecture.** Avant ratification, ce qui
 suit est exploratoire, et le refus des deux bras sous l'avenant 1 reste acquis.
 
 Jobs 755332 (batterie, 6/6 COMPLETED, 19 à 34 min) et 755333 (capacité), checkout
@@ -194,5 +194,5 @@ utilise bien `grid_top = max(grid) = 64` (`step0_criteria.py`, l. 193).
   du seuil d'une décade, mais avec moins de marge. Mécanisme non établi ; pas d'interprétation
   avant une mesure.
 
-**Config gelée, sous réserve de ratification** : config B pour les deux bras, plus
+**Config gelée (ratifiée 14/10)** : config B pour les deux bras, plus
 `growth_normalization=match_extending_layer` et la grille {0, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64}.
