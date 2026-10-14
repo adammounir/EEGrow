@@ -93,7 +93,12 @@ def with_stamp(pipeline, stamp: dict):
             named = isinstance(item, tuple) and len(item) == 2
             name, cb = item if named else (None, item)
             if _is_recorder(cb):
-                cb = type(cb)(path=cb.path, meta={**(cb.meta or {}), **stamp})
+                # Every constructor parameter carried over, not just path/meta: a
+                # recorder flag dropped here (save_selected) would be silently off
+                # in every stamped fold while the config says on.
+                params = dict(cb.get_params(deep=False))
+                params["meta"] = {**(cb.meta or {}), **stamp}
+                cb = type(cb)(**params)
                 hit = True
             rebuilt.append((name, cb) if named else cb)
         if hit:

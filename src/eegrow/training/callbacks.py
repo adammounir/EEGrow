@@ -89,20 +89,82 @@ class RestoreBestModel(Callback):
     ``restored_epoch_`` is recorded so the choice stays auditable after the fact rather
     than implicit.
 
+    WHICH EPOCH WINS A TIE
+    ----------------------
+    The historical rule kept the EARLIER of two tied epochs, on the argument that the
+    less-trained model is the conservative pick on a noisy criterion. On a quantised
+    ``valid_acc`` that argument backfires: with n_valid trials the metric takes only
+    n_valid + 1 values, a lucky epoch 1 or 2 sets a plateau the trained net can only
+    tie, and the strict comparison then hands back a net that barely trained. Measured
+    offline on the ``grow_shallow`` probe fits (``benchmarks/analysis/restored_tie_rule``,
+    06/10/2026): fits scored before epoch 5 fall from 64 % to 15 % on shin2017a
+    (n_valid=4) and from 33 % to 9 % on physionetmi (n_valid=8) under
+    ``tie_break="latest"``, and the across-fit reliability of ``restored_epoch_``
+    rises (ICC(1,k) 0.39 -> 0.61 and 0.44 -> 0.65). Large splits barely move (cho2017,
+    n_valid=32: 5 % -> 2 %), which is what a fix for quantisation should do.
+
+    But ``"latest"`` breaks the OTHER edge (measured 07/10, ``smooth_rule.py`` in the
+    same folder): once the net has memorised, ``valid_acc`` keeps re-touching its max
+    until the budget ends, so the last argmax lands in the final 5 epochs on 23-49 % of
+    fits, on every dataset including bnci2014_001. Neither tie rule is the fix.
+
+    SMOOTHED SELECTION
+    ------------------
+    Both edges fail for the same reason: a single quantised reading is selected on, so
+    whichever epoch got lucky wins. ``smooth_window=W`` selects instead on the centred
+    rolling mean of ``monitor`` over W epochs (truncated at both ends, at least
+    W//2 + 1 readings -- ``pandas.rolling(W, center=True, min_periods=W//2+1)``). An
+    isolated lucky epoch is diluted by its neighbours; a real plateau keeps its height.
+    Offline on the same probe fits (07/10): W=5 brings bnci2014_001 to 0 % early /
+    10 % late, under the 20 % refusal on both edges, where ``"latest"`` sat at 23 %
+    late. Below n_valid ~ 8 no rule passes either edge -- that is a floor on the
+    dataset, not a property of the rule.
+
+    The centred mean of epoch t is only known at epoch t + W//2, so the module of the
+    last W//2 + 1 epochs is kept in a ring buffer and the snapshot is taken from it
+    once its window closes. The epochs still open when training ends are scored on
+    their truncated windows in ``on_train_end``. ``smooth_window=1`` is exactly the
+    unsmoothed rule (no buffer, snapshot on improvement). The default stays 1 and
+    ``"earliest"`` so that archived results reproduce.
+
     Parameters
     ----------
     monitor : str
         History key to select on. Default ``"valid_loss"``.
     lower_is_better : bool
         Whether a smaller ``monitor`` is better. Default ``True``.
+    tie_break : {"earliest", "latest"}
+        Which epoch to keep when the monitor ties the best so far. Default
+        ``"earliest"`` (historical). ``"latest"`` fixes the early edge and breaks the
+        late one (see above). Applies to the smoothed score when ``smooth_window > 1``.
+    smooth_window : int
+        Odd width W of the centred rolling mean selected on. Default 1 (no smoothing).
+    swap : bool
+        Whether the selected module replaces the last one. Default ``True`` (the net
+        is scored at the selected epoch). ``False`` selects without restoring: the net
+        is scored at its LAST epoch, and the selected module is only handed to
+        ``FitRecorder`` to be saved. That is the deep campaign's protocol (13/10): at
+        patience 200 the last epoch scores as well or better than any selection on a
+        46-trial split (live, ``analysis/restored_tie_rule/live``), so the selection
+        serves the ``restored_epoch`` measure, not the score -- and keeping it out of
+        the score stops predictor and accuracy from sharing the same validation noise.
 
     Attributes stamped on the net
     -----------------------------
     ``restored_epoch_``
         The epoch whose weights the net ends up carrying, or ``None`` if the last
-        epoch was already the best. :class:`~eegrow.training.recording.FitRecorder`
+        epoch was already the best -- or if ``swap=False``, since the net then always
+        carries its last epoch. :class:`~eegrow.training.recording.FitRecorder`
         writes it into the fit record, so a downstream score can always be traced to
         the epoch that produced it.
+    ``selected_epoch_``
+        The epoch the rule selected, whether or not it was restored (``None`` if no
+        epoch was selectable).
+    ``selected_state_``
+        ``swap=False`` only: ``{"state_dict", "growable_width"}`` of the selected module
+        (CPU tensors), for ``FitRecorder`` to save; released by the recorder once
+        written. A dict and not the module itself: skorch refuses any
+        ``torch.nn.Module`` set on the net outside ``initialize_module``.
 
     Notes
     -----
@@ -117,9 +179,19 @@ class RestoreBestModel(Callback):
     epoch that produced it.
     """
 
-    def __init__(self, monitor: str = "valid_loss", lower_is_better: bool = True):
+    def __init__(self, monitor: str = "valid_loss", lower_is_better: bool = True,
+                 tie_break: str = "earliest", smooth_window: int = 1,
+                 swap: bool = True):
+        if tie_break not in ("earliest", "latest"):
+            raise ValueError(f"tie_break must be 'earliest' or 'latest', got {tie_break!r}")
+        if (isinstance(smooth_window, bool) or not isinstance(smooth_window, (int, np.integer))
+                or smooth_window < 1 or smooth_window % 2 == 0):
+            raise ValueError(f"smooth_window must be a positive odd int, got {smooth_window!r}")
         self.monitor = monitor
         self.lower_is_better = lower_is_better
+        self.tie_break = tie_break
+        self.smooth_window = smooth_window
+        self.swap = swap
         # Trailing underscore: skorch's ``Callback.get_params`` feeds every attribute
         # without one back through ``__init__`` when sklearn clones the pipeline, and
         # MOABB clones it per fold. State ends in ``_``; hyperparameters do not.
@@ -131,12 +203,20 @@ class RestoreBestModel(Callback):
         self.best_score_ = -np.inf if not self.lower_is_better else np.inf
         self.best_epoch_ = None
         self.best_module_ = None
+        # Smoothing state: every (epoch, score) seen, and the modules of the last
+        # W//2 + 1 epochs -- the oldest is the one whose window closes next.
+        self.scores_ = []
+        self.buffer_ = []
         net.restored_epoch_ = None
+        net.selected_epoch_ = None
+        net.selected_state_ = None
 
     def _improved(self, score) -> bool:
-        # Strict: on a tie we keep the EARLIER model. Both are equally good on the
-        # criterion and the earlier one is the smaller/less-trained of the two, which
-        # is the conservative pick when the criterion is noisy.
+        # ``tie_break="earliest"`` (strict) is the historical rule; the class docstring
+        # says why it is the wrong one on a quantised monitor.
+        if self.tie_break == "latest":
+            return score <= self.best_score_ if self.lower_is_better else \
+                score >= self.best_score_
         return score < self.best_score_ if self.lower_is_better else \
             score > self.best_score_
 
@@ -149,14 +229,61 @@ class RestoreBestModel(Callback):
             # A diverged fold reports NaN loss. Never snapshot it, and never let it
             # win the comparison by accident -- NaN compares False either way, which
             # is the behaviour we want, but being explicit costs nothing.
+            score = None
+        if self.smooth_window == 1:
+            if score is not None and self._improved(score):
+                self.best_score_ = score
+                self.best_epoch_ = row["epoch"]
+                self.best_module_ = copy.deepcopy(net.module_)
             return
-        if self._improved(score):
-            self.best_score_ = score
-            self.best_epoch_ = row["epoch"]
-            self.best_module_ = copy.deepcopy(net.module_)
+        # A non-finite reading still takes its slot (NaN), so window positions stay
+        # epochs; the mean skips it, like pandas does.
+        self.scores_.append(np.nan if score is None else float(score))
+        self.buffer_.append((row["epoch"], copy.deepcopy(net.module_)))
+        half = self.smooth_window // 2
+        if len(self.buffer_) > half + 1:
+            self.buffer_.pop(0)
+        # The window of the epoch ``half`` positions back has just closed.
+        centre = len(self.scores_) - 1 - half
+        if centre >= 0:
+            self._consider(centre, *self.buffer_[0])
+
+    def _smoothed(self, i: int) -> float:
+        half = self.smooth_window // 2
+        win = np.asarray(self.scores_[max(0, i - half): i + half + 1])
+        win = win[np.isfinite(win)]
+        # Rounded: two windows holding the same quantised readings in a different
+        # order must TIE, or float summation order breaks the tie rule at random.
+        return round(float(win.mean()), 10) if len(win) >= half + 1 else np.nan
+
+    def _consider(self, i: int, epoch, module):
+        smoothed = self._smoothed(i)
+        if np.isfinite(smoothed) and self._improved(smoothed):
+            self.best_score_ = smoothed
+            self.best_epoch_ = epoch
+            self.best_module_ = copy.deepcopy(module)
 
     def on_train_end(self, net, X=None, y=None, **kwargs):
+        if self.smooth_window > 1:
+            # Epochs whose window never closed: score them on what they got, in
+            # epoch order so the tie rule still means earliest/latest. Indices
+            # 0..n-half-1 were considered in on_epoch_end; the buffer holds the last
+            # len(buffer_) indices.
+            n, half = len(self.scores_), self.smooth_window // 2
+            first_buffered = n - len(self.buffer_)
+            for k, (epoch, module) in enumerate(self.buffer_):
+                if first_buffered + k >= n - half:
+                    self._consider(first_buffered + k, epoch, module)
+            self.buffer_ = []
         if self.best_module_ is None:
+            return
+        net.selected_epoch_ = self.best_epoch_
+        if not self.swap:
+            net.selected_state_ = {
+                "state_dict": {k: v.detach().cpu()
+                               for k, v in self.best_module_.state_dict().items()},
+                "growable_width": getattr(self.best_module_, "growable_width", None)}
+            self.best_module_ = None
             return
         last_epoch = net.history[-1]["epoch"] if len(net.history) else None
         if self.best_epoch_ == last_epoch:

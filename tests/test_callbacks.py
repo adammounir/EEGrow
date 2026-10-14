@@ -143,13 +143,174 @@ def test_restore_ignores_non_finite_scores():
     assert restore.best_epoch_ == 3, "NaN/inf epochs must not win the selection"
 
 
+@pytest.mark.parametrize("tie_break, expected", [("earliest", 2), ("latest", 6)])
+def test_restore_tie_break_on_a_quantised_plateau(tie_break, expected):
+    """A lucky early epoch ties the trained one: the rule decides which is scored.
+
+    The curve is what n_valid=4 looks like -- valid_acc moves in steps of 0.25, epoch 2
+    hits the plateau by luck and later epochs only tie it. ``earliest`` hands back
+    epoch 2 (the epoch-1 lock), ``latest`` the last epoch on the plateau.
+    """
+    restore = RestoreBestModel(monitor="valid_acc", lower_is_better=False,
+                               tie_break=tie_break)
+
+    class _Net:
+        def __init__(self):
+            self.history = []
+            self.module_ = torch.nn.Linear(2, 2)
+
+    net = _Net()
+    restore.on_train_begin(net)
+    for epoch, acc in enumerate([0.25, 0.75, 0.5, 0.75, 0.5, 0.75, 0.5], start=1):
+        net.history.append({"epoch": epoch, "valid_acc": acc})
+        restore.on_epoch_end(net)
+    assert restore.best_epoch_ == expected
+    restore.on_train_end(net)
+    assert net.restored_epoch_ == expected
+
+
+def test_restore_tie_break_latest_on_a_loss():
+    """``latest`` also holds for a lower-is-better monitor."""
+    restore = RestoreBestModel(monitor="valid_loss", lower_is_better=True,
+                               tie_break="latest")
+
+    class _Net:
+        def __init__(self):
+            self.history = []
+            self.module_ = torch.nn.Linear(2, 2)
+
+    net = _Net()
+    restore.on_train_begin(net)
+    for epoch, loss in enumerate([1.0, 0.5, 0.7, 0.5, 0.9], start=1):
+        net.history.append({"epoch": epoch, "valid_loss": loss})
+        restore.on_epoch_end(net)
+    assert restore.best_epoch_ == 4
+
+
+def test_restore_rejects_an_unknown_tie_break():
+    with pytest.raises(ValueError):
+        RestoreBestModel(tie_break="middle")
+
+
+class _TaggedNet:
+    """A net whose module carries its epoch, so a restore can be traced to the copy."""
+
+    def __init__(self):
+        self.history = []
+        self.module_ = torch.nn.Linear(2, 2)
+
+
+def _drive(restore, scores, key="valid_acc"):
+    net = _TaggedNet()
+    restore.on_train_begin(net)
+    for epoch, s in enumerate(scores, start=1):
+        net.module_.tag = epoch
+        net.history.append({"epoch": epoch, key: s})
+        restore.on_epoch_end(net)
+    restore.on_train_end(net)
+    return net
+
+
+def _offline_pick(scores, w, tie_break):
+    """The offline rule of ``analysis/restored_tie_rule/smooth_rule.py``."""
+    import pandas as pd
+
+    m = pd.Series(scores, dtype=float).rolling(
+        w, center=True, min_periods=w // 2 + 1).mean().round(10).to_numpy()
+    if np.isnan(m).all():  # fewer readings than W//2 + 1: nothing to select on
+        return None
+    best = np.nanmax(m)
+    hits = np.where(m == best)[0]
+    return int((hits[0] if tie_break == "earliest" else hits[-1]) + 1)
+
+
+@pytest.mark.parametrize("w", [1, 3, 5, 11])
+@pytest.mark.parametrize("tie_break", ["earliest", "latest"])
+def test_restore_smoothed_matches_the_offline_rule(w, tie_break):
+    """The online ring buffer picks the same epoch as the offline rolling mean.
+
+    The rule was chosen on offline numbers; this is what makes those numbers describe
+    the callback. Random quantised curves (n_valid = 4..46), short ones included, so the
+    early edge, the end edge and fits shorter than the window are all exercised.
+    """
+    rng = np.random.default_rng(0)
+    for trial in range(300):
+        n_valid = int(rng.choice([4, 8, 16, 46]))
+        n_epochs = int(rng.integers(1, 40))
+        scores = (rng.integers(0, n_valid + 1, n_epochs) / n_valid).tolist()
+        restore = RestoreBestModel(monitor="valid_acc", lower_is_better=False,
+                                   tie_break=tie_break, smooth_window=w)
+        net = _drive(restore, scores)
+        expected = _offline_pick(scores, w, tie_break)
+        assert restore.best_epoch_ == expected, (trial, scores)
+        if expected is None or expected == n_epochs:
+            assert net.restored_epoch_ is None
+        else:
+            assert net.restored_epoch_ == expected
+            # The weights handed back are the copy taken AT that epoch, not a later one.
+            assert net.module_.tag == expected
+
+
+def test_restore_smoothed_ignores_an_isolated_lucky_epoch():
+    """The case smoothing exists for: one lucky early reading vs a trained plateau."""
+    curve = [0.25, 1.0, 0.25, 0.25, 0.5, 0.75, 0.75, 0.75, 0.75, 0.75, 0.5, 0.5]
+    assert _drive(RestoreBestModel("valid_acc", False), curve).restored_epoch_ == 2
+    restore = RestoreBestModel("valid_acc", False, smooth_window=5)
+    assert _drive(restore, curve).restored_epoch_ == 8
+
+
+def test_restore_smoothed_skips_non_finite_readings():
+    restore = RestoreBestModel("valid_loss", True, smooth_window=3)
+    net = _drive(restore, [1.0, float("nan"), 0.4, 0.5, 0.9, 1.0], key="valid_loss")
+    # Windows: e1 mean(1.0)=1.0, e2 mean(1.0,0.4)=0.7, e3 mean(0.4,0.5)=0.45,
+    # e4 0.6, e5 0.8, e6 0.95 -> epoch 3.
+    assert net.restored_epoch_ == 3
+
+
+@pytest.mark.parametrize("bad", [0, 2, -1, 4.0, True])
+def test_restore_rejects_a_bad_smooth_window(bad):
+    with pytest.raises(ValueError):
+        RestoreBestModel(smooth_window=bad)
+
+
+def test_restore_smoothed_on_a_real_growing_fit():
+    """End to end through skorch and growth: the restored module is the epoch's width."""
+    from skorch.callbacks import Callback
+
+    widths = []
+
+    class _Width(Callback):  # the width each epoch ENDED with, i.e. after growth
+        def on_epoch_end(self, net, **kwargs):
+            widths.append(net.module_.growable_width)
+
+    restore = RestoreBestModel(monitor="valid_acc", lower_is_better=False,
+                               smooth_window=3)
+    net = _clf(_model(), [("gromo", GromoGrowth(grow_every=2, verbose=False)),
+                          ("width", _Width()), ("restore", restore)], max_epochs=10)
+    x, y = _xy()
+    net.fit(x, y)
+    assert len(set(widths)) > 1, "test needs a fit that actually grew"
+    accs = [row["valid_acc"] for row in net.history]
+    expected = _offline_pick(accs, 3, "earliest")
+    if expected == len(accs):
+        assert net.restored_epoch_ is None
+    else:
+        assert net.restored_epoch_ == expected
+        assert net.module_.growable_width == widths[expected - 1]
+    assert torch.isfinite(torch.as_tensor(net.predict_proba(x))).all()
+
+
 def test_restore_survives_sklearn_clone():
     """MOABB clones the pipeline per fold; the callback must round-trip."""
     net = _clf(_model(), [("restore", RestoreBestModel(monitor="valid_acc",
-                                                       lower_is_better=False))])
+                                                       lower_is_better=False,
+                                                       tie_break="latest",
+                                                       smooth_window=5))])
     cb = dict(clone(net).callbacks)["restore"]
     assert cb.monitor == "valid_acc"
     assert cb.lower_is_better is False
+    assert cb.tie_break == "latest", "a cloned fold would silently fall back to earliest"
+    assert cb.smooth_window == 5, "a cloned fold would silently stop smoothing"
 
 
 # ------------------------------------------------------------------ instrumentation
