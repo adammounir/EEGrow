@@ -280,6 +280,30 @@ que la perte ne saute — hypothèse, non mesurée).
 **Sortie.** Un tableau passe / refus par modèle et une config gelée. Un modèle refusé sort de
 la campagne, il n'est pas « gardé avec une réserve ».
 
+**14/10 — PREREG étape 0 GELÉ et LANCÉ** (décisions déléguées par Adam la nuit du 13 au 14,
+toutes sourcées dans `PREREG_step0_training_battery.md`, commits `343061a`, `50b68c7`,
+`38e94a2` sur `exp/deep-bottleneck`) :
+- **Weight decay** : jamais passé jusqu'ici, donc **0.01** (défaut AdamW) dans tous les fits
+  historiques, d'après le stamp `optimizer` des records. Le brouillon disait 0, c'était faux.
+  Le weight decay est désormais un paramètre explicite, `train.weight_decay`, avec 0.01 par
+  défaut.
+- **Hyperparamètres cités** : le papier ne donne pas le lr. braindecode recommande lr 6.25e-4
+  et wd 0 pour Shallow, lr **1e-2** et wd 5e-4 pour Deep4. Le code des auteurs (0.4) utilise
+  Adam par défaut. Deux candidats sont lancés : B (braindecode) et H (historique). La règle
+  B, sinon H, sinon refus est fixée avant les fits.
+- **Critère « départ »** : mesuré avant le gel, l'excès vaut +0.55 (Shallow) et +0.62 (Deep4)
+  nat. Il est identique quand l'entrée est divisée par son écart-type, donc il vient de l'init
+  publiée et non du pipeline. Pour les références, il est rapporté sans refuser. Pour nos
+  modèles, il refuse au-delà de +0.15 au-dessus de la référence de la même famille.
+- **Référence publiée** : on la reproduit sous le protocole des auteurs, porté ligne à ligne
+  depuis braindecode 0.4 (`step0_reference.py`, cropped, deux phases), en 4–38 Hz, avec pour
+  cibles 71.9 (Shallow) et 70.1 (Deep).
+- **Effet de la carte** : un seul modèle de carte, la RTX 2080 Ti (14 cartes), avec une porte
+  par nom. `gres=turing` inclut des RTX 2080 non Ti sur margpu028.
+- **Capacité** : 32 essais, 3 seeds, médiane de la perte en mode eval, seuil 0.05.
+- **Jobs** : 754941 (batterie, 12 cellules) et 754942 (12 capacités et 54 reproductions).
+  Lecture par `step0_gate.py`, puis par `step0_criteria.py`, commité avant lecture.
+
 ### Étape 1 — Un deep fidèle qui pousse vraiment
 
 **Question.** Peut-on faire croître une architecture deep publiée sans la dénaturer ?
