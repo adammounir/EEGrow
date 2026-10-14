@@ -1,0 +1,66 @@
+capacity bd_shallow B 6.25e-4 0.0 0
+capacity bd_shallow B 6.25e-4 0.0 1
+capacity bd_shallow B 6.25e-4 0.0 2
+capacity bd_shallow H 6.25e-4 0.01 0
+capacity bd_shallow H 6.25e-4 0.01 1
+capacity bd_shallow H 6.25e-4 0.01 2
+capacity bd_deep4 B 1e-2 5e-4 0
+capacity bd_deep4 B 1e-2 5e-4 1
+capacity bd_deep4 B 1e-2 5e-4 2
+capacity bd_deep4 H 6.25e-4 0.01 0
+capacity bd_deep4 H 6.25e-4 0.01 1
+capacity bd_deep4 H 6.25e-4 0.01 2
+reference shallow - - - 0 1
+reference shallow - - - 1 1
+reference shallow - - - 2 1
+reference shallow - - - 0 2
+reference shallow - - - 1 2
+reference shallow - - - 2 2
+reference shallow - - - 0 3
+reference shallow - - - 1 3
+reference shallow - - - 2 3
+reference shallow - - - 0 4
+reference shallow - - - 1 4
+reference shallow - - - 2 4
+reference shallow - - - 0 5
+reference shallow - - - 1 5
+reference shallow - - - 2 5
+reference shallow - - - 0 6
+reference shallow - - - 1 6
+reference shallow - - - 2 6
+reference shallow - - - 0 7
+reference shallow - - - 1 7
+reference shallow - - - 2 7
+reference shallow - - - 0 8
+reference shallow - - - 1 8
+reference shallow - - - 2 8
+reference shallow - - - 0 9
+reference shallow - - - 1 9
+reference shallow - - - 2 9
+reference deep - - - 0 1
+reference deep - - - 1 1
+reference deep - - - 2 1
+reference deep - - - 0 2
+reference deep - - - 1 2
+reference deep - - - 2 2
+reference deep - - - 0 3
+reference deep - - - 1 3
+reference deep - - - 2 3
+reference deep - - - 0 4
+reference deep - - - 1 4
+reference deep - - - 2 4
+reference deep - - - 0 5
+reference deep - - - 1 5
+reference deep - - - 2 5
+reference deep - - - 0 6
+reference deep - - - 1 6
+reference deep - - - 2 6
+reference deep - - - 0 7
+reference deep - - - 1 7
+reference deep - - - 2 7
+reference deep - - - 0 8
+reference deep - - - 1 8
+reference deep - - - 2 8
+reference deep - - - 0 9
+reference deep - - - 1 9
+reference deep - - - 2 9

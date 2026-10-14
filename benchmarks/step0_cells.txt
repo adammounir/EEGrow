@@ -1,0 +1,12 @@
+bd_shallow B 6.25e-4 0.0 0
+bd_shallow H 6.25e-4 0.01 0
+bd_deep4 B 1e-2 5e-4 0
+bd_deep4 H 6.25e-4 0.01 0
+bd_shallow B 6.25e-4 0.0 1
+bd_shallow H 6.25e-4 0.01 1
+bd_deep4 B 1e-2 5e-4 1
+bd_deep4 H 6.25e-4 0.01 1
+bd_shallow B 6.25e-4 0.0 2
+bd_shallow H 6.25e-4 0.01 2
+bd_deep4 B 1e-2 5e-4 2
+bd_deep4 H 6.25e-4 0.01 2
