@@ -1,0 +1,12 @@
+bd_shallow B 6.25e-4 0.0 0 physionetmi
+bd_deep4 B 1e-2 5e-4 0 physionetmi
+grow_shallow B 6.25e-4 0.0 0 physionetmi
+grow_deep4 B 1e-2 5e-4 0 physionetmi
+bd_shallow B 6.25e-4 0.0 1 physionetmi
+bd_deep4 B 1e-2 5e-4 1 physionetmi
+grow_shallow B 6.25e-4 0.0 1 physionetmi
+grow_deep4 B 1e-2 5e-4 1 physionetmi
+bd_shallow B 6.25e-4 0.0 2 physionetmi
+bd_deep4 B 1e-2 5e-4 2 physionetmi
+grow_shallow B 6.25e-4 0.0 2 physionetmi
+grow_deep4 B 1e-2 5e-4 2 physionetmi

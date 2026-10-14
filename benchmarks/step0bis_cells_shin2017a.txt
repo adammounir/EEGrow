@@ -1,0 +1,12 @@
+bd_shallow B 6.25e-4 0.0 0 shin2017a
+bd_deep4 B 1e-2 5e-4 0 shin2017a
+grow_shallow B 6.25e-4 0.0 0 shin2017a
+grow_deep4 B 1e-2 5e-4 0 shin2017a
+bd_shallow B 6.25e-4 0.0 1 shin2017a
+bd_deep4 B 1e-2 5e-4 1 shin2017a
+grow_shallow B 6.25e-4 0.0 1 shin2017a
+grow_deep4 B 1e-2 5e-4 1 shin2017a
+bd_shallow B 6.25e-4 0.0 2 shin2017a
+bd_deep4 B 1e-2 5e-4 2 shin2017a
+grow_shallow B 6.25e-4 0.0 2 shin2017a
+grow_deep4 B 1e-2 5e-4 2 shin2017a

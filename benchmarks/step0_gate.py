@@ -55,8 +55,15 @@ SELECTION = {
 MAX_EPOCHS = 200
 SPIKE_THRESHOLD = 1e6
 #: Datasets the step-0 battery runs on, with the session names MOABB serves.
-SESSIONS = {"bnci2014_001": ("0train", "1test")}
-N_SUBJECTS = {"bnci2014_001": 9}
+#: shin2017a / physionetmi (step 0-bis, 14/10): MOABB ``Shin2017A`` serves 3 MI sessions
+#: (``sessions_per_subject=3``, the even-numbered recordings) and ``PhysionetMI`` one;
+#: names and subject counts read off the complete historical cells
+#: ``results_final/within_session/{shin2017a,physionetmi}/grow_shallow__seed0__fits.jsonl``
+#: (435 fits = 29 x 3 x 5, 545 fits = 109 x 1 x 5, no subject missing).
+SESSIONS = {"bnci2014_001": ("0train", "1test"),
+            "shin2017a": ("0imagery", "2imagery", "4imagery"),
+            "physionetmi": ("0",)}
+N_SUBJECTS = {"bnci2014_001": 9, "shin2017a": 29, "physionetmi": 109}
 N_FOLDS = 5
 
 
