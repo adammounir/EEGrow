@@ -26,7 +26,7 @@
 
 set -uo pipefail
 
-ROOT=/scratch/amounir/eegrow_step0
+ROOT=${ROOT:-/scratch/amounir/eegrow_step0}   # lot 2: a fresh checkout, passed with --export
 CARD="NVIDIA GeForce RTX 2080 Ti"
 source /scratch/amounir/miniforge3/etc/profile.d/conda.sh
 conda activate bench
@@ -35,7 +35,7 @@ export MNE_DATA=/scratch/amounir/mne_data
 export HYDRA_FULL_ERROR=1
 export EEGROW_SHA="$(tr -d '[:space:]' < $ROOT/.eegrow_sha)"
 
-LINE=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$ROOT/benchmarks/step0_cells.txt")
+LINE=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$ROOT/benchmarks/${CELLS:-step0_cells.txt}")
 read -r ARM CAND LR WD SEED <<< "$LINE"
 OUT=$ROOT/step0_results/$CAND
 export EEGROW_BENCH_ROOT=$OUT
@@ -45,9 +45,9 @@ echo "  arm=$ARM candidate=$CAND lr=$LR wd=$WD seed=$SEED"
 GOT="$(nvidia-smi --query-gpu=name --format=csv,noheader | sed -n 1p)"
 if [ "$GOT" != "$CARD" ]; then echo "REFUSED: card '$GOT' != '$CARD'"; exit 1; fi
 
-python - <<'PY' || exit 1
+ROOT="$ROOT" python - <<'PY' || exit 1
 import eegrow, torch
-assert eegrow.__file__.startswith("/scratch/amounir/eegrow_step0/"), eegrow.__file__
+import os; assert eegrow.__file__.startswith(os.environ["ROOT"] + "/"), eegrow.__file__
 assert torch.cuda.is_available(), "no CUDA on a gpu job"
 import pipelines, inspect
 assert "weight_decay" in inspect.getsource(pipelines._build_dl), "stale pipelines.py"

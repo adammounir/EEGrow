@@ -67,9 +67,22 @@ def test_a_net_that_cannot_descend_is_refused():
     assert not res["passes"] and res["final_loss_eval"] > 0.5
 
 
-def test_growing_arms_are_refused_not_stood_in_for():
+def test_growing_arm_grows_during_the_capacity_test():
+    """Growth runs with its own callback and a disjoint held-out (addendum 1)."""
+    X, y = _data(n_per_class=10)
+    tr, ho = cap.growing_subset(y, 0)
+    assert len(tr) == 36 and len(ho) == 4 and not set(tr) & set(ho)
+    res = cap.capacity_fit(_model("grow_shallow"),
+                           _train(scaling_grid=[0.0, 0.25, 0.5, 1.0, 2.0, 4.0]),
+                           X[tr], y[tr], seed=0, max_epochs=12,
+                           X_hold=X[ho], y_hold=y[ho])
+    assert res["n_events"] > 0 and res["grow_holdout"] == ["disjoint"]
+    assert res["width_end"] > 8
+
+
+def test_growing_arm_without_held_out_is_refused():
     X, y = _data()
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(ValueError):
         cap.capacity_fit(_model("grow_shallow"), _train(), X, y, seed=0)
 
 

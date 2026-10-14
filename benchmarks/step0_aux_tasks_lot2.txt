@@ -1,0 +1,6 @@
+capacity grow_shallow B 6.25e-4 0.0 0
+capacity grow_shallow B 6.25e-4 0.0 1
+capacity grow_shallow B 6.25e-4 0.0 2
+capacity grow_deep4 B 1e-2 5e-4 0
+capacity grow_deep4 B 1e-2 5e-4 1
+capacity grow_deep4 B 1e-2 5e-4 2

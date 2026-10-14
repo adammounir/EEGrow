@@ -22,14 +22,14 @@
 
 set -uo pipefail
 
-ROOT=/scratch/amounir/eegrow_step0
+ROOT=${ROOT:-/scratch/amounir/eegrow_step0}   # lot 2: a fresh checkout, passed with --export
 CARD="NVIDIA GeForce RTX 2080 Ti"
 source /scratch/amounir/miniforge3/etc/profile.d/conda.sh
 conda activate bench
 export PYTHONPATH=$ROOT/src:$ROOT/benchmarks
 export MNE_DATA=/scratch/amounir/mne_data
 
-LINE=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$ROOT/benchmarks/step0_aux_tasks.txt")
+LINE=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$ROOT/benchmarks/${TASKS:-step0_aux_tasks.txt}")
 read -r KIND A B C D SEED SUBJ <<< "$LINE"
 echo "[$(date)] task=$SLURM_ARRAY_TASK_ID restart=${SLURM_RESTART_COUNT:-0} node=$(hostname) :: $LINE"
 GOT="$(nvidia-smi --query-gpu=name --format=csv,noheader | sed -n 1p)"

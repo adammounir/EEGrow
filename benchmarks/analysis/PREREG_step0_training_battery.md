@@ -210,3 +210,57 @@ seuls admis aux étapes 1 à 4.
   sécurité 6 h par cellule.
 - Lecture : `step0_gate.py` d'abord, sur toutes les cellules ; le script de lecture des
   critères de la § 5 est commité **avant** la lecture.
+
+## Avenant 1 — 14/10/2026 : bras en croissance `grow_shallow` et `grow_deep4`
+
+Écrit **après** la lecture du lot 1 (`RESULTAT_step0_training_battery.md`, config B gelée
+pour les deux références) et **avant** tout fit des bras ci-dessous. Les seuils de la § 5
+ne changent pas. L'avenant ne fait que rendre opérationnelles les définitions de la § 5.2,
+que le brouillon laissait sans agrégation.
+
+**Bras.** Chacun tourne sous la config B de sa famille (§ 3.2), car c'est la seule gelée :
+
+| bras | modèle | largeur | config | référence de famille = jumeau |
+|---|---|---|---|---|
+| `grow_shallow` | `GrowingShallowFBCSPNet` (parité vérifiée) | 8 → 40 | lr 6.25e-4, wd 0 | `bd_shallow` (40) |
+| `grow_deep4` | `GrowingDeep4Net` (`e78fb4d`, parité ≤ 1e-5) | 8 → 25 | lr 1e-2, wd 5e-4 | `bd_deep4` (25) |
+
+- `grow_every` = 5 pour les deux. La largeur de départ (8) est celle de `grow_shallow`.
+  Rien n'est réglé sur un résultat.
+- Protocole § 3.1 inchangé : held-out disjoint de 10 %, grille {0 ; 0,25 ; 0,5 ; 1 ; 2 ; 4},
+  dernière époque, 200 époques.
+- 2 bras × 3 seeds = 6 cellules, sur les mêmes RTX 2080 Ti.
+
+**Garde-fous** : ceux de la § 4, avec `--growing` (chaque événement de croissance doit avoir
+`grow_holdout == "disjoint"`).
+
+**Critères, avec leur définition opérationnelle** (implémentés dans
+`step0_criteria.py --growing`, commité avec cet avenant, 7 tests sur records synthétiques) :
+
+| critère | définition | refus si |
+|---|---|---|
+| départ (§ 5.3) | médiane de `first_batch_loss` − ln 4 | > excès de la référence lu au lot 1 + 0,15 : **0,610** (shallow), **0,853** (deep4) |
+| capacité | voir ci-dessous | médiane des 3 seeds ≥ 0,05 |
+| optimum | comme § 5.1 | > 20 % à ≤ 5 ou > 20 % à ≥ 195 |
+| sélection réelle | sur les pas **appliqués** : part des pas où `kept = proposed` ; médiane de `n_proposed / places`, où places = largeur après − largeur avant | `kept = proposed` sur **tous** les pas, ou médiane < **2** |
+| spectre | par événement, log10(max/min) des valeurs propres proposées > 0 ; médiane sur les événements | < **1** décade |
+| cible | part des fits avec `width_end == target` | < **80 %** |
+| calendrier | part des fits qui ont crû et dont **tous** les pas appliqués tombent à l'époque ≤ 10 | > **50 %** (gonflement unique, pas une croissance) |
+| censure | part des pas appliqués avec `s = 4` (sommet de la grille) | > **20 %** |
+| jumeau | par construction : à la cible, `GrowingDeep4Net` est Deep4Net et `GrowingShallowFBCSPNet` est ShallowFBCSPNet (parité) | — |
+
+**Capacité d'un bras en croissance.** La croissance tourne pendant le test, avec son propre
+`GromoGrowth` construit comme dans `pipelines._build_dl`. La line search a besoin d'essais
+jamais vus en entraînement, d'où le protocole suivant :
+- 10 essais par classe sont tirés au lieu de 8 ;
+- 1 par classe est mis de côté comme held-out disjoint ;
+- l'entraînement porte sur 36 essais, et la perte en mode eval est mesurée sur ces 36.
+
+Le chemin `bd` de `step0_capacity.py` est inchangé, ses résultats sont lus.
+
+**Signal préalable, non concluant** : sur le smoke du 13/10 (config H, 11 époques), la
+censure valait 100 %, la cible 0 % et le calendrier 100 %. Le smoke s'arrêtait à 11
+époques, donc seule la censure est informative ici, et le refus pour censure est un
+résultat attendu possible. Il sera rapporté tel quel.
+
+**Sortie** : passe / refus par bras et par critère. Un bras refusé ne passe pas à l'étape 2.

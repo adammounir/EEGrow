@@ -13,6 +13,8 @@ import step0_criteria as cr  # noqa: E402
 import step0_gate as g  # noqa: E402
 from test_step0_gate import _cell  # noqa: E402
 
+import pytest  # noqa: E402
+
 
 def _write_tree(root, *, late_frac=0.0, cap_loss=0.001, ref_acc=0.72, skip=None):
     for cand, arms in cr.CANDIDATES.items():
@@ -89,3 +91,50 @@ def test_departure_is_reported_not_refusing(tmp_path):
     _write_tree(tmp_path)
     d = cr.evaluate(tmp_path)["arms"]["bd_deep4"]["candidates"]["B"]["departure"]
     assert d["refusing"] is False and abs(d["excess_nat"] - (1.9 - 1.3863)) < 1e-3
+
+
+def _grow_rec(*, epochs=(5, 10, 15, 20), proposed=40, s=1.0, keep_all=False,
+              reach=True, start=8, target=40):
+    hist, width = [], start
+    step = (target - start) // len(epochs)
+    for ep in range(1, 201):
+        h = {"epoch": ep}
+        if ep in epochs:
+            after = width + step
+            h.update(grow_s=s, grow_applied=True, grow_width_after=after,
+                     grow_n_proposed=proposed, grow_n_kept=proposed if keep_all else step,
+                     grow_eig_proposed=list(np.logspace(0, -3, proposed)),
+                     grow_holdout="disjoint")
+            width = after
+        hist.append(h)
+    return {"width_start": start, "width_end": target if reach else width - 1,
+            "history": hist}
+
+
+import numpy as np  # noqa: E402
+
+
+def test_growth_criteria_pass_on_a_real_selection():
+    g = cr.growth_criteria([_grow_rec() for _ in range(10)], 40)
+    assert not any(v["refused"] for v in g.values()), g
+
+
+@pytest.mark.parametrize("kw,crit", [
+    (dict(s=4.0), "censoring"),
+    (dict(keep_all=True), "selection"),
+    (dict(proposed=10), "selection"),          # 10 candidates for 8 places
+    (dict(reach=False), "target"),
+    (dict(epochs=(2, 4, 6, 8)), "calendar"),
+])
+def test_each_growth_criterion_refuses(kw, crit):
+    g = cr.growth_criteria([_grow_rec(**kw) for _ in range(10)], 40)
+    assert g[crit]["refused"], (crit, g[crit])
+
+
+def test_flat_spectrum_is_refused():
+    recs = [_grow_rec() for _ in range(4)]
+    for r in recs:
+        for h in r["history"]:
+            if "grow_eig_proposed" in h:
+                h["grow_eig_proposed"] = [1.0, 0.9, 0.8]
+    assert cr.growth_criteria(recs, 40)["spectrum"]["refused"]

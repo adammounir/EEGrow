@@ -1,0 +1,14 @@
+# Faithful growable Deep4Net (étape 1a, 14/10/2026): braindecode's Deep4Net with its
+# first junction (conv_time -> conv_spat, no pooling, no nonlinearity) growable,
+# n_filters_time 8 -> 25 = Deep4Net's own width, so at target the net IS Deep4Net and
+# `bd_deep4` is its exact fixed twin. The three pooled junctions stay fixed: gromo
+# refuses a MaxPool inside a junction (tests/test_growing_deep4.py).
+# Start width 8 and grow_every 5 are the values grow_shallow uses (not tuned here).
+kind: growing
+arch: GrowingDeep4Net
+label: grow_deep4
+needs_sfreq: false
+grow_every: 5
+module_kwargs:
+  n_filters_time: 8
+  target_n_filters_time: 25
