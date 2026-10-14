@@ -7,6 +7,9 @@
 #SBATCH --job-name=s0-aux
 #SBATCH --partition=tau,gpu-best
 #SBATCH --gres=gpu:turing:1
+# margpu028 = RTX 2080 (non-Ti), margpu020/021/023 = phantom/suspect cards (memory
+# margaret-gpu-capability-map); the 2080 Ti pool is margpu017/018/019/022, 14 cards.
+#SBATCH --exclude=margpu020,margpu021,margpu023,margpu028
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4

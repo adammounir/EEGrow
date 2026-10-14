@@ -102,7 +102,7 @@ Implémentés dans `benchmarks/step0_gate.py` (22 tests, `tests/test_step0_gate.
 carte de chaque cellule de la campagne précédente n'est pas dans ses records, donc
 l'analyse préalable n'était pas faisable sans reconstitution. À la place : toutes les
 cellules de l'étape 0 tournent sur **un seul modèle de carte** (NVIDIA GeForce RTX 2080 Ti,
-7 cartes, margpu017/018), avec une porte dans le sbatch qui refuse toute autre carte, et
+14 cartes, margpu017/018/019/022, sondées par nvidia-smi le 14/10 ; margpu028 porte des RTX 2080 non Ti et margpu020/021/023 les cartes fantômes ou suspectes, tous exclus), avec une porte dans le sbatch qui refuse toute autre carte, et
 l'UUID est enregistré à chaque fit. Si les pics se concentrent sur une carte (plus de la
 moitié des pics d'une config sur une carte qui porte moins d'un tiers de ses fits), la
 carte est exclue par UUID et ses cellules relancées.

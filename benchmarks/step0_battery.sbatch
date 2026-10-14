@@ -3,7 +3,7 @@
 # array task, one line of step0_cells.txt each (`arm candidate lr wd seed`).
 #
 # One card model for every cell (PREREG § 4, effect of the card): RTX 2080 Ti, the 7
-# turing cards of margpu017/018 (probed 14/10 with nvidia-smi from srun). `gres=turing`
+# 2080 Ti cards of margpu017/018/019/022 (probed 14/10 with nvidia-smi from srun). `gres=turing`
 # is not a card model by itself, so the job also REFUSES any other card by name.
 #
 # Fresh checkout ROOT, never overwritten while a job runs. PYTHONPATH beats the `bench`
@@ -11,6 +11,9 @@
 #SBATCH --job-name=s0-battery
 #SBATCH --partition=tau,gpu-best
 #SBATCH --gres=gpu:turing:1
+# margpu028 = RTX 2080 (non-Ti), margpu020/021/023 = phantom/suspect cards (memory
+# margaret-gpu-capability-map); the 2080 Ti pool is margpu017/018/019/022, 14 cards.
+#SBATCH --exclude=margpu020,margpu021,margpu023,margpu028
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=6
