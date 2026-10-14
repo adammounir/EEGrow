@@ -318,6 +318,10 @@ def evaluate_growing(root, grid_top=GRID_TOP, grid=None, normalization=None):
         e.update(status="read", departure=dep, capacity=capacity(cap_rows, arm, "B"),
                  optimum=optimum(recs), growth=growth_criteria(recs, target, grid_top),
                  twin={"arm": ref, "refused": False})
+        # Addendum 2 reserve: the grid was chosen on subjects 1-3 (seed 0), so the
+        # censoring is also REPORTED (not decided) on the subjects it never saw.
+        unseen = [r for r in recs if str(r.get("subject")) not in {"1", "2", "3"}]
+        e["censoring_subjects_4_9"] = growth_criteria(unseen, target, grid_top)["censoring"]
         verdicts = ([dep["refused"], e["capacity"]["refused"], e["optimum"]["refused"]]
                     + [g["refused"] for g in e["growth"].values()])
         e["passes"] = None if any(v is None for v in verdicts) else not any(verdicts)

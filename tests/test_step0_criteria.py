@@ -138,3 +138,10 @@ def test_flat_spectrum_is_refused():
             if "grow_eig_proposed" in h:
                 h["grow_eig_proposed"] = [1.0, 0.9, 0.8]
     assert cr.growth_criteria(recs, 40)["spectrum"]["refused"]
+
+
+def test_censoring_on_unseen_subjects_is_reported(tmp_path):
+    recs = [dict(_grow_rec(), subject=str(1 + i % 9)) for i in range(18)]
+    unseen = [r for r in recs if r["subject"] not in {"1", "2", "3"}]
+    assert len(unseen) == 12
+    assert cr.growth_criteria(unseen, 40, 64.0)["censoring"]["frac_top"] == 0.0
