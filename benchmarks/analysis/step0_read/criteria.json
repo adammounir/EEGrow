@@ -1,0 +1,294 @@
+{
+  "reference": {
+    "shallow": {
+      "status": "read",
+      "per_subject": [
+        0.8541666666666666,
+        0.4791666666666667,
+        0.888888888888889,
+        0.7430555555555555,
+        0.5648148148148148,
+        0.5381944444444444,
+        0.9432870370370371,
+        0.8182870370370371,
+        0.8078703703703703
+      ],
+      "mean": 0.737525720164609,
+      "ci95": [
+        0.6309059927983539,
+        0.8341049382716049
+      ],
+      "published": 0.719,
+      "refused": false
+    },
+    "deep": {
+      "status": "read",
+      "per_subject": [
+        0.8356481481481483,
+        0.49652777777777773,
+        0.8564814814814815,
+        0.6678240740740741,
+        0.3645833333333333,
+        0.4756944444444445,
+        0.9131944444444443,
+        0.7627314814814814,
+        0.7824074074074074
+      ],
+      "mean": 0.6838991769547325,
+      "ci95": [
+        0.5596707818930041,
+        0.7952707047325103
+      ],
+      "published": 0.701,
+      "refused": false
+    }
+  },
+  "arms": {
+    "bd_shallow": {
+      "candidates": {
+        "B": {
+          "gate": {
+            "0": {
+              "refused": false,
+              "reasons": [],
+              "n_fits": 90,
+              "n_spikes": 0,
+              "spiked_fit_uids": [],
+              "gpu_uuids": [
+                "99b3ec31-f952-d974-9524-620467e2854f"
+              ]
+            },
+            "1": {
+              "refused": false,
+              "reasons": [],
+              "n_fits": 90,
+              "n_spikes": 0,
+              "spiked_fit_uids": [],
+              "gpu_uuids": [
+                "084d2838-5db7-413f-6e8d-d62d77b4d710"
+              ]
+            },
+            "2": {
+              "refused": false,
+              "reasons": [],
+              "n_fits": 90,
+              "n_spikes": 0,
+              "spiked_fit_uids": [],
+              "gpu_uuids": [
+                "fe287483-9aa2-7ee2-0b55-1b6530f8a6ba"
+              ]
+            }
+          },
+          "n_spikes": 0,
+          "status": "read",
+          "departure": {
+            "median_first_batch_loss": 1.8464444279670715,
+            "excess_nat": 0.46015006684718096,
+            "refusing": false
+          },
+          "capacity": {
+            "status": "read",
+            "losses": [
+              0.0007966650882735848,
+              0.0007311291992664337,
+              0.0006600144552066922
+            ],
+            "median": 0.0007311291992664337,
+            "refused": false
+          },
+          "optimum": {
+            "status": "read",
+            "n": 270,
+            "frac_early": 0.014814814814814815,
+            "frac_late": 0.11481481481481481,
+            "refused": false
+          },
+          "passes": true
+        },
+        "H": {
+          "gate": {
+            "0": {
+              "refused": false,
+              "reasons": [],
+              "n_fits": 90,
+              "n_spikes": 0,
+              "spiked_fit_uids": [],
+              "gpu_uuids": [
+                "ca6936c4-c3de-8ead-f27c-f456442406c3"
+              ]
+            },
+            "1": {
+              "refused": false,
+              "reasons": [],
+              "n_fits": 90,
+              "n_spikes": 0,
+              "spiked_fit_uids": [],
+              "gpu_uuids": [
+                "fc009067-0d0d-719e-a56c-a304343a3f23"
+              ]
+            },
+            "2": {
+              "refused": false,
+              "reasons": [],
+              "n_fits": 90,
+              "n_spikes": 0,
+              "spiked_fit_uids": [],
+              "gpu_uuids": [
+                "8feb9b7c-248a-7680-1c9a-87f850cf36b0"
+              ]
+            }
+          },
+          "n_spikes": 0,
+          "status": "read",
+          "departure": {
+            "median_first_batch_loss": 1.8464444279670715,
+            "excess_nat": 0.46015006684718096,
+            "refusing": false
+          },
+          "capacity": {
+            "status": "read",
+            "losses": [
+              0.0008013544138520956,
+              0.000735882087610662,
+              0.0006653156015090644
+            ],
+            "median": 0.000735882087610662,
+            "refused": false
+          },
+          "optimum": {
+            "status": "read",
+            "n": 270,
+            "frac_early": 0.014814814814814815,
+            "frac_late": 0.11481481481481481,
+            "refused": false
+          },
+          "passes": true
+        }
+      },
+      "frozen_config": "B"
+    },
+    "bd_deep4": {
+      "candidates": {
+        "B": {
+          "gate": {
+            "0": {
+              "refused": false,
+              "reasons": [],
+              "n_fits": 90,
+              "n_spikes": 0,
+              "spiked_fit_uids": [],
+              "gpu_uuids": [
+                "cdfb9628-55af-2fcc-e5df-7893c9df44de"
+              ]
+            },
+            "1": {
+              "refused": false,
+              "reasons": [],
+              "n_fits": 90,
+              "n_spikes": 0,
+              "spiked_fit_uids": [],
+              "gpu_uuids": [
+                "3656ec76-9656-e7e1-6392-a383e915dc4f"
+              ]
+            },
+            "2": {
+              "refused": false,
+              "reasons": [],
+              "n_fits": 90,
+              "n_spikes": 0,
+              "spiked_fit_uids": [],
+              "gpu_uuids": [
+                "e94942a4-4dec-47fd-a6ad-1a0cf3280f92"
+              ]
+            }
+          },
+          "n_spikes": 0,
+          "status": "read",
+          "departure": {
+            "median_first_batch_loss": 2.0895907878875732,
+            "excess_nat": 0.7032964267676827,
+            "refusing": false
+          },
+          "capacity": {
+            "status": "read",
+            "losses": [
+              0.0007517885533161461,
+              0.03986841067671776,
+              0.006644126493483782
+            ],
+            "median": 0.006644126493483782,
+            "refused": false
+          },
+          "optimum": {
+            "status": "read",
+            "n": 270,
+            "frac_early": 0.003703703703703704,
+            "frac_late": 0.05925925925925926,
+            "refused": false
+          },
+          "passes": true
+        },
+        "H": {
+          "gate": {
+            "0": {
+              "refused": false,
+              "reasons": [],
+              "n_fits": 90,
+              "n_spikes": 0,
+              "spiked_fit_uids": [],
+              "gpu_uuids": [
+                "ab332f89-1fc0-1fa5-3f0a-28d6776a20dc"
+              ]
+            },
+            "1": {
+              "refused": false,
+              "reasons": [],
+              "n_fits": 90,
+              "n_spikes": 0,
+              "spiked_fit_uids": [],
+              "gpu_uuids": [
+                "ea68b40d-befd-586e-bf55-92d85245411c"
+              ]
+            },
+            "2": {
+              "refused": false,
+              "reasons": [],
+              "n_fits": 90,
+              "n_spikes": 0,
+              "spiked_fit_uids": [],
+              "gpu_uuids": [
+                "8d30731f-d80a-99ac-daf2-c18d1b716098"
+              ]
+            }
+          },
+          "n_spikes": 0,
+          "status": "read",
+          "departure": {
+            "median_first_batch_loss": 2.0895907878875732,
+            "excess_nat": 0.7032964267676827,
+            "refusing": false
+          },
+          "capacity": {
+            "status": "read",
+            "losses": [
+              1.5490334033966064,
+              2.558359384536743,
+              1.7729498147964478
+            ],
+            "median": 1.7729498147964478,
+            "refused": true
+          },
+          "optimum": {
+            "status": "read",
+            "n": 270,
+            "frac_early": 0.03333333333333333,
+            "frac_late": 0.14074074074074075,
+            "refused": false
+          },
+          "passes": false
+        }
+      },
+      "frozen_config": "B"
+    }
+  }
+}

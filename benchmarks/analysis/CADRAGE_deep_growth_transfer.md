@@ -304,6 +304,19 @@ toutes sourcées dans `PREREG_step0_training_battery.md`, commits `343061a`, `50
 - **Jobs** : 754941 (batterie, 12 cellules) et 754942 (12 capacités et 54 reproductions).
   Lecture par `step0_gate.py`, puis par `step0_criteria.py`, commité avant lecture.
 
+**14/10 — ÉTAPE 0 LOT 1 LUE** (`RESULTAT_step0_training_battery.md`) :
+- les 12 cellules sont admises, sans aucun pic ;
+- les **deux références passent**, avec la config gelée **B** :
+  - Shallow : lr 6.25e-4, wd 0 ;
+  - Deep4 : lr **1e-2**, wd 5e-4 ;
+- reproduction Schirrmeister sous le protocole des auteurs : Shallow 73.8 % (publié 71.9),
+  Deep 68.4 % (publié 70.1) ;
+- **la config historique de Deep4 (H) est refusée en capacité** : perte de 1.5 à 2.6 sur
+  32 essais, donc toutes les comparaisons historiques contre `bd_deep4` portaient sur une
+  référence sous-entraînée ;
+- étape 1a : `GrowingDeep4Net` fidèle (première jonction, parité ≤ 1e-5). Le pooling dans
+  une jonction est refusé par gromo, testé.
+
 ### Étape 1 — Un deep fidèle qui pousse vraiment
 
 **Question.** Peut-on faire croître une architecture deep publiée sans la dénaturer ?

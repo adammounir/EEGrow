@@ -1,0 +1,41 @@
+{
+  "arm": "bd_deep4",
+  "dataset": "bnci2014_001",
+  "eval": "within_session",
+  "lr": 0.000625,
+  "weight_decay": 0.01,
+  "cells": {
+    "seed0": {
+      "refused": false,
+      "reasons": [],
+      "n_fits": 90,
+      "n_spikes": 0,
+      "spiked_fit_uids": [],
+      "gpu_uuids": [
+        "ab332f89-1fc0-1fa5-3f0a-28d6776a20dc"
+      ]
+    },
+    "seed1": {
+      "refused": false,
+      "reasons": [],
+      "n_fits": 90,
+      "n_spikes": 0,
+      "spiked_fit_uids": [],
+      "gpu_uuids": [
+        "ea68b40d-befd-586e-bf55-92d85245411c"
+      ]
+    },
+    "seed2": {
+      "refused": false,
+      "reasons": [],
+      "n_fits": 90,
+      "n_spikes": 0,
+      "spiked_fit_uids": [],
+      "gpu_uuids": [
+        "8d30731f-d80a-99ac-daf2-c18d1b716098"
+      ]
+    }
+  },
+  "refused_cells": [],
+  "n_spikes": 0
+}
