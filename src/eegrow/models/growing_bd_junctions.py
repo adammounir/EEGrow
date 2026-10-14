@@ -23,6 +23,22 @@ network IS the braindecode model). Junctions read in the braindecode 1.7.0 sourc
     ``Conv1x1 -> BN -> LeakyReLU -> Conv(5, 1)`` (the dense concatenation is applied
     after the junction). Hidden width bottleneck x s_growth = 72.
 
+``GrowingCTNet``
+    The FFN of transformer layer ``block``: ``trans.layers[block].feed_forward.module[0]``
+    = ``Linear(40, 160) -> GELU -> Dropout -> Linear(160, 40)`` (inside CTNet's own
+    residual add + LayerNorm). Hidden width 160.
+``GrowingMSVTNet``
+    The FFN of ``nn.TransformerEncoderLayer`` number ``block``: ``linear1 -> ReLU ->
+    dropout -> linear2``, hidden 72 (``dim_feedforward == d_model`` in MSVTNet). The
+    layer's fused fast path reads ``linear1.weight`` directly, so it is switched off
+    (``activation_relu_or_gelu = 0``): the slow path is the same function, op by op.
+``GrowingEEGNeX``
+    ``junction=1``: ``block_1[1] Conv(1, 8, (1, 64)) -> BN -> block_2[0] Conv(8, 32)``,
+    hidden 8; ``junction=2``: ``block_4[0] Conv(64, 32, dil 2) -> BN -> block_5[0]
+    Conv(32, 8, dil 4)``, hidden 32. Growing a junction IN PLACE leaves every other
+    width, and so the fixed tail, braindecode's: the reason ``grow_eegnex`` was not
+    width-matched (its knob ``filter_1`` also sized the tail) does not apply.
+
 Two caveats, inherent to the junctions and NOT fixed here:
 
 * a BatchNorm inside the junction (ContraWR, TIDNet) is identity for the candidate
@@ -37,7 +53,7 @@ Two caveats, inherent to the junctions and NOT fixed here:
 from __future__ import annotations
 
 import torch
-from braindecode.models import ContraWR, EEGConformer, TIDNet
+from braindecode.models import CTNet, ContraWR, EEGConformer, EEGNeX, MSVTNet, TIDNet
 from gromo.modules.conv2d_growing_module import RestrictedConv2dGrowingModule
 from gromo.modules.growing_normalisation import GrowingBatchNorm2d
 from gromo.modules.linear_growing_module import LinearGrowingModule
@@ -225,3 +241,133 @@ class GrowingTIDNet(JunctionGrowingModel):
         _, unexpected = self.net.load_state_dict(own, strict=False)
         assert not unexpected, unexpected
         return self
+
+
+class GrowingCTNet(JunctionGrowingModel):
+    """braindecode CTNet with the FFN of one transformer layer growable."""
+
+    def __init__(self, n_chans: int, n_outputs: int, n_times: int, *, block: int = 0,
+                 start_width: int = 8, target_width: int | None = None, device=None,
+                 **bd_kwargs) -> None:
+        super().__init__(in_features=n_chans, out_features=n_outputs, device=device)
+        self.net = CTNet(n_chans=n_chans, n_outputs=n_outputs, n_times=n_times,
+                         **bd_kwargs)
+        self.block = block
+        holder = self.net.trans.layers[block].feed_forward.module
+        lin1, act, drop, lin2 = holder[0]
+        target = lin1.out_features if target_width is None else target_width
+        self.pair = _linear_pair(lin1, lin2, nn.Sequential(act, drop), start=start_width,
+                                 target=target, device=self.device, name="ffn")
+        holder[0] = self.pair
+        self._finish(start=start_width, target=target)
+
+    @torch.no_grad()
+    def load_braindecode_weights(self, bd: CTNet) -> "GrowingCTNet":
+        return _load(self, bd, f"trans.layers.{self.block}.feed_forward.module.0.",
+                     ((self.pair.first, "0"), (self.pair.second, "3")))
+
+
+class GrowingMSVTNet(JunctionGrowingModel):
+    """braindecode MSVTNet with the FFN of one transformer encoder layer growable."""
+
+    def __init__(self, n_chans: int, n_outputs: int, n_times: int, *, block: int = 0,
+                 start_width: int = 8, target_width: int | None = None, device=None,
+                 **bd_kwargs) -> None:
+        super().__init__(in_features=n_chans, out_features=n_outputs, device=device)
+        self.net = MSVTNet(n_chans=n_chans, n_outputs=n_outputs, n_times=n_times,
+                           **bd_kwargs)
+        self.block = block
+        layer = self.net.transformer.trans.layers[block]
+        act = layer.activation if isinstance(layer.activation, nn.Module) else \
+            _Fn(layer.activation)
+        target = layer.linear1.out_features if target_width is None else target_width
+        self.pair = _linear_pair(layer.linear1, layer.linear2,
+                                 nn.Sequential(act, layer.dropout), start=start_width,
+                                 target=target, device=self.device, name="ffn")
+        # _ff_block = linear2(dropout(activation(linear1(x)))): the pair takes linear1's
+        # place, the three others become identities. No fused fast path (it would read
+        # linear1.weight): the slow path computes the same thing op by op.
+        layer.linear1, layer.linear2 = self.pair, nn.Identity()
+        layer.dropout, layer.activation = nn.Identity(), nn.Identity()
+        layer.activation_relu_or_gelu = 0
+        self._finish(start=start_width, target=target)
+
+    @torch.no_grad()
+    def load_braindecode_weights(self, bd: MSVTNet) -> "GrowingMSVTNet":
+        return _load(self, bd, f"transformer.trans.layers.{self.block}.",
+                     ((self.pair.first, "linear1"), (self.pair.second, "linear2")))
+
+
+class GrowingEEGNeX(JunctionGrowingModel):
+    """braindecode EEGNeX with one of its two conv -> BN -> conv junctions growable."""
+
+    _SITES = {1: ("block_1", 1, "block_2", 0), 2: ("block_4", 0, "block_5", 0)}
+
+    def __init__(self, n_chans: int, n_outputs: int, n_times: int, *, junction: int = 1,
+                 start_width: int = 2, target_width: int | None = None, device=None,
+                 **bd_kwargs) -> None:
+        super().__init__(in_features=n_chans, out_features=n_outputs, device=device)
+        self.net = EEGNeX(n_chans=n_chans, n_outputs=n_outputs, n_times=n_times,
+                          **bd_kwargs)
+        self.junction = junction
+        b1, i1, b2, i2 = self._SITES[junction]
+        s1, s2 = getattr(self.net, b1), getattr(self.net, b2)
+        c1, bn, c2 = s1[i1], s1[i1 + 1], s2[i2]
+        target = c1.out_channels if target_width is None else target_width
+        hw_in = _input_hw(self.net, c1, n_chans, n_times)
+        hw_mid = _input_hw(self.net, c2, n_chans, n_times)
+        self.pair = _conv_pair(c1, c2, nn.Sequential(_growing_bn(bn, start_width)),
+                               start=start_width, target=target, hw_in=hw_in,
+                               hw_mid=hw_mid, device=self.device, name=f"j{junction}")
+        s1[i1], s1[i1 + 1], s2[i2] = self.pair, nn.Identity(), nn.Identity()
+        self._finish(start=start_width, target=target)
+
+    @torch.no_grad()
+    def load_braindecode_weights(self, bd: EEGNeX) -> "GrowingEEGNeX":
+        b1, i1, b2, i2 = self._SITES[self.junction]
+        own = dict(bd.state_dict())
+        for dst, key in ((self.pair.first, f"{b1}.{i1}"), (self.pair.second, f"{b2}.{i2}")):
+            dst.layer.weight.copy_(own.pop(f"{key}.weight"))
+            if f"{key}.bias" in own:
+                dst.layer.bias.copy_(own.pop(f"{key}.bias"))
+        bnp = f"{b1}.{i1 + 1}."
+        self.pair.first.post_layer_function[0].load_state_dict(
+            {k[len(bnp):]: own.pop(k) for k in list(own) if k.startswith(bnp)})
+        _, unexpected = self.net.load_state_dict(own, strict=False)
+        assert not unexpected, unexpected
+        return self
+
+
+class _Fn(nn.Module):
+    """A functional activation (``F.relu``) as a stateless module."""
+
+    def __init__(self, fn):
+        super().__init__()
+        self.fn = fn
+
+    def forward(self, x):
+        return self.fn(x)
+
+
+def _linear_pair(lin1: nn.Linear, lin2: nn.Linear, mid: nn.Module, *, start, target,
+                 device, name):
+    first = LinearGrowingModule(
+        lin1.in_features, start, use_bias=lin1.bias is not None,
+        post_layer_function=mid, name=f"{name}.first", device=device)
+    second = LinearGrowingModule(
+        start, lin2.out_features, use_bias=lin2.bias is not None, previous_module=first,
+        allow_growing=target > start, target_in_features=target, name=f"{name}.second",
+        device=device)
+    return GrowingPair(first, second)
+
+
+def _load(model, bd, prefix, pairs):
+    own = dict(bd.state_dict())
+    for dst, key in pairs:
+        dst.layer.weight.copy_(own.pop(f"{prefix}{key}.weight"))
+        if f"{prefix}{key}.bias" in own:
+            dst.layer.bias.copy_(own.pop(f"{prefix}{key}.bias"))
+    missing, unexpected = model.net.load_state_dict(own, strict=False)
+    assert not unexpected, unexpected
+    assert all(".first." in k or ".second." in k for k in missing), missing
+    return model
