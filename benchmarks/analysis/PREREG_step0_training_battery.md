@@ -264,3 +264,42 @@ censure valait 100 %, la cible 0 % et le calendrier 100 %. Le smoke s'arrêtait 
 résultat attendu possible. Il sera rapporté tel quel.
 
 **Sortie** : passe / refus par bras et par critère. Un bras refusé ne passe pas à l'étape 2.
+
+## Avenant 2 — 14/10/2026 : line search à amplitude normalisée, grille 0 → 64
+
+**Statut : PROPOSÉ par Claude, lancé la nuit pour gagner du temps, À RATIFIER PAR ADAM.**
+Il remplace la grille {0 … 4} tranchée par Adam le 13/10. Si Adam ne le ratifie pas, ses
+résultats sont exploratoires. Les refus de l'avenant 1 restent acquis dans tous les cas.
+
+**Pourquoi.** L'avenant 1 a refusé les deux bras sur la seule censure. Le diagnostic
+exploratoire est consigné dans `RESULTAT_step0_training_battery.md` :
+- gromo intègre √(valeur singulière) aux poids ajoutés, ce qui donne une amplitude d'environ
+  1e-2 ;
+- la perte reste donc linéaire en `s` sur toute la grille.
+
+Trois sondes exploratoires ont suivi (bnci2014_001, sujets 1 à 3, seed 0, jobs 755300 à
+755303 et 755314/755315). Part de `s` au sommet de la grille :
+
+| protocole de la sonde | grow_shallow | grow_deep4 |
+|---|---|---|
+| grille log jusqu'à 4096 | 58.6 % | 80.2 % |
+| normalisation gromo, grille 0 → 4 | 40.5 % | 67.7 % |
+| **normalisation gromo, grille 0 → 64** | **0.0 %** | **5.3 %** |
+
+**Changement, et lui seul** :
+- `train.growth_normalization=match_extending_layer` : gromo `normalize_optimal_updates`,
+  appelé avant la line search, commit `24f6c5e` ;
+- `train.scaling_grid=[0,0.25,0.5,1,2,4,8,16,32,64]` ;
+- le sommet de la censure devient 64.
+
+Le reste ne change pas : bras, config B, seeds, cartes, seuils et définitions de l'avenant 1.
+Le garde-fou vérifie en plus, sur 100 % des événements, que la grille de `grow_losses` est
+exactement celle-ci et que `grow_normalization == "match_extending_layer"`. La capacité est
+refaite avec la même grille et la même normalisation.
+
+**Réserve, écrite avant la lecture.** La grille a été choisie sur les sujets 1 à 3 (seed 0)
+du dataset sur lequel la batterie la vérifie. Sur ces sujets, le critère de censure n'est
+donc pas indépendant du choix. Il sera rapporté **aussi** sur les sujets 4 à 9 seuls, et doit
+être reconfirmé sur un autre dataset avant l'étape 2.
+
+6 cellules et 6 capacités, sur un checkout neuf.

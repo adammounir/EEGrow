@@ -85,7 +85,7 @@ def _close(a, b) -> bool:
 
 
 def launch_violations(rec: dict, *, lr: float, weight_decay: float,
-                      growing: bool) -> list[str]:
+                      growing: bool, grid=None, normalization=None) -> list[str]:
     """G-lancement on one fit record: did this fit run the frozen protocol?"""
     bad = []
     sel = rec.get("selection") or {}
@@ -119,6 +119,16 @@ def launch_violations(rec: dict, *, lr: float, weight_decay: float,
         kinds = Counter(h.get("grow_holdout") for h in events)
         if set(kinds) - {"disjoint"}:
             bad.append(f"grow_holdout not all disjoint: {dict(kinds)}")
+        # Addendum 2: the line-search grid and the normalisation that actually ran.
+        if grid is not None:
+            want = sorted(float(g) for g in grid)
+            off = [h["epoch"] for h in events
+                   if sorted(float(k) for k in (h.get("grow_losses") or {})) != want]
+            if off:
+                bad.append(f"line-search grid != {want} on {len(off)} event(s)")
+        norms = {h.get("grow_normalization") for h in events}
+        if events and norms != {normalization}:
+            bad.append(f"grow_normalization {sorted(map(str, norms))} != {normalization!r}")
     return bad
 
 
@@ -167,13 +177,14 @@ def spiked(rec: dict) -> bool:
 
 
 def gate_cell(recs: list[dict], *, dataset: str, lr: float, weight_decay: float,
-              growing: bool) -> dict:
+              growing: bool, grid=None, normalization=None) -> dict:
     """Verdict for one cell. ``refused`` is True on any violation of any gate."""
     reasons = completeness_violations(recs, dataset=dataset)
     launch = Counter()
     for r in recs:
         for v in launch_violations(r, lr=lr, weight_decay=weight_decay,
-                                   growing=growing):
+                                   growing=growing, grid=grid,
+                                   normalization=normalization):
             launch[v] += 1
     reasons += [f"G-lancement: {v} ({n} fit(s))" for v, n in launch.items()]
     spikes = [r.get("fit_uid") for r in recs if spiked(r)]
@@ -196,6 +207,10 @@ def main(argv=None) -> int:
     ap.add_argument("--weight-decay", type=float, required=True)
     ap.add_argument("--growing", action="store_true",
                     help="also require every growth event to use the disjoint held-out")
+    ap.add_argument("--grid", type=float, nargs="+", default=None,
+                    help="expected line-search grid on every growth event (addendum 2)")
+    ap.add_argument("--normalization", default=None,
+                    help="expected grow_normalization (addendum 2); default: none")
     ap.add_argument("--out", required=True, help="verdict JSON")
     a = ap.parse_args(argv)
 
@@ -215,7 +230,8 @@ def main(argv=None) -> int:
                                     "spiked_fit_uids": [], "gpu_uuids": []}
             if recs is not None:
                 cell = gate_cell(recs, dataset=a.dataset, lr=a.lr,
-                                 weight_decay=a.weight_decay, growing=a.growing)
+                                 weight_decay=a.weight_decay, growing=a.growing,
+                                 grid=a.grid, normalization=a.normalization)
         verdict["cells"][f"seed{seed}"] = cell
     verdict["refused_cells"] = [k for k, c in verdict["cells"].items() if c["refused"]]
     verdict["n_spikes"] = sum(c["n_spikes"] for c in verdict["cells"].values())

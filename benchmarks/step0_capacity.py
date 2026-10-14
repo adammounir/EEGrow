@@ -128,6 +128,7 @@ def capacity_fit(model_cfg, train_cfg, X, y, *, seed, max_epochs=MAX_EPOCHS,
         callbacks = [("gromo", GromoGrowth(
             grow_every=model_cfg["grow_every"],
             scaling_grid=train_cfg.get("scaling_grid"),
+            normalization=train_cfg.get("growth_normalization"),
             min_singular_ratio=float(model_cfg.get("min_singular_ratio",
                                                    MIN_SINGULAR_RATIO)),
             verbose=False))]
@@ -199,6 +200,11 @@ def main(argv=None) -> int:
     ap.add_argument("--candidate", required=True, help="label of the optimizer candidate")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="cpu")
+    ap.add_argument("--grid", type=float, nargs="+",
+                    default=[0.0, 0.25, 0.5, 1.0, 2.0, 4.0],
+                    help="growing arms: line-search grid (addendum 2 widens it)")
+    ap.add_argument("--normalization", default=None,
+                    help="growing arms: growth_normalization (addendum 2)")
     ap.add_argument("--out", required=True, help="JSONL, one line appended per run")
     a = ap.parse_args(argv)
 
@@ -209,7 +215,7 @@ def main(argv=None) -> int:
     hold = None
     if model_cfg["kind"] == "growing":
         # Same line-search grid as the battery (PREREG § 3.1).
-        train_cfg.update(scaling_grid=[0.0, 0.25, 0.5, 1.0, 2.0, 4.0])
+        train_cfg.update(scaling_grid=list(a.grid), growth_normalization=a.normalization)
         idx, hold = growing_subset(y, a.seed)
         res = capacity_fit(model_cfg, train_cfg, X[idx], y[idx], seed=a.seed,
                            device=a.device, X_hold=X[hold], y_hold=y[hold])
@@ -221,6 +227,8 @@ def main(argv=None) -> int:
            "weight_decay": a.weight_decay, "subject": 1, "session": "0train",
            "trial_indices": idx.tolist(), "n_trials": int(len(idx)),
            "holdout_indices": None if hold is None else hold.tolist(),
+           "grid": list(a.grid) if hold is not None else None,
+           "normalization": a.normalization if hold is not None else None,
            "threshold": THRESHOLD, **res}
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     with open(a.out, "a") as fh:

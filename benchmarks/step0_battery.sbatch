@@ -68,7 +68,8 @@ python run_cell.py \
     train.max_epochs=200 train.patience=200 \
     train.selection_monitor=valid_acc train.smooth_window=5 train.tie_break=earliest \
     train.restore_selected=false train.save_selected=true \
-    train.growth_holdout=0.1 "train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0]" \
+    train.growth_holdout=0.1 "train.scaling_grid=${GRID:-[0.0,0.25,0.5,1.0,2.0,4.0]}" \
+    "train.growth_normalization=${NORM:-null}" \
     train.lr_schedule=null "train.lr=$LR" "train.weight_decay=$WD" \
     "results_dir=$OUT/results"
 rc=$?

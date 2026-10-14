@@ -140,3 +140,34 @@ def test_a_truncated_cell_is_refused_not_skipped(tmp_path):
     rc = g.main(["--root", str(tmp_path), "--arm", "bd_deep4", "--seeds", "0",
                  "--lr", str(LR), "--weight-decay", str(WD), "--out", str(out)])
     assert rc == 1
+
+
+def _grown_cell(norm="match_extending_layer", grid=(0.0, 1.0, 64.0)):
+    recs = _cell(growing=True)
+    for r in recs:
+        for h in r["history"]:
+            if "grow_s" in h:
+                h["grow_losses"] = {str(x): 1.0 for x in grid}
+                h["grow_normalization"] = norm
+    return recs
+
+
+def test_addendum2_grid_and_normalization_admitted():
+    v = g.gate_cell(_grown_cell(), dataset="bnci2014_001", lr=LR, weight_decay=WD,
+                    growing=True, grid=[0.0, 1.0, 64.0],
+                    normalization="match_extending_layer")
+    assert not v["refused"], v["reasons"]
+
+
+def test_addendum2_wrong_grid_refused():
+    v = g.gate_cell(_grown_cell(grid=(0.0, 1.0, 4.0)), dataset="bnci2014_001", lr=LR,
+                    weight_decay=WD, growing=True, grid=[0.0, 1.0, 64.0],
+                    normalization="match_extending_layer")
+    assert v["refused"]
+
+
+def test_addendum2_missing_normalization_refused():
+    v = g.gate_cell(_grown_cell(norm=None), dataset="bnci2014_001", lr=LR,
+                    weight_decay=WD, growing=True, grid=[0.0, 1.0, 64.0],
+                    normalization="match_extending_layer")
+    assert v["refused"]

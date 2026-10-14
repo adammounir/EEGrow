@@ -185,9 +185,13 @@ def main(argv=None) -> int:
     ap.add_argument("--out", required=True, help="prefix for .json and .md")
     ap.add_argument("--growing", action="store_true",
                     help="read the growing arms of addendum 1 instead of lot 1")
+    ap.add_argument("--grid", type=float, nargs="+", default=None,
+                    help="addendum 2: line-search grid (its max is the censoring top)")
+    ap.add_argument("--normalization", default=None, help="addendum 2")
     a = ap.parse_args(argv)
     if a.growing:
-        out = evaluate_growing(a.root)
+        out = evaluate_growing(a.root, grid_top=max(a.grid) if a.grid else GRID_TOP,
+                               grid=a.grid, normalization=a.normalization)
         Path(a.out + ".json").write_text(json.dumps(out, indent=2, default=float))
         md = markdown_growing(out)
         Path(a.out + ".md").write_text(md + "\n")
@@ -237,7 +241,7 @@ def all_events(recs):
     return [h for r in recs for h in r.get("history", []) if "grow_s" in h]
 
 
-def growth_criteria(recs, target):
+def growth_criteria(recs, target, grid_top=GRID_TOP):
     applied = [e for r in recs for e in growth_events(r)]
     res = {}
     # sélection réelle: gromo kept every candidate on every applied step, or offered
@@ -272,12 +276,12 @@ def growth_criteria(recs, target):
                        "refused": (not early) or float(np.mean(early)) > CALENDAR_FRAC}
     # censure de la line search
     s = [float(e["grow_s"]) for e in applied]
-    top = float(np.mean([x >= GRID_TOP for x in s])) if s else None
+    top = float(np.mean([x >= grid_top for x in s])) if s else None
     res["censoring"] = {"frac_top": top, "refused": top is None or top > CENSOR_FRAC}
     return res
 
 
-def read_growing_cells(root, arm):
+def read_growing_cells(root, arm, grid=None, normalization=None):
     ref, (lr, wd), _ = GROWING[arm]
     cells, recs = {}, []
     for seed in SEEDS:
@@ -288,19 +292,20 @@ def read_growing_cells(root, arm):
             continue
         rs = gate.read_records(p)
         cells[seed] = gate.gate_cell(rs, dataset="bnci2014_001", lr=lr,
-                                     weight_decay=wd, growing=True)
+                                     weight_decay=wd, growing=True, grid=grid,
+                                     normalization=normalization)
         recs += rs
     return cells, recs
 
 
-def evaluate_growing(root):
+def evaluate_growing(root, grid_top=GRID_TOP, grid=None, normalization=None):
     root = Path(root)
     aux = root / "aux"
     cap_rows = ([json.loads(l) for l in (aux / "capacity.jsonl").read_text().splitlines()
                  if l.strip()] if (aux / "capacity.jsonl").exists() else [])
     out = {}
     for arm, (ref, _, target) in GROWING.items():
-        cells, recs = read_growing_cells(root, arm)
+        cells, recs = read_growing_cells(root, arm, grid, normalization)
         e = {"gate": cells, "n_spikes": sum(c.get("n_spikes", 0) for c in cells.values())}
         if any(c["refused"] for c in cells.values()):
             e.update(status="gate refused: relaunch, criteria NOT read", passes=None)
@@ -311,7 +316,7 @@ def evaluate_growing(root):
         dep["refusing"] = True
         dep["refused"] = dep["excess_nat"] > dep["limit"]
         e.update(status="read", departure=dep, capacity=capacity(cap_rows, arm, "B"),
-                 optimum=optimum(recs), growth=growth_criteria(recs, target),
+                 optimum=optimum(recs), growth=growth_criteria(recs, target, grid_top),
                  twin={"arm": ref, "refused": False})
         verdicts = ([dep["refused"], e["capacity"]["refused"], e["optimum"]["refused"]]
                     + [g["refused"] for g in e["growth"].values()])

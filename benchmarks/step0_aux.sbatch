@@ -45,7 +45,8 @@ cd $ROOT/benchmarks
 t0=$SECONDS
 if [ "$KIND" = capacity ]; then
     python step0_capacity.py --arm "$A" --candidate "$B" --lr "$C" --weight-decay "$D" \
-        --seed "$SEED" --device cuda --out "$OUTD/capacity.jsonl"
+        --seed "$SEED" --device cuda --out "$OUTD/capacity.jsonl" \
+        ${CAP_GRID:+--grid $CAP_GRID} ${NORM:+--normalization $NORM}
     rc=$?
     # capacity exits 1 on a REFUSED net: that is a result, not a crash.
     [ $rc -le 1 ] && touch "$OUTD/done/$TAG" && rc=0
