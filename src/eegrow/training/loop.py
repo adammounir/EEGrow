@@ -99,7 +99,14 @@ def train_epoch(model, loader, opt, crit, device) -> float:
     return tot / len(loader)
 
 
+#: The historical line-search grid. Censored: applied steps pick its top on 97.8-100 %
+#: of events (analysis/step0_catalogue/line_search_censoring.py), so its maximum says
+#: nothing about the best amplitude. Kept as the default so archived runs reproduce;
+#: the deep campaign passes WIDE_SCALING_GRID.
 SCALING_GRID = (0.0, 0.1, 0.5, 1.0)
+#: Geometric, and twice past 1 so the step-0 censoring criterion (top of the grid wins
+#: on > 20 % of applied steps => refused) can actually be met. Decided 13/10.
+WIDE_SCALING_GRID = (0.0, 0.25, 0.5, 1.0, 2.0, 4.0)
 
 
 #: Keep a candidate neuron when its singular value is at least this fraction of the
@@ -111,7 +118,8 @@ MIN_SINGULAR_RATIO = 0.1
 
 def grow_step(model, train_loader, device, *, val_loader=None,
               max_added: int | None = None,
-              min_singular_ratio: float = MIN_SINGULAR_RATIO) -> dict:
+              min_singular_ratio: float = MIN_SINGULAR_RATIO,
+              scaling_grid=SCALING_GRID) -> dict:
     """One gromo growth: stats -> optimal update -> line search -> apply_change.
 
     NB: ``compute_optimal_updates`` relies on ``eigh``, which is NOT implemented on
@@ -139,6 +147,9 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         the largest candidate's. Replaces gromo's absolute ``statistical_threshold``;
         see Notes. ``1.0`` reproduces "one neuron per step", ``0.0`` keeps every
         numerically valid candidate.
+    scaling_grid : sequence of float
+        The amplitudes the line search tries, in increasing order; must contain 0.0
+        (the abstention). Ties go to the smaller amplitude. Default ``SCALING_GRID``.
 
     Returns
     -------
@@ -200,6 +211,9 @@ def grow_step(model, train_loader, device, *, val_loader=None,
     is still a threshold on the same quantity gromo ranks by -- we changed the units it
     is expressed in, not the criterion.
     """
+    grid = tuple(float(v) for v in scaling_grid)
+    if 0.0 not in grid or list(grid) != sorted(grid):
+        raise ValueError(f"scaling_grid must be increasing and contain 0.0, got {grid}")
     crit_sum = torch.nn.CrossEntropyLoss(reduction="sum")
     crit_mean = torch.nn.CrossEntropyLoss(reduction="mean")
     width_before = getattr(model, "growable_width", None)
@@ -237,7 +251,7 @@ def grow_step(model, train_loader, device, *, val_loader=None,
     select_loader = train_loader if val_loader is None else val_loader
     best_loss, best_s = float("inf"), 0.0
     losses = {}
-    for s in SCALING_GRID:
+    for s in grid:
         model.set_scaling_factor(s)
         loss, _ = evaluate_model(model, select_loader, crit_mean,
                                  use_extended_model=True, device=device)

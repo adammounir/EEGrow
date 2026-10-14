@@ -37,7 +37,7 @@ import logging
 import torch
 from skorch.callbacks import Callback
 
-from eegrow.training.loop import MIN_SINGULAR_RATIO, grow_step
+from eegrow.training.loop import MIN_SINGULAR_RATIO, SCALING_GRID, grow_step
 
 logger = logging.getLogger(__name__)
 
@@ -83,19 +83,43 @@ class GromoGrowth(Callback):
         relative to the best candidate's. See ``loop.grow_step``: gromo's own cut is
         absolute and sits above the entire spectrum of half our arms, which pins them
         to one neuron per step regardless of the data.
+    scaling_grid : sequence of float, optional
+        Line-search amplitudes. ``None`` (default) = ``loop.SCALING_GRID``, the
+        historical (censored) grid; the deep campaign passes
+        ``loop.WIDE_SCALING_GRID``.
     verbose : bool
+
+    Notes
+    -----
+    **Where the line search reads its data.** When the net's ``train_split`` is a
+    :class:`~eegrow.training.splits.HoldoutValidSplit` with ``holdout > 0``, the
+    statistics use EVERY training batch and the line search runs on the split's
+    ``holdout_`` -- trials never trained on, disjoint from the validation side
+    (``grow_holdout = "disjoint"``). That is the deep campaign's protocol. Otherwise the
+    historical behaviour applies: the last ``holdout_frac`` of the epoch's training
+    batches (``"train_tail"``, already trained on) or, under ``min_holdout_batches``,
+    the statistics batches themselves (``"none"``). A split that was asked for a
+    held-out and did not produce one is refused, not degraded.
         Log a one-line summary (``INFO``) at each growth.
     """
 
     def __init__(self, grow_every: int = 15, growth_device=None,
                  holdout_frac: float = 0.2, min_holdout_batches: int = 4,
                  min_singular_ratio: float = MIN_SINGULAR_RATIO,
-                 verbose: bool = True):
+                 scaling_grid=None, verbose: bool = True):
         self.grow_every = grow_every
         self.growth_device = growth_device
         self.holdout_frac = holdout_frac
         self.min_holdout_batches = min_holdout_batches
         self.min_singular_ratio = min_singular_ratio
+        # Validated here, stored verbatim (clone must round-trip): a bad grid should
+        # fail at construction, not at the first growth epoch of a GPU job.
+        if scaling_grid is not None:
+            grid = [float(v) for v in scaling_grid]
+            if 0.0 not in grid or grid != sorted(grid):
+                raise ValueError(
+                    f"scaling_grid must be increasing and contain 0.0, got {scaling_grid}")
+        self.scaling_grid = scaling_grid
         self.verbose = verbose
         self.done_ = False
 
@@ -158,10 +182,28 @@ class GromoGrowth(Callback):
             if moved:
                 model.to(train_device)
             return
-        stats_loader, val_loader = self._split_holdout(batches)
+        split = getattr(net, "train_split", None)
+        holdout = getattr(split, "holdout_", None)
+        if float(getattr(split, "holdout", 0.0) or 0.0) > 0 and holdout is None:
+            if moved:
+                model.to(train_device)
+            raise RuntimeError(
+                "train_split asks for a growth held-out but produced none; refusing to "
+                "fall back to a line search on training batches")
+        if holdout is not None:
+            stats_loader = batches
+            val_loader = list(net.get_iterator(holdout, training=False))
+            holdout_kind = "disjoint"
+        else:
+            stats_loader, val_loader = self._split_holdout(batches)
+            holdout_kind = "none" if val_loader is None else "train_tail"
         result = grow_step(model, stats_loader, growth_device,
                            val_loader=val_loader, max_added=max_added,
-                           min_singular_ratio=self.min_singular_ratio)
+                           min_singular_ratio=self.min_singular_ratio,
+                           scaling_grid=(SCALING_GRID if self.scaling_grid is None
+                                         else self.scaling_grid))
+        result["holdout_kind"] = holdout_kind
+        result["n_select"] = sum(len(b[1]) for b in (val_loader or stats_loader))
         if moved:
             model.to(train_device)
 
@@ -208,6 +250,11 @@ class GromoGrowth(Callback):
         if record is None:
             return
         record("grow_s", result["s"])
+        # Which data the line search was scored on, and how many trials: the step-0
+        # criterion requires "disjoint" on every event of the deep campaign.
+        if "holdout_kind" in result:
+            record("grow_holdout", result["holdout_kind"])
+            record("grow_n_select", result["n_select"])
         record("grow_applied", bool(result["applied"]))
         record("grow_width_after", result["width_after"])
         record("grow_n_proposed", result["n_proposed"])
