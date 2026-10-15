@@ -66,3 +66,32 @@ Couvrir deux familles avec des modèles conçus pour la MI :
 Chaque nouveau bras doit passer l'**étape 0** avant le benchmark : capacité, optimum, critères
 de croissance, censure. Il faut d'abord choisir son optimiseur, lu dans le papier ou dans
 l'exemple braindecode, jamais inféré.
+
+## 5. Recettes d'entraînement lues dans le code officiel (15/10/2026)
+
+Lues dans les dépôts cités par les docstrings braindecode, sans rien exécuter. Le commit lu
+est indiqué, et chaque valeur vient d'une ligne de code. Pour les candidats MI, on lit la
+config **intra-sujet** (*subject-dependent*), celle du benchmark.
+
+| modèle | source (commit) | optimiseur | lr | betas | wd | batch | époques / arrêt | choix du modèle | augmentation, autres |
+|---|---|---|---|---|---|---|---|---|---|
+| EEGConformer | `eeyhsong/EEG-Conformer` `9ae149b`, `conformer.py` l. 217-222, 334 | Adam | 2e-4 | (0.5, 0.999) | 0 | 72 | 2000, sans arrêt | **meilleure accuracy de TEST** (l. 57, pas de validation) | S&R (8 segments), batch augmenté |
+| CTNet | `snailpt/CTNet` `fb83814`, `main_subject_specific.py` l. 293-302, 704-723 | Adam | 1e-3 (défaut `ExP`, non surchargé par `main`) | (0.5, 0.999) | 0 | 72 (+3× S&R) | 1000, sans arrêt | min `val_loss`, validation = 30 % du train | S&R ×3. Config 2a = emb 16 / 2 têtes / 6 couches ; braindecode met par défaut emb 40 / 4 têtes (défauts de `ExP`) |
+| MSVTNet | `SheepTAO/MSVTNet` `c3fa7fd`, `train_MSVTNet.ipynb` ; dpeeg 0.3.6 `6085816` (`classifier.py` l. 65-73, `experiments.py` l. 290-305) | Adam (torch) | 1e-3 (défaut dpeeg) | défaut (0.9, 0.999) | 0 | 64 | deux phases : 1500 max, patience 100 sur `val_inacc`, puis 600 | meilleur état de la phase 1, puis ré-entraînement | S&R ×1, normalisation, perte jointe sur les branches (`JointCrossEntoryLoss`) |
+| TIDNet | `SPOClab-ca/ThinkerInvariance` `784a8b8`, `main.py` l. 99-118, `train.py` l. 490-491 | Adam **amsgrad** | 1e-3 | défaut | **0.01** (L2 couplé) | 60 | 100, cosinus avec 20 époques de montée | meilleure validation | label smoothing 0.2, alignement euclidien par défaut |
+| EEGNeX | `chenxiachan/EEGNeX` `044d7fb`, `Run_model.ipynb`, `BenchmarkModels.py` (Keras) | Adam Keras | 1e-3 (défaut Keras) | défaut (ε = 1e-7) | 0 | 128 | 200, arrêt `val_loss` patience 20, lr ×0.5 sur plateau (patience 5) | **dernière époque** (rechargement du checkpoint commenté) | split 75/12.5/12.5 aléatoire |
+| ContraWR | `ycq091044/ContraWR` `217753a`, `src/supervised.py` l. 72-73, 149 | Adam | 2e-4 | défaut | 0 | 128 | 100 | — | **sommeil seulement** : aucune recette MI n'existe |
+
+**Ce que ça implique pour l'étape 1.**
+- Aucune recette n'est un « optimiseur seul » : chacune vient avec son protocole (époques,
+  arrêt, choix du modèle, augmentation S&R pour trois modèles sur six). L'étape 0 a tranché la
+  même question pour Shallow et Deep4 : **optimiseur de la source** (type, lr, betas, wd,
+  batch), **protocole commun du benchmark** (200 époques, `valid_acc` lissée W = 5, sans
+  augmentation). Appliquer la même règle ici rend les bras comparables. Mais les modèles
+  qui dépendent de S&R (Conformer, CTNet) risquent d'échouer la capacité ou l'optimum : l'étape 0
+  le dira, ce n'est pas à inférer.
+- Le chiffre publié de l'EEGConformer est choisi sur le test : il ne peut pas servir de
+  critère « référence publiée ».
+- La largeur de CTNet dans braindecode n'est pas celle du papier pour BCI IV 2a.
+- ContraWR n'a pas de recette MI : à écarter, ou à garder avec une recette déclarée non
+  publiée.
