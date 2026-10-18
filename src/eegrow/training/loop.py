@@ -307,6 +307,37 @@ def grow_step(model, train_loader, device, *, val_loader=None,
     }
 
 
+def _dump_failed_statistics(model) -> None:
+    """Diagnose a pinv that fails in float64 too (job 787665): are S and M finite, are
+    the weights finite, what is S's spectrum on CPU? Printed, and saved under
+    ``$EEGROW_DUMP_DIR`` when it is set. Never raises."""
+    import os
+    try:
+        rows = []
+        for layer in model._growing_layers:
+            s, m = layer.tensor_s().detach().double().cpu(), layer.tensor_m().detach().double().cpu()
+            row = {"junction": model.junction_of(layer), "S_shape": list(s.shape),
+                   "S_finite": bool(torch.isfinite(s).all()),
+                   "M_finite": bool(torch.isfinite(m).all()),
+                   "S_absmax": float(s.abs().nan_to_num(0).max())}
+            if row["S_finite"]:
+                ev = torch.linalg.eigvalsh((s + s.t()) / 2)
+                row.update(S_eig_max=float(ev.max()), S_eig_min=float(ev.min()),
+                           S_rank_1e12=int((ev > ev.max() * 1e-12).sum()))
+            rows.append((row, s, m))
+        params_finite = all(bool(torch.isfinite(p).all()) for p in model.parameters())
+        print(f"[pinv-failure] params_finite={params_finite} "
+              f"{[r for r, _, _ in rows]}", flush=True)
+        out = os.environ.get("EEGROW_DUMP_DIR")
+        if out:
+            os.makedirs(out, exist_ok=True)
+            torch.save({"rows": [r for r, _, _ in rows], "S": [s for _, s, _ in rows],
+                        "M": [m for _, _, m in rows], "params_finite": params_finite},
+                       os.path.join(out, f"pinv_failure_{os.getpid()}.pt"))
+    except Exception as exc:   # a diagnostic must not mask the real error
+        print(f"[pinv-failure] diagnostic itself failed: {exc!r}", flush=True)
+
+
 def _junction_candidates(model, loader, device, *, min_singular_ratio: float) -> list:
     """Statistics on ``loader``, optimal updates on EVERY growable junction, then the
     per-junction relative floor and width cap. The updates are left in place; returns
@@ -330,7 +361,11 @@ def _junction_candidates(model, loader, device, *, min_singular_ratio: float) ->
     try:
         model.compute_optimal_updates(statistical_threshold=0.0)
     except torch.linalg.LinAlgError:
-        model.compute_optimal_updates(statistical_threshold=0.0, dtype=torch.float64)
+        try:
+            model.compute_optimal_updates(statistical_threshold=0.0, dtype=torch.float64)
+        except torch.linalg.LinAlgError:
+            _dump_failed_statistics(model)
+            raise
         retried = True
     out = []
     for layer in model._growing_layers:
