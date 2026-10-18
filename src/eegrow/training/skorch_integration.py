@@ -33,11 +33,36 @@ env var.)
 from __future__ import annotations
 
 import logging
+import os
 
 import torch
 from skorch.callbacks import Callback
 
 from eegrow.training.loop import MIN_SINGULAR_RATIO, SCALING_GRID, grow_step
+
+
+def _debug_params(net, epoch, tag) -> None:
+    """EEGROW_DEBUG_GROWTH: where does a fit turn NaN (job 787800)? One line per call:
+    train loss, finiteness and max |w| of every parameter, per junction, plus the
+    optimizer's second-moment range for the junction weights."""
+
+    m = net.module_
+    loss = net.history[-1].get("train_loss") if len(net.history) else None
+    ps = list(m.parameters())
+    fin = all(bool(torch.isfinite(p).all()) for p in ps)
+    amax = max(float(p.detach().abs().nan_to_num(0).max()) for p in ps)
+    parts = []
+    for i, pr in enumerate(getattr(m, "pairs", [])):
+        for side in ("first", "second"):
+            w = getattr(pr, side).layer.weight
+            st = net.optimizer_.state.get(w, {})
+            v = st.get("exp_avg_sq")
+            parts.append(f"j{i}{side[0]} {tuple(w.shape)} |w|={float(w.detach().abs().max()):.3g}"
+                         f" fin={bool(torch.isfinite(w).all())}"
+                         + (f" v=[{float(v.min()):.2g},{float(v.max()):.2g}]"
+                            if v is not None else " v=none"))
+    print(f"[dbg] ep={epoch} {tag} loss={loss} finite={fin} absmax={amax:.3g} | "
+          + " ; ".join(parts), flush=True)
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +169,8 @@ class GromoGrowth(Callback):
 
     def on_epoch_end(self, net, dataset_train=None, dataset_valid=None, **kwargs):
         epoch = len(net.history)
+        if os.environ.get("EEGROW_DEBUG_GROWTH"):
+            _debug_params(net, epoch, "epoch_end")
         if (self.done_ or dataset_train is None
                 or epoch % self.grow_every != 0
                 or epoch >= net.max_epochs):
@@ -246,6 +273,9 @@ class GromoGrowth(Callback):
             self.done_ = True  # reached the target cap: stop trying
             return
         self._refresh_optimizer(net)
+        if os.environ.get("EEGROW_DEBUG_GROWTH"):
+            _debug_params(net, epoch, f"after_growth j={result.get('junction')} "
+                                      f"s={result['s']}")
         if self.verbose:
             logger.info("gromo epoch %d: width %d -> %d (s=%.2g, %s params)", epoch,
                         width_before, width_after, result["s"],
