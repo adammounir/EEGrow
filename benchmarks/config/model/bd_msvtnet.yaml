@@ -1,0 +1,6 @@
+# braindecode reference: MSVTNet with its published defaults (twin of grow_msvtnet_all).
+kind: bd
+arch: MSVTNet
+label: bd_msvtnet
+needs_sfreq: false
+module_kwargs: {}

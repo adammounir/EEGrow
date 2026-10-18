@@ -1,0 +1,17 @@
+# MSVTNet with the FFN of EVERY transformer encoder layer growable (étape 1, lecture a,
+# 15/10/2026, EXPLORATORY -- no PREREG yet): linear1 -> ReLU -> dropout -> linear2 of the
+# `num_layers` (=2) encoder layers, hidden 8 -> 72 each = braindecode's own width
+# (dim_feedforward == d_model). ONE junction grows per step, chosen by gromo's
+# select_best_update (largest first_order_improvement); a junction at its target stops
+# competing. `growth_split_half` records the argmax on each half of the statistics
+# batches (measurement of selection noise), at the cost of two extra statistics passes.
+# Start width 8 / grow_every 5: the eegrow convention of grow_shallow/grow_deep4, not tuned.
+kind: growing
+arch: GrowingMSVTNetAll
+label: grow_msvtnet_all
+needs_sfreq: false
+grow_every: 5
+growth_select: best
+growth_split_half: true
+module_kwargs:
+  start_width: 8
