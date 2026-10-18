@@ -364,8 +364,20 @@ def _junction_candidates(model, loader, device, *, min_singular_ratio: float) ->
         try:
             model.compute_optimal_updates(statistical_threshold=0.0, dtype=torch.float64)
         except torch.linalg.LinAlgError:
+            # Still failed (job 787665: 3/3 cells, on the full pass, not reproduced by
+            # the same seed in 787668 -> intermittent). Last resort: the same float64
+            # pinv through MAGMA instead of cuSOLVER. Same quantity, other SVD driver.
             _dump_failed_statistics(model)
-            raise
+            if not torch.cuda.is_available():
+                raise
+            previous = torch.backends.cuda.preferred_linalg_library()
+            torch.backends.cuda.preferred_linalg_library("magma")
+            try:
+                model.compute_optimal_updates(statistical_threshold=0.0,
+                                              dtype=torch.float64)
+            finally:
+                torch.backends.cuda.preferred_linalg_library(previous)
+            print("[pinv-failure] recovered with MAGMA", flush=True)
         retried = True
     out = []
     for layer in model._growing_layers:
