@@ -41,6 +41,16 @@ DS=${DS:-bnci2014_001}   # 6th column (step 0-bis); lots 1-3 had 5 columns
 OUT=$ROOT/step0_results/$CAND
 export EEGROW_BENCH_ROOT=$OUT
 
+# Step 0 avenant 2 (da47313): grid 0->64 + match_extending_layer. Falling back to the
+# 0->4 / no-normalisation defaults silently cost two runs on 18/10 (787668, 787705):
+# a growing cell now REFUSES to start without both, unless ALLOW_DEFAULT_GROWTH=1.
+case "$ARM" in grow_*)
+  if [ -z "${GRID:-}" ] || [ -z "${NORM:-}" ]; then
+    if [ "${ALLOW_DEFAULT_GROWTH:-0}" != 1 ]; then
+      echo "REFUSED: growing arm $ARM without GRID/NORM (avenant 2)"; exit 1; fi
+  fi;;
+esac
+echo "  grid=${GRID:-default} norm=${NORM:-default}"
 echo "[$(date)] task=$SLURM_ARRAY_TASK_ID restart=${SLURM_RESTART_COUNT:-0} node=$(hostname) sha=$EEGROW_SHA"
 echo "  arm=$ARM candidate=$CAND lr=$LR wd=$WD seed=$SEED dataset=$DS"
 GOT="$(nvidia-smi --query-gpu=name --format=csv,noheader | sed -n 1p)"

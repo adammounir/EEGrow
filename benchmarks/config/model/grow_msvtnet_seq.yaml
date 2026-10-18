@@ -1,0 +1,14 @@
+# Control of grow_msvtnet_all (étape 1, 18/10/2026, EXPLORATORY): same model, same
+# candidates, but the two FFN junctions grow IN TURN (gromo scheduling "sequential";
+# TINY Algorithm 1 loops over depths) instead of by select_best_update's argmax. The
+# argmax is still recorded (`grow_junction_argmax`). Measured on 270 fits: the argmax
+# picks junction 0 in 99.4 % of contested steps, i.e. "fill FFN 1, then FFN 2".
+kind: growing
+arch: GrowingMSVTNetAll
+label: grow_msvtnet_seq
+needs_sfreq: false
+grow_every: 5
+growth_select: sequential
+growth_split_half: false
+module_kwargs:
+  start_width: 8

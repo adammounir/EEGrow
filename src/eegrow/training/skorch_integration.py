@@ -132,8 +132,9 @@ class GromoGrowth(Callback):
                     f"scaling_grid must be increasing and contain 0.0, got {scaling_grid}")
         self.scaling_grid = scaling_grid
         self.normalization = normalization
-        if select not in ("first", "best"):
-            raise ValueError(f"select must be 'first' or 'best', got {select!r}")
+        if select not in ("first", "best", "sequential"):
+            raise ValueError(
+                f"select must be 'first', 'best' or 'sequential', got {select!r}")
         if split_half and select != "best":
             raise ValueError("split_half needs select='best'")
         self.select = select
@@ -297,9 +298,9 @@ class GromoGrowth(Callback):
         record("grow_eig_proposed", result["eig_proposed"])
         record("grow_eig_kept", result["eig_kept"])
         record("grow_param_update_decrease", result["parameter_update_decrease"])
-        # Multi-junction steps (select="best") only: which junction won and why.
+        # Multi-junction steps (select="best"/"sequential") only: which junction won and why.
         if "junction" in result:
-            for key in ("junction", "junction_foi", "junction_ids", "junction_n_proposed",
+            for key in ("junction", "junction_argmax", "junction_foi", "junction_ids", "junction_n_proposed",
                         "junction_n_kept", "junction_widths_after", "split_a",
                         "split_b", "split_foi_a", "split_foi_b", "fp64_retry",
                         "split_failed", "split_fp64_retry"):

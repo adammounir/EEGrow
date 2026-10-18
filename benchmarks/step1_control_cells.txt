@@ -1,0 +1,9 @@
+grow_msvtnet_all B 1e-3 0.0 0 bnci2014_001
+grow_msvtnet_all B 1e-3 0.0 1 bnci2014_001
+grow_msvtnet_all B 1e-3 0.0 2 bnci2014_001
+grow_msvtnet_seq B 1e-3 0.0 0 bnci2014_001
+grow_msvtnet_seq B 1e-3 0.0 1 bnci2014_001
+grow_msvtnet_seq B 1e-3 0.0 2 bnci2014_001
+bd_msvtnet B 1e-3 0.0 0 bnci2014_001
+bd_msvtnet B 1e-3 0.0 1 bnci2014_001
+bd_msvtnet B 1e-3 0.0 2 bnci2014_001

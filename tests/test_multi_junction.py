@@ -126,7 +126,9 @@ def test_split_half_needs_best_and_select_is_validated():
     with pytest.raises(ValueError, match="select"):
         grow_step(m, train, "cpu", val_loader=hold, select="all")
     with pytest.raises(ValueError):
-        GromoGrowth(select="sequential")
+        GromoGrowth(select="round_robin")
+    with pytest.raises(ValueError, match="split_half"):
+        grow_step(m, train, "cpu", val_loader=hold, select="sequential", split_half=True)
     with pytest.raises(ValueError):
         GromoGrowth(split_half=True)
 
@@ -182,3 +184,33 @@ def test_a_half_that_fails_twice_is_recorded_not_fatal(monkeypatch):
                     split_half=True)
     assert res["split_failed"] == 1 and res["split_a"] is None
     assert res["split_b"] in (0, 1) and res["junction"] in (0, 1)
+
+
+def test_sequential_alternates_junctions_and_records_the_argmax():
+    torch.manual_seed(0)
+    m = GrowingMSVTNetAll(n_chans=C, n_outputs=K, n_times=T, start_width=8)
+    _, _, train, hold = _data()
+    chosen = []
+    for _ in range(4):
+        res = grow_step(m, train, "cpu", val_loader=hold, scaling_grid=GRID,
+                        normalization="match_extending_layer", select="sequential")
+        chosen.append(res["junction"])
+        assert res["junction_argmax"] in (0, 1)
+        changed = [i for i in range(2)
+                   if res["junction_widths_after"][i] != res["junction_widths_before"][i]]
+        assert changed == ([res["junction"]] if res["applied"] else [])
+    assert chosen == [0, 1, 0, 1]
+
+
+def test_sequential_skips_a_junction_at_target():
+    torch.manual_seed(0)
+    m = GrowingMSVTNetAll(n_chans=C, n_outputs=K, n_times=T, start_width=4,
+                          target_width=6)
+    _, _, train, hold = _data()
+    for _ in range(8):
+        if not m._growable_layers:
+            break
+        res = grow_step(m, train, "cpu", val_loader=hold, scaling_grid=GRID,
+                        normalization="match_extending_layer", select="sequential")
+        assert m.junction_widths[res["junction"]] <= 6
+        assert all(w <= 6 for w in m.junction_widths)

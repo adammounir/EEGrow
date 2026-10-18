@@ -126,6 +126,9 @@ def grow_step(model, train_loader, device, *, val_loader=None,
     ``select="first"`` (default, every historical arm) grows ``_growable_layers[0]``.
     ``select="best"`` is for a :class:`MultiJunctionGrowingModel`: candidates on every
     junction, then gromo's ``select_best_update``; see :func:`_grow_step_best`.
+    ``select="sequential"`` is its control: the same candidates, but the junctions grow
+    in turn (gromo's ``scheduling_method="sequential"``; TINY's Algorithm 1 loops over
+    the depths), whatever the gains say.
 
     NB: ``compute_optimal_updates`` relies on ``eigh``, which is NOT implemented on
     MPS -- growth therefore requires a CPU device.
@@ -219,12 +222,15 @@ def grow_step(model, train_loader, device, *, val_loader=None,
     grid = tuple(float(v) for v in scaling_grid)
     if 0.0 not in grid or list(grid) != sorted(grid):
         raise ValueError(f"scaling_grid must be increasing and contain 0.0, got {grid}")
-    if select == "best":
+    if select in ("best", "sequential"):
+        if split_half and select != "best":
+            raise ValueError("split_half compares argmaxes: it needs select='best'")
         return _grow_step_best(model, train_loader, device, val_loader=val_loader,
                                min_singular_ratio=min_singular_ratio, grid=grid,
-                               normalization=normalization, split_half=split_half)
+                               normalization=normalization, split_half=split_half,
+                               sequential=select == "sequential")
     if select != "first":
-        raise ValueError(f"select must be 'first' or 'best', got {select!r}")
+        raise ValueError(f"select must be 'first', 'best' or 'sequential', got {select!r}")
     if split_half:
         raise ValueError("split_half compares junctions: it needs select='best'")
     crit_sum = torch.nn.CrossEntropyLoss(reduction="sum")
@@ -406,7 +412,7 @@ def _argmax_junction(per: list) -> int:
 
 
 def _grow_step_best(model, train_loader, device, *, val_loader, min_singular_ratio,
-                    grid, normalization, split_half) -> dict:
+                    grid, normalization, split_half, sequential=False) -> dict:
     """``grow_step`` for several junctions: gromo's ``select_best_update``.
 
     1. candidates on every junction still under its target (:func:`_junction_candidates`);
@@ -449,9 +455,19 @@ def _grow_step_best(model, train_loader, device, *, val_loader, min_singular_rat
     per = _junction_candidates(model, batches, device,
                                min_singular_ratio=min_singular_ratio)
     expected = _argmax_junction(per)
-    idx = model.select_best_update()
-    if idx != expected:   # same quantity, same order: a mismatch is a bug, not noise
-        raise RuntimeError(f"select_best_update chose {idx}, argmax is {expected}")
+    if sequential:
+        # Round-robin over the junctions still under their target: the next one after
+        # the junction grown (or abstained on) last time. The gains are still computed
+        # and recorded, so the reader can tell what the argmax would have chosen.
+        ids = [d["junction"] for d in per]
+        last = getattr(model, "_sequential_last", -1)
+        nxt = min((j for j in ids if j > last), default=min(ids))
+        idx = model.select_update(ids.index(nxt))
+        model._sequential_last = nxt
+    else:
+        idx = model.select_best_update()
+        if idx != expected:   # same quantity, same order: a mismatch is a bug, not noise
+            raise RuntimeError(f"select_best_update chose {idx}, argmax is {expected}")
     layer = model.currently_updated_layer
     if normalization is not None:
         layer.normalize_optimal_updates(normalization_type=normalization)
@@ -489,6 +505,7 @@ def _grow_step_best(model, train_loader, device, *, val_loader, min_singular_rat
         # Multi-junction record: which junction won, every junction's ranked gain (raw,
         # before normalisation), what each proposed, and the widths after the step.
         "junction": chosen["junction"],
+        "junction_argmax": per[expected]["junction"],
         "junction_foi": [d["first_order_improvement"] for d in per],
         "junction_ids": [d["junction"] for d in per],
         "junction_n_proposed": [d["n_proposed"] for d in per],
