@@ -134,3 +134,51 @@ def test_split_half_needs_best_and_select_is_validated():
 def test_exported():
     import eegrow
     assert eegrow.GrowingMSVTNetAll is GrowingMSVTNetAll
+
+
+def _flaky(m, fail_float32_calls):
+    """Make gromo's compute_optimal_updates raise LinAlgError on chosen float32 calls."""
+    real = m.compute_optimal_updates
+    calls = {"n": 0}
+
+    def wrapped(*args, **kwargs):
+        if kwargs.get("dtype", torch.float32) is torch.float32:
+            calls["n"] += 1
+            if calls["n"] in fail_float32_calls:
+                raise torch.linalg.LinAlgError("simulated cuSOLVER error 46")
+        return real(*args, **kwargs)
+
+    m.compute_optimal_updates = wrapped
+
+
+def test_ill_conditioned_pinv_is_retried_in_float64():
+    torch.manual_seed(0)
+    m = GrowingMSVTNetAll(n_chans=C, n_outputs=K, n_times=T, start_width=8)
+    _, _, train, hold = _data()
+    _flaky(m, fail_float32_calls={1})    # first call = half a
+    res = grow_step(m, train, "cpu", val_loader=hold, scaling_grid=GRID,
+                    normalization="match_extending_layer", select="best",
+                    split_half=True)
+    assert res["split_failed"] == 0 and res["split_fp64_retry"] == 1
+    assert res["fp64_retry"] is False and res["split_a"] in (0, 1)
+
+
+def test_a_half_that_fails_twice_is_recorded_not_fatal(monkeypatch):
+    torch.manual_seed(0)
+    m = GrowingMSVTNetAll(n_chans=C, n_outputs=K, n_times=T, start_width=8)
+    _, _, train, hold = _data()
+    real = m.compute_optimal_updates
+    calls = {"n": 0}
+
+    def wrapped(*args, **kwargs):   # half a fails in float32 AND float64
+        calls["n"] += 1
+        if calls["n"] in (1, 2):
+            raise torch.linalg.LinAlgError("simulated")
+        return real(*args, **kwargs)
+
+    m.compute_optimal_updates = wrapped
+    res = grow_step(m, train, "cpu", val_loader=hold, scaling_grid=GRID,
+                    normalization="match_extending_layer", select="best",
+                    split_half=True)
+    assert res["split_failed"] == 1 and res["split_a"] is None
+    assert res["split_b"] in (0, 1) and res["junction"] in (0, 1)

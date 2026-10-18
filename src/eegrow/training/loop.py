@@ -322,7 +322,16 @@ def _junction_candidates(model, loader, device, *, min_singular_ratio: float) ->
     crit_sum = torch.nn.CrossEntropyLoss(reduction="sum")
     model.set_growing_layers(scheduling_method="all")
     compute_statistics(model, loader, loss_function=crit_sum, device=device)
-    model.compute_optimal_updates(statistical_threshold=0.0)
+    # float32 pinv of S fails to converge on CUDA when S is ill-conditioned (cuSOLVER
+    # error 46, job 787660: 3/3 cells, always on a split-half pass, i.e. half the
+    # samples). gromo takes the dtype of that computation as an argument: retry ONCE in
+    # float64 and say so in the record; a second failure propagates.
+    retried = False
+    try:
+        model.compute_optimal_updates(statistical_threshold=0.0)
+    except torch.linalg.LinAlgError:
+        model.compute_optimal_updates(statistical_threshold=0.0, dtype=torch.float64)
+        retried = True
     out = []
     for layer in model._growing_layers:
         proposed = getattr(layer, "eigenvalues_extension", None)
@@ -333,7 +342,7 @@ def _junction_candidates(model, loader, device, *, min_singular_ratio: float) ->
             layer.sub_select_optimal_added_parameters(keep_neurons=keep)
         d = _update_diagnostics(layer)
         d.update(junction=model.junction_of(layer), n_proposed=n_proposed,
-                 eig_proposed=eig_proposed)
+                 eig_proposed=eig_proposed, fp64_retry=retried)
         out.append(d)
     model.reset_computation()
     return out
@@ -375,10 +384,17 @@ def _grow_step_best(model, train_loader, device, *, val_loader, min_singular_rat
         if len(batches) >= 2:
             cut = len(batches) // 2
             for tag, part in (("a", batches[:cut]), ("b", batches[cut:])):
-                per_h = _junction_candidates(model, part, device,
-                                             min_singular_ratio=min_singular_ratio)
-                halves[tag] = {"junction": per_h[_argmax_junction(per_h)]["junction"],
-                               "foi": [d["first_order_improvement"] for d in per_h]}
+                try:
+                    per_h = _junction_candidates(model, part, device,
+                                                 min_singular_ratio=min_singular_ratio)
+                    halves[tag] = {"junction": per_h[_argmax_junction(per_h)]["junction"],
+                                   "foi": [d["first_order_improvement"] for d in per_h],
+                                   "fp64_retry": per_h[0]["fp64_retry"]}
+                except torch.linalg.LinAlgError:
+                    # A measurement, not the step: record the failure, never kill the
+                    # fit. The reader counts these (`grow_split_failed`).
+                    model.reset_computation()
+                    halves[tag] = None
                 for layer in model._growing_layers:
                     layer.delete_update()
         else:
@@ -436,6 +452,11 @@ def _grow_step_best(model, train_loader, device, *, val_loader, min_singular_rat
         "split_b": None if not halves or halves.get("b") is None else halves["b"]["junction"],
         "split_foi_a": None if not halves or halves.get("a") is None else halves["a"]["foi"],
         "split_foi_b": None if not halves or halves.get("b") is None else halves["b"]["foi"],
+        "fp64_retry": chosen["fp64_retry"],
+        "split_failed": None if not split_half else
+        sum(halves.get(t) is None for t in ("a", "b")) if len(batches) >= 2 else None,
+        "split_fp64_retry": None if not split_half else
+        sum(bool(h and h.get("fp64_retry")) for h in halves.values()),
     }
 
 

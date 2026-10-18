@@ -229,6 +229,7 @@ class FitRecorder(Callback):
                   "grow_junction_n_proposed", "grow_junction_n_kept",
                   "grow_junction_widths_after", "grow_split_a", "grow_split_b",
                   "grow_split_foi_a", "grow_split_foi_b",
+                  "grow_fp64_retry", "grow_split_failed", "grow_split_fp64_retry",
                   "adam_atten_mean", "adam_atten_p05", "adam_eps_frac")
 
     def on_train_end(self, net, X=None, y=None, **kwargs):

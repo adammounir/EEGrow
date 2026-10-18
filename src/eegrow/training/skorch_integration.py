@@ -301,7 +301,8 @@ class GromoGrowth(Callback):
         if "junction" in result:
             for key in ("junction", "junction_foi", "junction_ids", "junction_n_proposed",
                         "junction_n_kept", "junction_widths_after", "split_a",
-                        "split_b", "split_foi_a", "split_foi_b"):
+                        "split_b", "split_foi_a", "split_foi_b", "fp64_retry",
+                        "split_failed", "split_fp64_retry"):
                 record(f"grow_{key}", result[key])
 
     def _split_holdout(self, batches):

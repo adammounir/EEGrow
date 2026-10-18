@@ -65,7 +65,9 @@ def main():
                  "applied": bool(h.get("grow_applied")), "s": h.get("grow_s"),
                  "foi": h.get("grow_junction_foi"), "ids": h.get("grow_junction_ids"),
                  "a": h.get("grow_split_a"), "b": h.get("grow_split_b"),
-                 "widths": h.get("grow_junction_widths_after")}
+                 "widths": h.get("grow_junction_widths_after"),
+                 "fp64": h.get("grow_fp64_retry"), "split_failed": h.get("grow_split_failed"),
+                 "split_fp64": h.get("grow_split_fp64_retry")}
             events.append(e)
             widths_end = e["widths"] or widths_end
         by_subj.setdefault(subj, []).append({"fit": r, "widths_end": widths_end})
@@ -149,6 +151,9 @@ def main():
             float(np.median([x for x in first_j1 if x])),
             "never": float(np.mean([x is None for x in first_j1]))},
         "censoring_s64_applied": censored,
+        "fp64_retry_events": int(sum(bool(e["fp64"]) for e in events)),
+        "split_halves_failed": int(sum(e["split_failed"] or 0 for e in events)),
+        "split_halves_fp64_retry": int(sum(e["split_fp64"] or 0 for e in events)),
         "selected_epoch_le5": float(np.mean([e <= 5 for e in sel])) if sel else None,
         "selected_epoch_ge195": float(np.mean([e >= 195 for e in sel])) if sel else None,
     }
@@ -166,6 +171,9 @@ def main():
     lines += [f"- agreement by margin: {json.dumps(margin_bins)}",
               f"- first epoch j1 grows: {res['first_epoch_j1_grows']}",
               f"- censoring s=64 (applied): {censored}",
+              f"- fp64 retries (real step): {res['fp64_retry_events']} ; split halves "
+              f"failed: {res['split_halves_failed']} ; split halves retried in fp64: "
+              f"{res['split_halves_fp64_retry']}",
               f"- selected epoch <=5 / >=195: {res['selected_epoch_le5']} / "
               f"{res['selected_epoch_ge195']}"]
     Path(a.out + ".md").write_text("\n".join(lines) + "\n")
