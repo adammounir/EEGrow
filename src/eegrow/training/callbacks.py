@@ -282,7 +282,10 @@ class RestoreBestModel(Callback):
             net.selected_state_ = {
                 "state_dict": {k: v.detach().cpu()
                                for k, v in self.best_module_.state_dict().items()},
-                "growable_width": getattr(self.best_module_, "growable_width", None)}
+                "growable_width": getattr(self.best_module_, "growable_width", None),
+                # Multi-junction modules: the per-junction widths (the sum alone does
+                # not say how to rebuild the module; the shapes in state_dict do too).
+                "junction_widths": getattr(self.best_module_, "junction_widths", None)}
             self.best_module_ = None
             return
         last_epoch = net.history[-1]["epoch"] if len(net.history) else None

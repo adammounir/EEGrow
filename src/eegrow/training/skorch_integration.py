@@ -90,6 +90,12 @@ class GromoGrowth(Callback):
     normalization : str, optional
         gromo ``normalize_optimal_updates`` type applied before the line search
         (e.g. ``"match_extending_layer"``). ``None`` (default) = historical, unscaled.
+    select : str
+        ``"first"`` (default, every single-junction arm) or ``"best"``: several
+        junctions, gromo's ``select_best_update`` (``loop.grow_step``).
+    split_half : bool
+        With ``select="best"`` only: also record the argmax junction on each half of
+        the statistics batches (étape 1 measurement of selection noise).
     verbose : bool
 
     Notes
@@ -110,6 +116,7 @@ class GromoGrowth(Callback):
                  holdout_frac: float = 0.2, min_holdout_batches: int = 4,
                  min_singular_ratio: float = MIN_SINGULAR_RATIO,
                  scaling_grid=None, normalization: str | None = None,
+                 select: str = "first", split_half: bool = False,
                  verbose: bool = True):
         self.grow_every = grow_every
         self.growth_device = growth_device
@@ -125,6 +132,12 @@ class GromoGrowth(Callback):
                     f"scaling_grid must be increasing and contain 0.0, got {scaling_grid}")
         self.scaling_grid = scaling_grid
         self.normalization = normalization
+        if select not in ("first", "best"):
+            raise ValueError(f"select must be 'first' or 'best', got {select!r}")
+        if split_half and select != "best":
+            raise ValueError("split_half needs select='best'")
+        self.select = select
+        self.split_half = split_half
         self.verbose = verbose
         self.done_ = False
 
@@ -207,7 +220,8 @@ class GromoGrowth(Callback):
                            min_singular_ratio=self.min_singular_ratio,
                            scaling_grid=(SCALING_GRID if self.scaling_grid is None
                                          else self.scaling_grid),
-                           normalization=self.normalization)
+                           normalization=self.normalization,
+                           select=self.select, split_half=self.split_half)
         result["holdout_kind"] = holdout_kind
         result["n_select"] = sum(len(b[1]) for b in (val_loader or stats_loader))
         if moved:
@@ -283,6 +297,12 @@ class GromoGrowth(Callback):
         record("grow_eig_proposed", result["eig_proposed"])
         record("grow_eig_kept", result["eig_kept"])
         record("grow_param_update_decrease", result["parameter_update_decrease"])
+        # Multi-junction steps (select="best") only: which junction won and why.
+        if "junction" in result:
+            for key in ("junction", "junction_foi", "junction_ids", "junction_n_proposed",
+                        "junction_n_kept", "junction_widths_after", "split_a",
+                        "split_b", "split_foi_a", "split_foi_b"):
+                record(f"grow_{key}", result[key])
 
     def _split_holdout(self, batches):
         """Split ``batches`` into (stats, line-search) loaders per ``holdout_frac``.

@@ -124,6 +124,10 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
             # arm's spectrum shape, not a global constant -- see loop.grow_step.
             min_singular_ratio=float(model_cfg.get("min_singular_ratio",
                                                    MIN_SINGULAR_RATIO)),
+            # Several junctions (étape 1, lecture a): gromo's select_best_update.
+            # Per-arm, absent = "first" = every historical arm, unchanged.
+            select=model_cfg.get("growth_select", "first"),
+            split_half=bool(model_cfg.get("growth_split_half", False)),
             verbose=False)))
     # ORDER IS THE CONTRACT HERE, and each position is load-bearing:
     #

@@ -60,7 +60,7 @@ from gromo.modules.growing_normalisation import GrowingBatchNorm2d
 from gromo.modules.linear_growing_module import LinearGrowingModule
 from torch import nn
 
-from .growing_junction import GrowingPair, JunctionGrowingModel
+from .growing_junction import GrowingPair, JunctionGrowingModel, MultiJunctionGrowingModel
 
 Conv2dGrowingModule = RestrictedConv2dGrowingModule
 
@@ -319,6 +319,54 @@ class GrowingMSVTNet(JunctionGrowingModel):
     def load_braindecode_weights(self, bd: MSVTNet) -> "GrowingMSVTNet":
         return _load(self, bd, f"transformer.trans.layers.{self.block}.",
                      ((self.pair.first, "linear1"), (self.pair.second, "linear2")))
+
+
+class GrowingMSVTNetAll(MultiJunctionGrowingModel):
+    """braindecode MSVTNet with the FFN of EVERY transformer encoder layer growable.
+
+    Lecture (a) of étape 1: the junctions are the ``linear1 -> ReLU -> dropout ->
+    linear2`` FFNs of all ``num_layers`` encoder layers (2 by default), each replaced
+    exactly as in :class:`GrowingMSVTNet`. One junction grows per step, chosen by
+    gromo's ``select_best_update`` (``loop.grow_step(select="best")``). Each junction
+    grows from ``start_width`` to ``target_width`` (default: braindecode's own width,
+    so at target the network IS braindecode's MSVTNet).
+    """
+
+    def __init__(self, n_chans: int, n_outputs: int, n_times: int, *,
+                 start_width: int = 8, target_width: int | None = None, device=None,
+                 **bd_kwargs) -> None:
+        super().__init__(in_features=n_chans, out_features=n_outputs, device=device)
+        self.net = MSVTNet(n_chans=n_chans, n_outputs=n_outputs, n_times=n_times,
+                           **bd_kwargs)
+        pairs, targets = [], []
+        for i, layer in enumerate(self.net.transformer.trans.layers):
+            act = layer.activation if isinstance(layer.activation, nn.Module) else \
+                _Fn(layer.activation)
+            target = layer.linear1.out_features if target_width is None else target_width
+            pair = _linear_pair(layer.linear1, layer.linear2,
+                                nn.Sequential(act, layer.dropout), start=start_width,
+                                target=target, device=self.device, name=f"ffn{i}")
+            # Same in-place swap as GrowingMSVTNet (slow path = same function).
+            layer.linear1, layer.linear2 = pair, nn.Identity()
+            layer.dropout, layer.activation = nn.Identity(), nn.Identity()
+            layer.activation_relu_or_gelu = 0
+            pairs.append(pair)
+            targets.append(target)
+        self._finish_multi(pairs, start=start_width, targets=targets)
+
+    @torch.no_grad()
+    def load_braindecode_weights(self, bd: MSVTNet) -> "GrowingMSVTNetAll":
+        own = dict(bd.state_dict())
+        for i, pair in enumerate(self.pairs):
+            pre = f"transformer.trans.layers.{i}."
+            for dst, key in ((pair.first, "linear1"), (pair.second, "linear2")):
+                dst.layer.weight.copy_(own.pop(f"{pre}{key}.weight"))
+                if f"{pre}{key}.bias" in own:
+                    dst.layer.bias.copy_(own.pop(f"{pre}{key}.bias"))
+        missing, unexpected = self.net.load_state_dict(own, strict=False)
+        assert not unexpected, unexpected
+        assert all(".first." in k or ".second." in k for k in missing), missing
+        return self
 
 
 class GrowingEEGNeXJunction(JunctionGrowingModel):

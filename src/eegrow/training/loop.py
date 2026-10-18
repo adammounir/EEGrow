@@ -119,8 +119,13 @@ MIN_SINGULAR_RATIO = 0.1
 def grow_step(model, train_loader, device, *, val_loader=None,
               max_added: int | None = None,
               min_singular_ratio: float = MIN_SINGULAR_RATIO,
-              scaling_grid=SCALING_GRID, normalization: str | None = None) -> dict:
+              scaling_grid=SCALING_GRID, normalization: str | None = None,
+              select: str = "first", split_half: bool = False) -> dict:
     """One gromo growth: stats -> optimal update -> line search -> apply_change.
+
+    ``select="first"`` (default, every historical arm) grows ``_growable_layers[0]``.
+    ``select="best"`` is for a :class:`MultiJunctionGrowingModel`: candidates on every
+    junction, then gromo's ``select_best_update``; see :func:`_grow_step_best`.
 
     NB: ``compute_optimal_updates`` relies on ``eigh``, which is NOT implemented on
     MPS -- growth therefore requires a CPU device.
@@ -214,6 +219,14 @@ def grow_step(model, train_loader, device, *, val_loader=None,
     grid = tuple(float(v) for v in scaling_grid)
     if 0.0 not in grid or list(grid) != sorted(grid):
         raise ValueError(f"scaling_grid must be increasing and contain 0.0, got {grid}")
+    if select == "best":
+        return _grow_step_best(model, train_loader, device, val_loader=val_loader,
+                               min_singular_ratio=min_singular_ratio, grid=grid,
+                               normalization=normalization, split_half=split_half)
+    if select != "first":
+        raise ValueError(f"select must be 'first' or 'best', got {select!r}")
+    if split_half:
+        raise ValueError("split_half compares junctions: it needs select='best'")
     crit_sum = torch.nn.CrossEntropyLoss(reduction="sum")
     crit_mean = torch.nn.CrossEntropyLoss(reduction="mean")
     width_before = getattr(model, "growable_width", None)
@@ -291,6 +304,138 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         # The untrimmed singular values, next to `n_proposed` they came from.
         "eig_proposed": eig_proposed,
         **diag,
+    }
+
+
+def _junction_candidates(model, loader, device, *, min_singular_ratio: float) -> list:
+    """Statistics on ``loader``, optimal updates on EVERY growable junction, then the
+    per-junction relative floor and width cap. The updates are left in place; returns
+    one diagnostics dict per entry of ``model._growing_layers``, in that order.
+
+    The floor and cap are applied BEFORE any selection: gromo's own flow trims inside
+    ``compute_optimal_updates`` (``maximum_added_neurons``, ``statistical_threshold``)
+    and only then ranks, so this is the native order with our relative floor in place
+    of its absolute cut. Normalisation is NOT applied here: ``normalize_optimal_updates``
+    rescales ``eigenvalues_extension`` (``scale_layer_extension``), which would turn
+    the ranked quantity from a predicted loss decrease into an arbitrary amplitude.
+    """
+    crit_sum = torch.nn.CrossEntropyLoss(reduction="sum")
+    model.set_growing_layers(scheduling_method="all")
+    compute_statistics(model, loader, loss_function=crit_sum, device=device)
+    model.compute_optimal_updates(statistical_threshold=0.0)
+    out = []
+    for layer in model._growing_layers:
+        proposed = getattr(layer, "eigenvalues_extension", None)
+        n_proposed = int(proposed.shape[0]) if proposed is not None else None
+        eig_proposed = _spectrum(proposed)
+        keep = _n_candidates_to_keep(layer, min_singular_ratio, model.remaining(layer))
+        if keep is not None:
+            layer.sub_select_optimal_added_parameters(keep_neurons=keep)
+        d = _update_diagnostics(layer)
+        d.update(junction=model.junction_of(layer), n_proposed=n_proposed,
+                 eig_proposed=eig_proposed)
+        out.append(d)
+    model.reset_computation()
+    return out
+
+
+def _argmax_junction(per: list) -> int:
+    """Index (into ``per``) of the largest first-order improvement; refuses a None."""
+    fois = [d["first_order_improvement"] for d in per]
+    if any(f is None for f in fois):
+        # A junction whose gain cannot be computed cannot be ranked; ranking the others
+        # without it would silently starve it. Refuse instead of degrading.
+        raise RuntimeError(f"first_order_improvement unavailable on a junction: {fois}")
+    return max(range(len(fois)), key=lambda i: fois[i])
+
+
+def _grow_step_best(model, train_loader, device, *, val_loader, min_singular_ratio,
+                    grid, normalization, split_half) -> dict:
+    """``grow_step`` for several junctions: gromo's ``select_best_update``.
+
+    1. candidates on every junction still under its target (:func:`_junction_candidates`);
+    2. ``model.select_best_update()`` keeps the junction with the largest
+       ``first_order_improvement`` (= ``parameter_update_decrease`` + sum of the
+       squared singular values of the kept neurons) and deletes the others' updates;
+    3. normalisation, line search, abstention and ``apply_change`` exactly as the
+       single-junction path, on the selected junction only.
+
+    ``split_half`` (measurement, étape 1): before the real step, the same candidates
+    are computed on each half of the statistics batches and the two argmaxes are
+    recorded. If they disagree often, the selection reads noise, not a bottleneck.
+    The real step is unaffected: the half-updates are deleted and the statistics are
+    recomputed on all batches.
+    """
+    crit_mean = torch.nn.CrossEntropyLoss(reduction="mean")
+    width_before = model.growable_width
+    widths_before = list(model.junction_widths)
+    batches = train_loader if isinstance(train_loader, list) else list(train_loader)
+    halves = {}
+    if split_half:
+        if len(batches) >= 2:
+            cut = len(batches) // 2
+            for tag, part in (("a", batches[:cut]), ("b", batches[cut:])):
+                per_h = _junction_candidates(model, part, device,
+                                             min_singular_ratio=min_singular_ratio)
+                halves[tag] = {"junction": per_h[_argmax_junction(per_h)]["junction"],
+                               "foi": [d["first_order_improvement"] for d in per_h]}
+                for layer in model._growing_layers:
+                    layer.delete_update()
+        else:
+            halves = {"a": None, "b": None}
+    per = _junction_candidates(model, batches, device,
+                               min_singular_ratio=min_singular_ratio)
+    expected = _argmax_junction(per)
+    idx = model.select_best_update()
+    if idx != expected:   # same quantity, same order: a mismatch is a bug, not noise
+        raise RuntimeError(f"select_best_update chose {idx}, argmax is {expected}")
+    layer = model.currently_updated_layer
+    if normalization is not None:
+        layer.normalize_optimal_updates(normalization_type=normalization)
+    diag = _update_diagnostics(layer)
+    select_loader = batches if val_loader is None else val_loader
+    best_loss, best_s = float("inf"), 0.0
+    losses = {}
+    for s in grid:
+        model.set_scaling_factor(s)
+        loss, _ = evaluate_model(model, select_loader, crit_mean,
+                                 use_extended_model=True, device=device)
+        losses[s] = float(loss)
+        if loss < best_loss:
+            best_loss, best_s = loss, s
+    if best_s == 0.0:
+        model.set_scaling_factor(0.0)
+        layer.delete_update()
+        model.currently_updated_layer_index = None
+    else:
+        model.set_scaling_factor(best_s)
+        model.apply_change()
+    model.refresh_growable()
+    chosen = per[idx]
+    return {
+        "s": best_s,
+        "applied": best_s != 0.0,
+        "select_loss": float(best_loss),
+        "losses": losses,
+        "width_before": width_before,
+        "width_after": model.growable_width,
+        "n_proposed": chosen["n_proposed"],
+        "normalization": normalization,
+        "eig_proposed": chosen["eig_proposed"],
+        **diag,
+        # Multi-junction record: which junction won, every junction's ranked gain (raw,
+        # before normalisation), what each proposed, and the widths after the step.
+        "junction": chosen["junction"],
+        "junction_foi": [d["first_order_improvement"] for d in per],
+        "junction_ids": [d["junction"] for d in per],
+        "junction_n_proposed": [d["n_proposed"] for d in per],
+        "junction_n_kept": [d["n_candidates"] for d in per],
+        "junction_widths_before": widths_before,
+        "junction_widths_after": list(model.junction_widths),
+        "split_a": None if not halves or halves.get("a") is None else halves["a"]["junction"],
+        "split_b": None if not halves or halves.get("b") is None else halves["b"]["junction"],
+        "split_foi_a": None if not halves or halves.get("a") is None else halves["a"]["foi"],
+        "split_foi_b": None if not halves or halves.get("b") is None else halves["b"]["foi"],
     }
 
 

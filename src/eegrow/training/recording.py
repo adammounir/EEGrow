@@ -225,6 +225,10 @@ class FitRecorder(Callback):
                   "grow_select_loss", "grow_losses", "grow_param_update_decrease",
                   "grow_eig_proposed", "grow_eig_kept", "grow_holdout", "grow_n_select",
                   "grow_normalization",
+                  "grow_junction", "grow_junction_foi", "grow_junction_ids",
+                  "grow_junction_n_proposed", "grow_junction_n_kept",
+                  "grow_junction_widths_after", "grow_split_a", "grow_split_b",
+                  "grow_split_foi_a", "grow_split_foi_b",
                   "adam_atten_mean", "adam_atten_p05", "adam_eps_frac")
 
     def on_train_end(self, net, X=None, y=None, **kwargs):
