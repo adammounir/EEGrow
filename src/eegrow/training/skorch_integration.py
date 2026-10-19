@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import logging
 import os
+from types import SimpleNamespace
 
 import torch
 from skorch.callbacks import Callback
@@ -52,7 +53,13 @@ def _debug_params(net, epoch, tag) -> None:
     fin = all(bool(torch.isfinite(p).all()) for p in ps)
     amax = max(float(p.detach().abs().nan_to_num(0).max()) for p in ps)
     parts = []
-    for i, pr in enumerate(getattr(m, "pairs", [])):
+    # Multi-junction models expose `pairs`; single-junction ones (Shallow) only the
+    # growing layer, whose `previous_module` is the first side of the junction.
+    pairs = getattr(m, "pairs", None)
+    if pairs is None:
+        pairs = [SimpleNamespace(first=g.previous_module, second=g)
+                 for g in getattr(m, "_growable_layers", [])]
+    for i, pr in enumerate(pairs):
         for side in ("first", "second"):
             w = getattr(pr, side).layer.weight
             st = net.optimizer_.state.get(w, {})
