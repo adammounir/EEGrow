@@ -120,8 +120,18 @@ def grow_step(model, train_loader, device, *, val_loader=None,
               max_added: int | None = None,
               min_singular_ratio: float = MIN_SINGULAR_RATIO,
               scaling_grid=SCALING_GRID, normalization: str | None = None,
-              select: str = "first", split_half: bool = False) -> dict:
+              select: str = "first", split_half: bool = False,
+              fixed_s: float | None = None, rescale: bool = False) -> dict:
     """One gromo growth: stats -> optimal update -> line search -> apply_change.
+
+    Two controls for the 20/10 attribution campaign, both off by default (historical):
+    ``fixed_s`` applies that amplitude on every step, whatever the line search says
+    (its losses are still recorded) -- a dose that the data cannot choose. ``rescale``
+    restores, after ``apply_change``, each output channel of the growing layer to its
+    pre-growth norm and compensates the following BatchNorm's running statistics
+    (``model.post_growth_norm``), so the network computes the same function with the
+    pre-growth weight scale: it separates the *direction* a step writes from the
+    *scale* it leaves behind.
 
     ``select="first"`` (default, every historical arm) grows ``_growable_layers[0]``.
     ``select="best"`` is for a :class:`MultiJunctionGrowingModel`: candidates on every
@@ -222,7 +232,11 @@ def grow_step(model, train_loader, device, *, val_loader=None,
     grid = tuple(float(v) for v in scaling_grid)
     if 0.0 not in grid or list(grid) != sorted(grid):
         raise ValueError(f"scaling_grid must be increasing and contain 0.0, got {grid}")
+    if fixed_s is not None and not float(fixed_s) > 0.0:
+        raise ValueError(f"fixed_s must be > 0 (s=0 is an abstention), got {fixed_s}")
     if select in ("best", "sequential"):
+        if fixed_s is not None or rescale:
+            raise ValueError("fixed_s / rescale are single-junction controls (select='first')")
         if split_half and select != "best":
             raise ValueError("split_half compares argmaxes: it needs select='best'")
         return _grow_step_best(model, train_loader, device, val_loader=val_loader,
@@ -284,6 +298,13 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         losses[s] = float(loss)
         if loss < best_loss:
             best_loss, best_s = loss, s
+    ls_s = best_s
+    if fixed_s is not None:
+        best_s = float(fixed_s)
+        model.set_scaling_factor(best_s)
+        best_loss, _ = evaluate_model(model, select_loader, crit_mean,
+                                      use_extended_model=True, device=device)
+    rescale_factors = None
     if best_s == 0.0:
         # Abstain -- see Notes. `delete_update` is exactly the cleanup gromo's own
         # `apply_change` runs after applying (growing_container.py), so the model is
@@ -292,9 +313,15 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         layer.delete_update()
         model.currently_updated_layer_index = None
     else:
+        norms_before = _out_channel_norms(layer.layer.weight) if rescale else None
         model.set_scaling_factor(best_s)
         model.apply_change()
+        if rescale:
+            rescale_factors = _restore_out_channel_norms(model, layer, norms_before)
     return {
+        "fixed_s": None if fixed_s is None else float(fixed_s),
+        "line_search_s": ls_s,
+        "rescale_factors": rescale_factors,
         "s": best_s,
         "applied": best_s != 0.0,
         "select_loss": float(best_loss),
@@ -311,6 +338,32 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         "eig_proposed": eig_proposed,
         **diag,
     }
+
+
+def _out_channel_norms(w: torch.Tensor) -> torch.Tensor:
+    """L2 norm of each output channel (dim 0) of a weight tensor."""
+    return w.detach().flatten(1).norm(dim=1)
+
+
+@torch.no_grad()
+def _restore_out_channel_norms(model, layer, norms_before: torch.Tensor) -> list[float]:
+    """Scale each output channel of ``layer`` back to ``norms_before`` and compensate
+    the BatchNorm that follows it, so the function is unchanged in both train mode
+    (batch statistics are scale-free) and eval mode (running mean x c, var x c^2).
+    Refuses a layer with a bias or a model without ``post_growth_norm``: then the
+    rescaling would change the function and the control would measure something else."""
+    bn = getattr(model, "post_growth_norm", None)
+    if not isinstance(bn, torch.nn.modules.batchnorm._BatchNorm):
+        raise ValueError("rescale needs model.post_growth_norm, the BatchNorm right after "
+                         "the growing layer")
+    if getattr(layer.layer, "bias", None) is not None:
+        raise ValueError("rescale assumes a bias-free growing layer (BatchNorm after it)")
+    w = layer.layer.weight
+    c = norms_before.to(w.device) / _out_channel_norms(w).clamp_min(1e-30)
+    w.mul_(c.view(-1, *([1] * (w.dim() - 1))))
+    bn.running_mean.mul_(c)
+    bn.running_var.mul_(c * c)
+    return [float(x) for x in c.cpu()]
 
 
 def _dump_failed_statistics(model) -> None:

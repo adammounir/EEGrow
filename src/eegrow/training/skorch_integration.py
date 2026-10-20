@@ -59,15 +59,27 @@ def _debug_params(net, epoch, tag) -> None:
     if pairs is None:
         pairs = [SimpleNamespace(first=g.previous_module, second=g)
                  for g in getattr(m, "_growable_layers", [])]
+    # Relative step since the previous call, ||w - w_prev|| / ||w_prev||: does a layer
+    # still learn after a growth (20/10: is conv_spat frozen once its scale explodes?).
+    # Only between two calls on the same shape; "du=na" across a growth.
+    prev = getattr(m, "_dbg_prev_w", {})
     for i, pr in enumerate(pairs):
         for side in ("first", "second"):
             w = getattr(pr, side).layer.weight
             st = net.optimizer_.state.get(w, {})
             v = st.get("exp_avg_sq")
+            wd = w.detach().float()
+            key = f"j{i}{side[0]}"
+            p = prev.get(key)
+            du = (f"{float((wd - p).norm() / p.norm().clamp_min(1e-30)):.3g}"
+                  if p is not None and p.shape == wd.shape else "na")
+            prev[key] = wd.clone()
             parts.append(f"j{i}{side[0]} {tuple(w.shape)} |w|={float(w.detach().abs().max()):.3g}"
+                         f" fro={float(wd.norm()):.3g} du={du}"
                          f" fin={bool(torch.isfinite(w).all())}"
                          + (f" v=[{float(v.min()):.2g},{float(v.max()):.2g}]"
                             if v is not None else " v=none"))
+    m._dbg_prev_w = prev
     print(f"[dbg] ep={epoch} {tag} loss={loss} finite={fin} absmax={amax:.3g} | "
           + " ; ".join(parts), flush=True)
 
@@ -149,6 +161,7 @@ class GromoGrowth(Callback):
                  min_singular_ratio: float = MIN_SINGULAR_RATIO,
                  scaling_grid=None, normalization: str | None = None,
                  select: str = "first", split_half: bool = False,
+                 fixed_s: float | None = None, rescale: bool = False,
                  verbose: bool = True):
         self.grow_every = grow_every
         self.growth_device = growth_device
@@ -171,6 +184,9 @@ class GromoGrowth(Callback):
             raise ValueError("split_half needs select='best'")
         self.select = select
         self.split_half = split_half
+        # 20/10 attribution controls (loop.grow_step); None/False = historical.
+        self.fixed_s = fixed_s
+        self.rescale = rescale
         self.verbose = verbose
         self.done_ = False
 
@@ -256,7 +272,8 @@ class GromoGrowth(Callback):
                            scaling_grid=(SCALING_GRID if self.scaling_grid is None
                                          else self.scaling_grid),
                            normalization=self.normalization,
-                           select=self.select, split_half=self.split_half)
+                           select=self.select, split_half=self.split_half,
+                           fixed_s=self.fixed_s, rescale=self.rescale)
         result["holdout_kind"] = holdout_kind
         result["n_select"] = sum(len(b[1]) for b in (val_loader or stats_loader))
         if moved:
@@ -314,6 +331,12 @@ class GromoGrowth(Callback):
             record("grow_holdout", result["holdout_kind"])
             record("grow_n_select", result["n_select"])
         record("grow_normalization", result.get("normalization"))
+        # 20/10 controls: with a fixed dose, `grow_s` is the dose and
+        # `grow_ls_s` what the line search would have picked.
+        if result.get("fixed_s") is not None:
+            record("grow_ls_s", result["line_search_s"])
+        if result.get("rescale_factors") is not None:
+            record("grow_rescale", result["rescale_factors"])
         record("grow_applied", bool(result["applied"]))
         record("grow_width_after", result["width_after"])
         record("grow_n_proposed", result["n_proposed"])

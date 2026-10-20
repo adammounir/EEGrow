@@ -224,7 +224,7 @@ class FitRecorder(Callback):
                   "grow_first_order_improvement", "grow_eig_sum",
                   "grow_select_loss", "grow_losses", "grow_param_update_decrease",
                   "grow_eig_proposed", "grow_eig_kept", "grow_holdout", "grow_n_select",
-                  "grow_normalization",
+                  "grow_normalization", "grow_ls_s", "grow_rescale",
                   "grow_junction", "grow_junction_argmax", "grow_junction_foi", "grow_junction_ids",
                   "grow_junction_n_proposed", "grow_junction_n_kept",
                   "grow_junction_widths_after", "grow_split_a", "grow_split_b",

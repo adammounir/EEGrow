@@ -50,7 +50,7 @@ case "$ARM" in grow_*)
       echo "REFUSED: growing arm $ARM without GRID/NORM (avenant 2)"; exit 1; fi
   fi;;
 esac
-echo "  grid=${GRID:-default} norm=${NORM:-default}"
+echo "  grid=${GRID:-default} norm=${NORM:-default} fixed_s=${FIXED_S:-null} rescale=${RESCALE:-false}"
 echo "[$(date)] task=$SLURM_ARRAY_TASK_ID restart=${SLURM_RESTART_COUNT:-0} node=$(hostname) sha=$EEGROW_SHA"
 echo "  arm=$ARM candidate=$CAND lr=$LR wd=$WD seed=$SEED dataset=$DS"
 GOT="$(nvidia-smi --query-gpu=name --format=csv,noheader | sed -n 1p)"
@@ -81,6 +81,7 @@ python run_cell.py \
     train.restore_selected=false train.save_selected=true \
     train.growth_holdout=0.1 "train.scaling_grid=${GRID:-[0.0,0.25,0.5,1.0,2.0,4.0]}" \
     "train.growth_normalization=${NORM:-null}" \
+    "train.growth_fixed_s=${FIXED_S:-null}" "train.growth_rescale=${RESCALE:-false}" \
     train.lr_schedule=null "train.lr=$LR" "train.weight_decay=$WD" \
     "results_dir=$OUT/results"
 rc=$?

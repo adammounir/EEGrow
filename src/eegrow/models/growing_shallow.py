@@ -213,6 +213,12 @@ class GrowingShallowFBCSPNet(SequentialGrowingModel):
         """Width of the growable axis (= n_filters_time)."""
         return self.conv_time.out_channels
 
+    @property
+    def post_growth_norm(self) -> nn.Module:
+        """The BatchNorm right after the growing layer (conv_spat -> bnorm): the
+        ``rescale`` control of ``loop.grow_step`` compensates its running stats."""
+        return self.bnorm
+
     # ------------------------------------------------------------------ utils
     @torch.no_grad()
     def _infer_final_conv_length(self, n_chans: int, n_times: int) -> int:

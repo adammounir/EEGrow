@@ -128,6 +128,9 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
             # Per-arm, absent = "first" = every historical arm, unchanged.
             select=model_cfg.get("growth_select", "first"),
             split_half=bool(model_cfg.get("growth_split_half", False)),
+            # 20/10 attribution controls (loop.grow_step); null/false = historical.
+            fixed_s=train_cfg.get("growth_fixed_s"),
+            rescale=bool(train_cfg.get("growth_rescale") or False),
             verbose=False)))
     # ORDER IS THE CONTRACT HERE, and each position is load-bearing:
     #

@@ -108,6 +108,11 @@ train:
   # weights, ~1e-2 amplitude, and the line search stays linear in s (step 0,
   # addendum 1, RESULTAT_step0_training_battery.md). Exploratory until an addendum.
   growth_normalization: null
+  # 20/10 attribution controls (loop.grow_step): apply this s on every growth step
+  # whatever the line search says; restore the growing layer's per-channel norms after
+  # each step (function-preserving through the following BatchNorm). null/false = off.
+  growth_fixed_s: null
+  growth_rescale: false
   stop_monitor: valid_loss
   # Epochs without improvement on `stop_monitor` before the fit ends. null => the
   # historical max(15, max_epochs//10) = 20. Set it >= max_epochs to disable early
