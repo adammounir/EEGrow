@@ -54,11 +54,34 @@ def test_rescale_preserves_the_function_and_restores_the_norms(norm):
     torch.testing.assert_close(after, before, rtol=1e-5, atol=0)
     assert not torch.allclose(loop._out_channel_norms(a.conv_spat.layer.weight), before)
     x = _batches(seed=7, n=1)[0][0]
+
+    def out(m):  # same dropout mask for both networks in train mode
+        torch.manual_seed(11)
+        return m(x)
+
+    with torch.no_grad():
+        # Eval mode is exact whenever no channel needed the eps fallback.
+        if getattr(b, "_rescale_fallbacks", 0) == 0:
+            a.eval(); b.eval()
+            torch.testing.assert_close(out(b), out(a), rtol=1e-3, atol=1e-4)
+        # Train mode (where optimisation happens): batch statistics, eps negligible at
+        # the restored scale.
+        a.train(); b.train()
+        torch.testing.assert_close(out(b), out(a), rtol=1e-3, atol=1e-3)
+
+
+def test_rescale_eval_mode_is_exact_including_eps():
+    """Moderate dose (no fallback): the eval-mode function is preserved exactly."""
+    a = _model()
+    b = copy.deepcopy(a)
+    kw = dict(min_singular_ratio=0.1, normalization="match_extending_layer", fixed_s=1.0)
+    loop.grow_step(a, _batches(), DEVICE, **kw)
+    loop.grow_step(b, _batches(), DEVICE, rescale=True, **kw)
+    assert getattr(b, "_rescale_fallbacks", 0) == 0
+    x = _batches(seed=7, n=1)[0][0]
     with torch.no_grad():
         a.eval(); b.eval()
-        torch.testing.assert_close(b(x), a(x), rtol=1e-3, atol=1e-4)
-        a.train(); b.train()
-        torch.testing.assert_close(b(x), a(x), rtol=1e-3, atol=1e-4)
+        torch.testing.assert_close(b(x), a(x), rtol=1e-4, atol=1e-5)
 
 
 def test_fixed_s_overrides_the_line_search_and_records_it():

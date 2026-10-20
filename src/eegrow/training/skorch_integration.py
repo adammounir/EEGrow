@@ -337,6 +337,7 @@ class GromoGrowth(Callback):
             record("grow_ls_s", result["line_search_s"])
         if result.get("rescale_factors") is not None:
             record("grow_rescale", result["rescale_factors"])
+            record("grow_rescale_fallbacks", result["rescale_fallbacks"])
         record("grow_applied", bool(result["applied"]))
         record("grow_width_after", result["width_after"])
         record("grow_n_proposed", result["n_proposed"])

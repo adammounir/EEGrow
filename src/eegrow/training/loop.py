@@ -322,6 +322,7 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         "fixed_s": None if fixed_s is None else float(fixed_s),
         "line_search_s": ls_s,
         "rescale_factors": rescale_factors,
+        "rescale_fallbacks": (getattr(model, "_rescale_fallbacks", 0) if rescale else None),
         "s": best_s,
         "applied": best_s != 0.0,
         "select_loss": float(best_loss),
@@ -362,7 +363,17 @@ def _restore_out_channel_norms(model, layer, norms_before: torch.Tensor) -> list
     c = norms_before.to(w.device) / _out_channel_norms(w).clamp_min(1e-30)
     w.mul_(c.view(-1, *([1] * (w.dim() - 1))))
     bn.running_mean.mul_(c)
-    bn.running_var.mul_(c * c)
+    # Eval mode, exact including eps: sqrt(var' + eps) = c * sqrt(var + eps). When that
+    # would go negative (c^2 (var + eps) < eps) no running variance can reproduce it --
+    # eps does not scale with the weights -- and we fall back to the naive var * c^2.
+    # Train mode (batch statistics) is exact up to eps at the restored scale, which is
+    # the scale the net trained at before the step; the running stats are re-estimated
+    # within a few batches anyway (momentum). `model._rescale_fallbacks` counts them.
+    exact = c * c * (bn.running_var + bn.eps) - bn.eps
+    naive = c * c * bn.running_var
+    fb = exact < 0
+    bn.running_var.copy_(torch.where(fb, naive, exact))
+    model._rescale_fallbacks = getattr(model, "_rescale_fallbacks", 0) + int(fb.sum())
     return [float(x) for x in c.cpu()]
 
 
