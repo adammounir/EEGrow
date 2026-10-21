@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from eegrow.models.growing_bd_junctions import (GrowingContraWR, GrowingCTNet,
-                                                GrowingEEGConformer, GrowingEEGNeXJunction,
+                                                GrowingCTNetAll, GrowingEEGConformer,
+                                                GrowingEEGConformerAll, GrowingEEGNeXJunction,
                                                 GrowingMSVTNet, GrowingMSVTNetAll,
                                                 GrowingTIDNet)
 from eegrow.models.growing_deep4 import GrowingDeep4Net
@@ -22,5 +23,7 @@ __all__ = [
     "GrowingCTNet",
     "GrowingMSVTNet",
     "GrowingMSVTNetAll",
+    "GrowingEEGConformerAll",
+    "GrowingCTNetAll",
     "GrowingEEGNeXJunction",
 ]

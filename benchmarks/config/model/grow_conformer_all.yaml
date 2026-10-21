@@ -1,0 +1,11 @@
+# EEGConformer with the FFN of EVERY transformer block growable (GrowingEEGConformerAll,
+# lecture a): hidden 16 -> 160 each = braindecode's width, so at target the net IS
+# bd_conformer. One junction per step via gromo select_best_update. Validation 21/10.
+kind: growing
+arch: GrowingEEGConformerAll
+label: grow_conformer_all
+needs_sfreq: false
+grow_every: 5
+growth_select: best
+module_kwargs:
+  start_width: 16

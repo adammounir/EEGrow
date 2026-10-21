@@ -1,0 +1,6 @@
+# braindecode reference: CTNet with its published defaults (twin of grow_ctnet_all).
+kind: bd
+arch: CTNet
+label: bd_ctnet
+needs_sfreq: false
+module_kwargs: {}

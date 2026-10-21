@@ -1,0 +1,13 @@
+# EEGNeX with its junction 2 (block_4 -> BN -> block_5, hidden 32) growable IN PLACE
+# (GrowingEEGNeXJunction): every other width and the fixed tail are braindecode's, so
+# at target the net IS bd_eegnex. Not grow_eegnex (historical, grows filter_1 and
+# resizes the tail, memory eegnex-width-mismatch). Validation campaign 21/10.
+# Start width 4: GrowingEEGNeXJunction's default.
+kind: growing
+arch: GrowingEEGNeXJunction
+label: grow_eegnex_j2
+needs_sfreq: false
+grow_every: 5
+module_kwargs:
+  junction: 2
+  start_width: 4

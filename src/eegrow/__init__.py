@@ -11,7 +11,8 @@ from __future__ import annotations
 from eegrow.alignment import euclidean_align
 from eegrow.convert import GrowableSequential, make_growable
 from eegrow.models.growing_bd_junctions import (GrowingContraWR, GrowingCTNet,
-                                                GrowingEEGConformer, GrowingEEGNeXJunction,
+                                                GrowingCTNetAll, GrowingEEGConformer,
+                                                GrowingEEGConformerAll, GrowingEEGNeXJunction,
                                                 GrowingMSVTNet, GrowingMSVTNetAll,
                                                 GrowingTIDNet)
 from eegrow.models.growing_deep4 import GrowingDeep4Net

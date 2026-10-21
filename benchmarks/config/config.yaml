@@ -113,6 +113,12 @@ train:
   # each step (function-preserving through the following BatchNorm). null/false = off.
   growth_fixed_s: null
   growth_rescale: false
+  # Model recipe (validation campaign 21/10, CATALOGUE § 5): adamw|adam, [b1, b2] or
+  # null (torch default), amsgrad. Defaults = every historical cell. growth_normalization
+  # also takes "tiny_paper" (TINY App. E.3.1, needs growth_fixed_s: 1.0 = the paper).
+  optimizer: adamw
+  betas: null
+  amsgrad: false
   stop_monitor: valid_loss
   # Epochs without improvement on `stop_monitor` before the fit ends. null => the
   # historical max(15, max_epochs//10) = 20. Set it >= max_epochs to disable early

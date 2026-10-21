@@ -369,6 +369,75 @@ class GrowingMSVTNetAll(MultiJunctionGrowingModel):
         return self
 
 
+class _FFNAll(MultiJunctionGrowingModel):
+    """Every ``Linear -> act -> Dropout -> Linear`` FFN of a transformer growable.
+
+    Lecture (a) of étape 1, as :class:`GrowingMSVTNetAll`: one junction per transformer
+    layer, each replaced exactly as in the single-junction class, ONE growing per step
+    (``loop.grow_step(select="best")``). Subclasses name where the FFNs live
+    (``_holders``: ``(parent, index, state_dict prefix)`` per layer).
+    """
+
+    def _build(self, start_width, target_width) -> None:
+        pairs, targets = [], []
+        for i, (parent, idx, _) in enumerate(self._holders()):
+            lin1, act, drop, lin2 = parent[idx]
+            target = lin1.out_features if target_width is None else target_width
+            pair = _linear_pair(lin1, lin2, nn.Sequential(act, drop), start=start_width,
+                                target=target, device=self.device, name=f"ffn{i}")
+            parent[idx] = pair
+            pairs.append(pair)
+            targets.append(target)
+        self._finish_multi(pairs, start=start_width, targets=targets)
+
+    @torch.no_grad()
+    def load_braindecode_weights(self, bd):
+        own = dict(bd.state_dict())
+        for pair, (_, _, pre) in zip(self.pairs, self._holders()):
+            for dst, key in ((pair.first, "0"), (pair.second, "3")):
+                dst.layer.weight.copy_(own.pop(f"{pre}{key}.weight"))
+                if f"{pre}{key}.bias" in own:
+                    dst.layer.bias.copy_(own.pop(f"{pre}{key}.bias"))
+        missing, unexpected = self.net.load_state_dict(own, strict=False)
+        assert not unexpected, unexpected
+        assert all(".first." in k or ".second." in k for k in missing), missing
+        return self
+
+
+class GrowingEEGConformerAll(_FFNAll):
+    """braindecode EEGConformer with the FFN of EVERY transformer block growable
+    (``transformer[i][1].fn[1]``, hidden 4 x emb = 160 each, as :class:`GrowingEEGConformer`)."""
+
+    def __init__(self, n_chans: int, n_outputs: int, n_times: int, *,
+                 start_width: int = 16, target_width: int | None = None, device=None,
+                 **bd_kwargs) -> None:
+        super().__init__(in_features=n_chans, out_features=n_outputs, device=device)
+        self.net = EEGConformer(n_chans=n_chans, n_outputs=n_outputs, n_times=n_times,
+                                **bd_kwargs)
+        self._build(start_width, target_width)
+
+    def _holders(self):
+        return [(blk[1].fn, 1, f"transformer.{i}.1.fn.1.")
+                for i, blk in enumerate(self.net.transformer)]
+
+
+class GrowingCTNetAll(_FFNAll):
+    """braindecode CTNet with the FFN of EVERY transformer layer growable
+    (``trans.layers[i].feed_forward.module[0]``, hidden 160 each, as :class:`GrowingCTNet`)."""
+
+    def __init__(self, n_chans: int, n_outputs: int, n_times: int, *,
+                 start_width: int = 16, target_width: int | None = None, device=None,
+                 **bd_kwargs) -> None:
+        super().__init__(in_features=n_chans, out_features=n_outputs, device=device)
+        self.net = CTNet(n_chans=n_chans, n_outputs=n_outputs, n_times=n_times,
+                         **bd_kwargs)
+        self._build(start_width, target_width)
+
+    def _holders(self):
+        return [(lay.feed_forward.module, 0, f"trans.layers.{i}.feed_forward.module.0.")
+                for i, lay in enumerate(self.net.trans.layers)]
+
+
 class GrowingEEGNeXJunction(JunctionGrowingModel):
     """braindecode EEGNeX with one of its two conv -> BN -> conv junctions growable.
 

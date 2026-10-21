@@ -108,6 +108,17 @@ SCALING_GRID = (0.0, 0.1, 0.5, 1.0)
 #: on > 20 % of applied steps => refused) can actually be met. Decided 13/10.
 WIDE_SCALING_GRID = (0.0, 0.25, 0.5, 1.0, 2.0, 4.0)
 
+#: ``normalization="tiny_paper"``: the amplitude of the TINY paper's training protocol
+#: (Verbockhaven et al., TMLR 2024, arXiv 2405.19816). Algorithm 1 (the protocol of
+#: Fig. 5-6 and Table 1) is NewNeurons -> "Normalize according to E.3" -> add the
+#: neurons -> train; App. E.3.1 eq. (197)-(198) sets the incoming (alpha) and outgoing
+#: (omega) weights of the K new neurons to a mean squared norm per neuron of 1e-3:
+#: ``alpha_k <- alpha_k * sqrt(1e-3 / (||(alpha_j)_j||^2 / K))``, same for omega. No
+#: line search (the gamma* search of App. E.3.2 is Fig. 8, a run WITHOUT any gradient
+#: descent), and no best-update step on the existing weights (Algorithm 1 adds neurons
+#: only). Read 21/10/2026 in the PDF; nothing here is inferred.
+TINY_PAPER_SQ_NORM = 1e-3
+
 
 #: Keep a candidate neuron when its singular value is at least this fraction of the
 #: largest one. Replaces gromo's ``statistical_threshold``, which is an ABSOLUTE cut
@@ -234,15 +245,19 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         raise ValueError(f"scaling_grid must be increasing and contain 0.0, got {grid}")
     if fixed_s is not None and not float(fixed_s) > 0.0:
         raise ValueError(f"fixed_s must be > 0 (s=0 is an abstention), got {fixed_s}")
+    if normalization == "tiny_paper" and fixed_s is None:
+        # The paper's amplitude is the normalisation itself; a line search on top would
+        # be a different method (see TINY_PAPER_SQ_NORM). fixed_s=1 is the paper.
+        raise ValueError("normalization='tiny_paper' needs fixed_s (1.0 = the paper)")
     if select in ("best", "sequential"):
-        if fixed_s is not None or rescale:
-            raise ValueError("fixed_s / rescale are single-junction controls (select='first')")
+        if rescale:
+            raise ValueError("rescale is a single-junction control (select='first')")
         if split_half and select != "best":
             raise ValueError("split_half compares argmaxes: it needs select='best'")
         return _grow_step_best(model, train_loader, device, val_loader=val_loader,
                                min_singular_ratio=min_singular_ratio, grid=grid,
                                normalization=normalization, split_half=split_half,
-                               sequential=select == "sequential")
+                               sequential=select == "sequential", fixed_s=fixed_s)
     if select != "first":
         raise ValueError(f"select must be 'first', 'best' or 'sequential', got {select!r}")
     if split_half:
@@ -282,7 +297,7 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         # (step 0, addendum 1: s = 4 wins 81-99 % of steps, loss linear in s). gromo's
         # own normalisation rescales each component to the std of the layer it extends
         # BEFORE the line search, so `s` becomes a relative amplitude. None = historical.
-        layer.normalize_optimal_updates(normalization_type=normalization)
+        _normalize(layer, normalization)
     # Read the two diagnostics off the layer NOW: `apply_change`/`delete_update` both
     # clear them, so after the branch below there is nothing left to record.
     diag = _update_diagnostics(layer)
@@ -316,6 +331,7 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         norms_before = _out_channel_norms(layer.layer.weight) if rescale else None
         model.set_scaling_factor(best_s)
         model.apply_change()
+        _fix_conv_statistic_shapes(model)
         if rescale:
             rescale_factors = _restore_out_channel_norms(model, layer, norms_before)
     return {
@@ -339,6 +355,82 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         "eig_proposed": eig_proposed,
         **diag,
     }
+
+
+def _fix_conv_statistic_shapes(model) -> int:
+    """Repair the S/M statistics gromo re-creates with the wrong size after a growth.
+
+    gromo ``Conv2dGrowingModule.layer_in_extension`` (conv2d_growing_module.py l. 1166-1186,
+    commits b1ffd4d and 88c20ee) re-creates ``tensor_s``/``tensor_m`` with
+    ``(in_channels + use_bias) * kh * kw`` rows, while every update (and the same class's
+    own ``update_input_size``, l. 594-600) is ``in_channels * kh * kw + use_bias``. The two
+    agree only without bias or with a 1x1 kernel, so a conv WITH bias and a kernel > 1x1
+    (TIDNet's Conv(5, 1)) dies on its SECOND growth step: "The update tensor has a
+    different size than the tensor statistic" (smoke 802688, 21/10/2026). The statistics
+    are empty right after the extension, so re-creating them at the right size changes
+    nothing else. Returns how many were repaired."""
+    from gromo.modules.conv2d_growing_module import Conv2dGrowingModule
+    from gromo.utils.tensor_statistic import TensorStatistic
+    fixed = 0
+    for mod in model.modules():
+        if not isinstance(mod, Conv2dGrowingModule) or not mod.use_bias:
+            continue
+        n = mod.in_channels * mod.layer.kernel_size[0] * mod.layer.kernel_size[1] + 1
+        s = getattr(mod, "_tensor_s", None)
+        if s is not None and s._shape is not None and s._shape != (n, n):
+            if s.samples:
+                raise RuntimeError(f"{s.name} holds {s.samples} samples at a wrong shape")
+            mod._tensor_s = TensorStatistic((n, n), update_function=mod.compute_s_update,
+                                            name=s.name)
+            fixed += 1
+        m = getattr(mod, "tensor_m", None)
+        if m is not None and m._shape is not None and m._shape != (n, mod.out_channels):
+            if m.samples:
+                raise RuntimeError(f"{m.name} holds {m.samples} samples at a wrong shape")
+            mod.tensor_m = TensorStatistic((n, mod.out_channels),
+                                           update_function=mod.compute_m_update, name=m.name)
+            fixed += 1
+    return fixed
+
+
+def _normalize(layer, normalization: str) -> None:
+    """gromo's ``normalize_optimal_updates``, or the TINY paper's amplitude."""
+    if normalization == "tiny_paper":
+        _tiny_paper_normalize(layer)
+    else:
+        layer.normalize_optimal_updates(normalization_type=normalization)
+
+
+@torch.no_grad()
+def _tiny_paper_normalize(layer, sq_norm: float = TINY_PAPER_SQ_NORM) -> None:
+    """TINY App. E.3.1 eq. (197)-(198) on the pending candidates of ``layer``, and the
+    best update zeroed (Algorithm 1 adds neurons only) -- see ``TINY_PAPER_SQ_NORM``.
+
+    omega = ``layer.extended_input_layer`` (new input columns of the second layer, one
+    neuron per index of dim 1), alpha = ``layer.previous_module.extended_output_layer``
+    (new output rows of the first layer, one neuron per index of dim 0, its bias
+    included: it is part of the neuron's incoming weights). Each is rescaled so that
+    ``||.||^2 / K = sq_norm``; with ``fixed_s=1`` gromo then splices them in as is."""
+    omega = layer.extended_input_layer
+    alpha = layer.previous_module.extended_output_layer
+    if omega is None or alpha is None:
+        raise ValueError("tiny_paper normalisation needs pending candidate neurons")
+    k = int(omega.weight.shape[1])
+    if int(alpha.weight.shape[0]) != k:
+        raise ValueError(f"alpha has {alpha.weight.shape[0]} neurons, omega {k}")
+    for lin, tensors in ((omega, [omega.weight]),
+                         (alpha, [alpha.weight] + ([alpha.bias] if alpha.bias is not None
+                                                   else []))):
+        sq = sum(float(t.double().pow(2).sum()) for t in tensors)
+        if not sq > 0:
+            raise ValueError("a candidate extension is identically zero: nothing to scale")
+        c = (sq_norm / (sq / k)) ** 0.5
+        for t in tensors:
+            t.mul_(c)
+    if layer.optimal_delta_layer is not None:
+        layer.optimal_delta_layer.weight.zero_()
+        if layer.optimal_delta_layer.bias is not None:
+            layer.optimal_delta_layer.bias.zero_()
 
 
 def _out_channel_norms(w: torch.Tensor) -> torch.Tensor:
@@ -476,7 +568,8 @@ def _argmax_junction(per: list) -> int:
 
 
 def _grow_step_best(model, train_loader, device, *, val_loader, min_singular_ratio,
-                    grid, normalization, split_half, sequential=False) -> dict:
+                    grid, normalization, split_half, sequential=False,
+                    fixed_s: float | None = None) -> dict:
     """``grow_step`` for several junctions: gromo's ``select_best_update``.
 
     1. candidates on every junction still under its target (:func:`_junction_candidates`);
@@ -534,7 +627,7 @@ def _grow_step_best(model, train_loader, device, *, val_loader, min_singular_rat
             raise RuntimeError(f"select_best_update chose {idx}, argmax is {expected}")
     layer = model.currently_updated_layer
     if normalization is not None:
-        layer.normalize_optimal_updates(normalization_type=normalization)
+        _normalize(layer, normalization)
     diag = _update_diagnostics(layer)
     select_loader = batches if val_loader is None else val_loader
     best_loss, best_s = float("inf"), 0.0
@@ -546,6 +639,14 @@ def _grow_step_best(model, train_loader, device, *, val_loader, min_singular_rat
         losses[s] = float(loss)
         if loss < best_loss:
             best_loss, best_s = loss, s
+    ls_s = best_s
+    if fixed_s is not None:
+        # Same contract as the single-junction path: the line search is still run and
+        # recorded (`line_search_s`), the applied amplitude is the imposed one.
+        best_s = float(fixed_s)
+        model.set_scaling_factor(best_s)
+        best_loss, _ = evaluate_model(model, select_loader, crit_mean,
+                                      use_extended_model=True, device=device)
     if best_s == 0.0:
         model.set_scaling_factor(0.0)
         layer.delete_update()
@@ -553,9 +654,12 @@ def _grow_step_best(model, train_loader, device, *, val_loader, min_singular_rat
     else:
         model.set_scaling_factor(best_s)
         model.apply_change()
+        _fix_conv_statistic_shapes(model)
     model.refresh_growable()
     chosen = per[idx]
     return {
+        "fixed_s": None if fixed_s is None else float(fixed_s),
+        "line_search_s": ls_s,
         "s": best_s,
         "applied": best_s != 0.0,
         "select_loss": float(best_loss),

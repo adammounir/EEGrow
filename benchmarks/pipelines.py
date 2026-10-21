@@ -264,11 +264,28 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
                       monitor=stop_monitor,
                       lower_is_better=stop_monitor.endswith("loss")))
 
+    # Optimiser of each model's own recipe (CATALOGUE_growable_models.md § 5, read in the
+    # official repositories): Adam vs AdamW (TIDNet's wd 0.01 is a COUPLED L2 under Adam),
+    # betas (Conformer/CTNet: 0.5), amsgrad (TIDNet). null/absent = AdamW, torch betas,
+    # no amsgrad = every historical cell, unchanged. skorch re-applies these kwargs when
+    # GromoGrowth rebuilds the optimizer, so they survive every growth step.
+    opt_name = str(train_cfg.get("optimizer") or "adamw")
+    if opt_name not in ("adamw", "adam"):
+        raise ValueError(f"train.optimizer must be adamw|adam, got {opt_name!r}")
+    opt_extra = {}
+    if train_cfg.get("betas") is not None:
+        b = [float(v) for v in train_cfg["betas"]]
+        if len(b) != 2:
+            raise ValueError(f"train.betas needs two values, got {b}")
+        opt_extra["optimizer__betas"] = tuple(b)
+    if train_cfg.get("amsgrad"):
+        opt_extra["optimizer__amsgrad"] = True
     clf = EEGClassifier(
         module=module,
         **module_params,
+        **opt_extra,
         criterion=torch.nn.CrossEntropyLoss,  # bd 1.x + eegrow models output logits
-        optimizer=torch.optim.AdamW,
+        optimizer=torch.optim.AdamW if opt_name == "adamw" else torch.optim.Adam,
         optimizer__lr=float(train_cfg["lr"]),
         # Torch's default (1e-8), stated rather than inherited. It is the parameter
         # Stella's hypothesis is about, so it has to be settable to be testable at all
