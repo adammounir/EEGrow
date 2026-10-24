@@ -1,0 +1,144 @@
+cross_subject bd_conformer alexmi 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_conformer_all alexmi 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_ctnet alexmi 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_ctnet_all alexmi 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_msvtnet alexmi 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_msvtnet_all alexmi 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+cross_subject bd_tidnet alexmi 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60
+cross_subject grow_tidnet alexmi 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_eegnex alexmi 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128
+cross_subject grow_eegnex_j2 alexmi 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_shallow alexmi 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_shallow alexmi 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_conformer bnci2014_001 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_conformer_all bnci2014_001 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_ctnet bnci2014_001 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_ctnet_all bnci2014_001 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_msvtnet bnci2014_001 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_msvtnet_all bnci2014_001 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+cross_subject bd_tidnet bnci2014_001 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60
+cross_subject grow_tidnet bnci2014_001 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_eegnex bnci2014_001 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128
+cross_subject grow_eegnex_j2 bnci2014_001 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_shallow bnci2014_001 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_shallow bnci2014_001 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_conformer bnci2014_002 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_conformer_all bnci2014_002 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_ctnet bnci2014_002 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_ctnet_all bnci2014_002 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_msvtnet bnci2014_002 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_msvtnet_all bnci2014_002 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+cross_subject bd_tidnet bnci2014_002 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60
+cross_subject grow_tidnet bnci2014_002 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_eegnex bnci2014_002 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128
+cross_subject grow_eegnex_j2 bnci2014_002 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_shallow bnci2014_002 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_shallow bnci2014_002 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_conformer bnci2014_004 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_conformer_all bnci2014_004 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_ctnet bnci2014_004 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_ctnet_all bnci2014_004 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_msvtnet bnci2014_004 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_msvtnet_all bnci2014_004 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+cross_subject bd_tidnet bnci2014_004 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60
+cross_subject grow_tidnet bnci2014_004 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_eegnex bnci2014_004 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128
+cross_subject grow_eegnex_j2 bnci2014_004 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_shallow bnci2014_004 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_shallow bnci2014_004 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_conformer bnci2015_001 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_conformer_all bnci2015_001 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_ctnet bnci2015_001 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_ctnet_all bnci2015_001 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_msvtnet bnci2015_001 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_msvtnet_all bnci2015_001 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+cross_subject bd_tidnet bnci2015_001 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60
+cross_subject grow_tidnet bnci2015_001 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_eegnex bnci2015_001 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128
+cross_subject grow_eegnex_j2 bnci2015_001 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_shallow bnci2015_001 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_shallow bnci2015_001 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_conformer cho2017 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_conformer_all cho2017 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_ctnet cho2017 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_ctnet_all cho2017 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_msvtnet cho2017 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_msvtnet_all cho2017 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+cross_subject bd_tidnet cho2017 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60
+cross_subject grow_tidnet cho2017 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_eegnex cho2017 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128
+cross_subject grow_eegnex_j2 cho2017 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_shallow cho2017 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_shallow cho2017 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_conformer lee2019_mi 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_conformer_all lee2019_mi 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_ctnet lee2019_mi 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_ctnet_all lee2019_mi 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_msvtnet lee2019_mi 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_msvtnet_all lee2019_mi 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+cross_subject bd_tidnet lee2019_mi 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60
+cross_subject grow_tidnet lee2019_mi 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_eegnex lee2019_mi 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128
+cross_subject grow_eegnex_j2 lee2019_mi 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_shallow lee2019_mi 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_shallow lee2019_mi 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_conformer physionetmi 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_conformer_all physionetmi 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_ctnet physionetmi 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_ctnet_all physionetmi 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_msvtnet physionetmi 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_msvtnet_all physionetmi 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+cross_subject bd_tidnet physionetmi 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60
+cross_subject grow_tidnet physionetmi 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_eegnex physionetmi 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128
+cross_subject grow_eegnex_j2 physionetmi 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_shallow physionetmi 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_shallow physionetmi 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_conformer schirrmeister2017 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_conformer_all schirrmeister2017 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_ctnet schirrmeister2017 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_ctnet_all schirrmeister2017 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_msvtnet schirrmeister2017 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_msvtnet_all schirrmeister2017 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+cross_subject bd_tidnet schirrmeister2017 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60
+cross_subject grow_tidnet schirrmeister2017 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_eegnex schirrmeister2017 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128
+cross_subject grow_eegnex_j2 schirrmeister2017 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_shallow schirrmeister2017 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_shallow schirrmeister2017 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_conformer shin2017a 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_conformer_all shin2017a 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_ctnet shin2017a 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_ctnet_all shin2017a 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_msvtnet shin2017a 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_msvtnet_all shin2017a 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+cross_subject bd_tidnet shin2017a 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60
+cross_subject grow_tidnet shin2017a 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_eegnex shin2017a 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128
+cross_subject grow_eegnex_j2 shin2017a 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_shallow shin2017a 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_shallow shin2017a 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_conformer weibo2014 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_conformer_all weibo2014 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_ctnet weibo2014 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_ctnet_all weibo2014 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_msvtnet weibo2014 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_msvtnet_all weibo2014 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+cross_subject bd_tidnet weibo2014 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60
+cross_subject grow_tidnet weibo2014 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_eegnex weibo2014 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128
+cross_subject grow_eegnex_j2 weibo2014 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_shallow weibo2014 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_shallow weibo2014 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_conformer zhou2016 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_conformer_all zhou2016 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_ctnet zhou2016 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_ctnet_all zhou2016 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_msvtnet zhou2016 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_msvtnet_all zhou2016 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+cross_subject bd_tidnet zhou2016 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60
+cross_subject grow_tidnet zhou2016 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_eegnex zhou2016 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128
+cross_subject grow_eegnex_j2 zhou2016 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_shallow zhou2016 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_shallow zhou2016 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0

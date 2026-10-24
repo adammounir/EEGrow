@@ -1,0 +1,10 @@
+msvtnet__bd_e400 bd_msvtnet lee2019_mi 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+msvtnet__tiny_e400 grow_msvtnet_all lee2019_mi 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+msvtnet__bd_e400 bd_msvtnet cho2017 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+msvtnet__tiny_e400 grow_msvtnet_all cho2017 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+msvtnet__bd_e400 bd_msvtnet bnci2014_001 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+msvtnet__tiny_e400 grow_msvtnet_all bnci2014_001 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+msvtnet__bd_e400 bd_msvtnet bnci2014_001 1 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+msvtnet__tiny_e400 grow_msvtnet_all bnci2014_001 1 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+msvtnet__bd_e400 bd_msvtnet bnci2014_001 2 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+msvtnet__tiny_e400 grow_msvtnet_all bnci2014_001 2 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false

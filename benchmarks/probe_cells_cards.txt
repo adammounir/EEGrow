@@ -1,0 +1,12 @@
+cross_subject bd_conformer lee2019_mi 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_conformer_all lee2019_mi 0 train.optimizer=adam train.lr=2e-4 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_ctnet lee2019_mi 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72
+cross_subject grow_ctnet_all lee2019_mi 0 train.optimizer=adam train.lr=1e-3 train.betas=[0.5,0.999] train.weight_decay=0.0 train.batch_size=72 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_msvtnet lee2019_mi 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_msvtnet_all lee2019_mi 0 train.optimizer=adam train.lr=1e-3 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0 model.growth_split_half=false
+cross_subject bd_tidnet lee2019_mi 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60
+cross_subject grow_tidnet lee2019_mi 0 train.optimizer=adam train.amsgrad=true train.lr=1e-3 train.weight_decay=0.01 train.batch_size=60 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_eegnex lee2019_mi 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128
+cross_subject grow_eegnex_j2 lee2019_mi 0 train.optimizer=adam train.lr=1e-3 train.optimizer_eps=1e-7 train.weight_decay=0.0 train.batch_size=128 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
+cross_subject bd_shallow lee2019_mi 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64
+cross_subject grow_shallow lee2019_mi 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
