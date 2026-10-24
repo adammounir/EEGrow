@@ -70,6 +70,32 @@ Rapportés, sans valeur décisionnelle :
 - l'AUC des distances même sujet contre sujets différents ;
 - le nombre de fits exclus parce que la largeur sélectionnée vaut 8.
 
+## 7. Contrôles (avenant du 24/10, gelé avant leur lecture, `embed_controls.py`)
+
+Le critère principal est passé (+0.306 sur lee). Trois explications banales restent à
+exclure, toutes mesurées sur lee2019_mi par des contrastes top-1 appariés par sujet :
+
+- **(a) Nombre de neurones moyennés.** bd réduit, fit par fit, à un sous-ensemble
+  aléatoire de même taille que les neurones ajoutés du fit tiny apparié (même sujet,
+  même session, même cv_ind ; 20 tirages, `default_rng(seed)`).
+- **(b) Largeur à l'époque sélectionnée seule**, qui est un trait du sujet. Plus proche
+  voisin sur |Δ largeur|, avec les égalités tranchées au hasard.
+- **(c) Covariance de l'EEG brut**, avec le même prétraitement : paradigme, 8-32 Hz,
+  250 Hz, le même cache. On prend la moyenne log-euclidienne des covariances d'essais
+  normalisées par la trace, puis leur triangle supérieur. On mesure **cov+ajoutés − cov**.
+
+Verdicts :
+- (a) et (b) : **EMPREINTE NON TRIVIALE** si la borne basse est > 0 pour ajoutés − bd
+  apparié **et** pour ajoutés − largeur seule. Sinon, **EXPLIQUÉE PAR (a) OU (b)**.
+- (c) : **AU-DELÀ DE LA COVARIANCE** si la borne basse de cov+ajoutés − cov est > 0.
+  Sinon, **REDONDANTE AVEC LA COVARIANCE**.
+
+Lecture : la lecture 1 (une empreinte d'analyse nouvelle) n'a de contenu propre que si
+on obtient NON TRIVIALE et AU-DELÀ. Une empreinte redondante avec la covariance ne tue pas
+la lecture 2. Elle dit seulement que les neurones ajoutés encodent la statistique de
+second ordre des données du sujet, ce qui est cohérent avec la façon dont TINY les
+calcule.
+
 ## 6. Limites connues avant lecture
 
 - Les poids sont ceux de l'époque sélectionnée, pas de la dernière : la largeur varie
