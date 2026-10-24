@@ -92,7 +92,8 @@ def covariances(ds):
     if getattr(dataset, "_selected_sessions", None) is not None:
         dataset._selected_sessions = None  # same off-by-one fix as run_moabb_hydra
     paradigm = getattr(mpar, par)(fmin=8.0, fmax=32.0, resample=250.0)
-    cc = cache_config({"enabled": True, "path": "/scratch/amounir/moabb_cache"}) if cached else None
+    from omegaconf import OmegaConf
+    cc = cache_config(OmegaConf.create({"enabled": True, "path": "/scratch/amounir/moabb_cache"})) if cached else None
     emb = {}
     for subj in dataset.subject_list:
         X, _, meta = paradigm.get_data(dataset=dataset, subjects=[subj], **({"cache_config": cc} if cc else {}))
