@@ -72,8 +72,8 @@ def identify_scalar(emb):
     sessions = sorted({se for _, se in emb})
     subjects = [s for s in subjects if all((s, se) in emb for se in sessions)]
     n = len(subjects)
-    A = np.array([float(emb[(s, sessions[0])][0]) for s in subjects])
-    B = np.array([float(emb[(s, sessions[1])][0]) for s in subjects])
+    A = np.array([np.ravel(emb[(s, sessions[0])][0])[0] for s in subjects])
+    B = np.array([np.ravel(emb[(s, sessions[1])][0])[0] for s in subjects])
     C = -np.abs(A[:, None] - B[None, :])
     rng = np.random.default_rng(0)
     C = C + 1e-9 * rng.standard_normal(C.shape)  # break exact ties at random, not by index
