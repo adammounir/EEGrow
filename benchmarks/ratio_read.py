@@ -55,6 +55,8 @@ def widths(root, label, ds):
             bad += (any(not (isinstance(h.get(k), (int, float)) and math.isfinite(h[k]))
                         for h in r["history"] for k in ("train_loss", "valid_loss"))
                     or not (isinstance(g, (int, float)) and math.isfinite(g) and g <= SPIKE))
+            if r.get("width_end") is None or r.get("target_width") is None:
+                continue  # fixed arm: stability only, no width
             at += r["width_end"] >= r["target_width"]
             frac.append(r["width_end"] / r["target_width"])
     return {"n_fits": n, "unstable": bad, "at_target": at / n if n else None,
