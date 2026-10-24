@@ -219,7 +219,8 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
         from eegrow import FitRecorder
         callbacks.append(("record", FitRecorder(
             record_path, meta={"model": model_cfg.get("label"), "seed": seed},
-            save_selected=bool(train_cfg.get("save_selected", False)))))
+            save_selected=bool(train_cfg.get("save_selected", False)),
+            save_final=bool(train_cfg.get("save_final", False)))))
     # LR schedule, AFTER every instrumentation callback and before EarlyStopping.
     # The position is the same argument as `eps` above: `grad` and `eps` must describe
     # the optimizer that trained the epoch just finished, and stepping the scheduler

@@ -68,7 +68,7 @@ def _align_tag(cfg) -> str:
     return align_tag(cfg.align)
 
 
-def _make_evaluation(cfg, paradigm, dataset, hdf5_path, stamp=False):
+def _make_evaluation(cfg, paradigm, dataset, hdf5_path, stamp=False, only_subject=None):
     """Build the MOABB evaluation object named by ``cfg.eval.name``.
 
     ``stamp`` wraps the class so every fit record names its held-out subject (see
@@ -93,7 +93,9 @@ def _make_evaluation(cfg, paradigm, dataset, hdf5_path, stamp=False):
     cc = cache_config(cfg.get("cache"))
     if cc:
         common["cache_config"] = cc
-    wrap = stamped if stamp else (lambda c: c)
+    if only_subject is not None and not stamp:
+        raise ValueError("only_subject needs the stamped evaluation (deep arms only)")
+    wrap = (lambda c: stamped(c, only_subject)) if stamp else (lambda c: c)
     name = cfg.eval.name
     if name == "within_session":
         return wrap(mev.WithinSessionEvaluation)(
@@ -140,6 +142,18 @@ def main(cfg: DictConfig) -> pd.DataFrame:
         dcfg.get("kwargs")) or {}))
     if dcfg.get("subjects"):
         dataset.subject_list = list(dcfg.subjects)
+    only = cfg.get("only_subject")
+    if only is not None:
+        hit = [s for s in dataset.subject_list if str(s) == str(only)]
+        if len(hit) != 1:
+            raise ValueError(f"only_subject={only!r} is not a subject of {dcfg.name}")
+        if cfg.model.kind == "ml":
+            # The fold filter lives in the subject-stamp mixin, which the ML arms do
+            # not get (no fit records): refuse rather than run the whole dataset.
+            raise ValueError("only_subject is only supported for the deep arms")
+        if cfg.eval.name != "cross_subject":
+            # within/cross_session folds never mix subjects: load this one only.
+            dataset.subject_list = hit
 
     # MOABB 1.5.0 silently drops sessions on the Lee2019 family. BaseDataset.get_data
     # filters sessions with {str(s) for s in self._selected_sessions} -- {'1','2'} for
@@ -204,6 +218,8 @@ def main(cfg: DictConfig) -> pd.DataFrame:
     # untagged stem makes the second arm overwrite the first -- silently, and for the
     # fit records as well as for the results.
     stem = cell_stem(label, _align_tag(cfg), cfg.seed)
+    if only is not None:
+        stem = f"{stem}__subj{only}"
     # One JSONL per cell: this process is its only writer, so appends from the
     # successive folds cannot interleave. Deep arms only -- the ML pipelines have
     # neither epochs nor a width. See eegrow.training.recording for why the growth
@@ -218,8 +234,11 @@ def main(cfg: DictConfig) -> pd.DataFrame:
     logger.info("pipeline ready (device=%s)", device)
 
     # ---- evaluate ----------------------------------------------------------
-    evaluation = _make_evaluation(cfg, paradigm, dataset, out_dir,
-                                  stamp=record_path is not None)
+    # Per-job MOABB results dir when one subject per job: concurrent jobs of one cell
+    # would otherwise share (and corrupt) the same hdf5 results file.
+    hdf5_dir = out_dir if only is None else out_dir / "_moabb" / stem
+    evaluation = _make_evaluation(cfg, paradigm, dataset, hdf5_dir,
+                                  stamp=record_path is not None, only_subject=only)
     results = evaluation.process({label: pipeline})
 
     results["eval"] = cfg.eval.name

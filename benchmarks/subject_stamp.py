@@ -140,22 +140,41 @@ class _SubjectStampMixin:
                          pipelines, param_grid):
         tasks = super()._build_task_list(dataset, X, y, metadata, splitter,
                                          work_plan, pipelines, param_grid)
+        only = getattr(self, "only_subject_", None)
+        if only is not None:
+            # One fold per job (cross_subject) / one subject per job (within, cross
+            # session). Filtered HERE, after MOABB built the folds on the full subject
+            # list, so the training pool of a cross-subject fold is untouched. A filter
+            # that keeps nothing refuses: an empty job would write an empty CSV that
+            # looks like a finished cell.
+            tasks = [t for t in tasks if str(t["subject"]) == str(only)]
+            if not tasks:
+                raise RuntimeError(f"only_subject={only!r}: no MOABB task holds this subject out")
         for task in tasks:
             try:
                 stamp = {k: task[k] for k in STAMP_KEYS}
                 stamp["subject"] = str(stamp["subject"])
                 stamp["session"] = str(stamp["session"])
                 stamp["cv_ind"] = int(stamp["cv_ind"])
+                # What the fit was TRAINED on, read off the fold's own indices: the
+                # weight analyses (subject/session fingerprint, adaptation from a
+                # cross-subject model) need it, and it cannot be rebuilt from the
+                # protocol name alone once MOABB's splitter is not at hand.
+                tr = metadata.iloc[task["train_idx"]]
+                stamp["train_subjects"] = sorted({str(s) for s in tr["subject"]})
+                stamp["train_sessions"] = sorted({f"{s}:{se}" for s, se in zip(tr["subject"], tr["session"])})
                 task["pipeline"] = with_stamp(task["pipeline"], stamp)
             except Exception:  # pragma: no cover - never break a fit to label it
                 logger.warning("subject stamp: task left unstamped", exc_info=True)
         return tasks
 
 
-def stamped(eval_cls):
+def stamped(eval_cls, only_subject=None):
     """A subclass of ``eval_cls`` that stamps subjects into its fit records.
 
     Built on demand rather than declared at import time, so this module stays free of
-    a MOABB import for the callers that do not need one.
+    a MOABB import for the callers that do not need one. ``only_subject`` keeps only
+    the task(s) whose TEST subject it is (see ``_build_task_list``).
     """
-    return type(f"Stamped{eval_cls.__name__}", (_SubjectStampMixin, eval_cls), {})
+    return type(f"Stamped{eval_cls.__name__}", (_SubjectStampMixin, eval_cls),
+                {"only_subject_": only_subject})

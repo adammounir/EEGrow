@@ -165,6 +165,12 @@ class FitRecorder(Callback):
         the selected-epoch score recoverable offline when the net is scored at its
         last epoch; any such score is exploratory (the deep campaign's PREREG fixes
         the last epoch as the score). Default ``False``.
+    save_final : bool
+        Save the module as it ends training (the LAST epoch's weights, which are the
+        scored ones under ``restore_selected=false``) in ``<stem>__final/<fit_uid>.pt``,
+        same layout as ``save_selected``. The offline weight analyses (subject/session
+        fingerprint, campaign A) need the scored network, not the selected one: the
+        selected epoch varies per fit, and with it the width. Default ``False``.
 
     Notes
     -----
@@ -176,7 +182,8 @@ class FitRecorder(Callback):
     ``NeuralNet.partial_fit`` catches the interrupt and notifies it regardless.
     """
 
-    def __init__(self, path, meta: dict | None = None, save_selected: bool = False):
+    def __init__(self, path, meta: dict | None = None, save_selected: bool = False,
+                 save_final: bool = False):
         # Stored VERBATIM, not normalised. Two separate sklearn/skorch contracts bite
         # here, and MOABB clones the pipeline for every fold so both are exercised:
         #
@@ -192,6 +199,7 @@ class FitRecorder(Callback):
         self.path = path
         self.meta = meta
         self.save_selected = save_selected
+        self.save_final = save_final
         # Note this counter restarts at 0 on every clone, and MOABB clones per fold --
         # so it does NOT identify a fold across a cell's records. The reader
         # (analysis/growth_io.py) numbers folds by line order instead, which is exact
@@ -260,6 +268,18 @@ class FitRecorder(Callback):
                         "meta": self.meta}, selected_path)
         if state is not None:
             net.selected_state_ = None  # release the copy either way
+        final_path = None
+        if self.save_final:
+            import torch
+            folder = Path(self.path).with_name(Path(self.path).stem + "__final")
+            folder.mkdir(parents=True, exist_ok=True)
+            final_path = folder / f"{fit_uid}.pt"
+            torch.save({"state_dict": {k: v.detach().cpu() for k, v in net.module_.state_dict().items()},
+                        "growable_width": getattr(net.module_, "growable_width", None),
+                        "junction_widths": getattr(net.module_, "junction_widths", None),
+                        "epoch": net.history[-1]["epoch"] if len(net.history) else None,
+                        "train_fingerprint": self.fingerprint_,
+                        "meta": self.meta}, final_path)
         record = {
             **(self.meta or {}),
             "fit": self.fit_idx_,
@@ -289,6 +309,7 @@ class FitRecorder(Callback):
             # this is the restored_epoch MEASURE; `selected_path` holds its weights.
             "selected_epoch": getattr(net, "selected_epoch_", None),
             "selected_path": None if selected_path is None else selected_path.name,
+            "final_path": None if final_path is None else final_path.name,
             "first_batch_loss": first_batch_loss,
             "grad_norm_max_fit": gmax_fit,
             "grad_norm_max_epoch": gmax_epoch,

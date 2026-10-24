@@ -9,6 +9,14 @@ defaults:
 
 seed: 42
 
+# One subject per job (campaign A, fine-grained parallelism). null = the whole dataset in
+# one process, the historical behaviour. within/cross_session: only this subject is
+# loaded (its folds are independent of the others). cross_subject: EVERY subject is
+# loaded (they are the training pool) and only the fold that holds this subject out is
+# run. The subject goes into the output stem and the MOABB results dir, so concurrent
+# jobs of one cell never write the same file.
+only_subject: null
+
 # Band-pass of the MOABB paradigm (motor-imagery default 8-32 Hz).
 paradigm:
   fmin: 8
@@ -91,6 +99,9 @@ train:
   # so the selected-epoch score stays recoverable offline when the last epoch is
   # scored. Any score read from them is exploratory, never the primary endpoint.
   save_selected: false
+  # Save the LAST epoch's weights per fit (`<cell>__fits__final/<fit_uid>.pt`): the
+  # scored network under restore_selected=false, for the offline weight analyses.
+  save_final: false
   # Fraction of each fold set aside for the growth line search, carved from the
   # TRAINING side for every arm (fixed ones just never read it), so all arms train on
   # the same trials; the validation split is unchanged. 0.0 = historical: the line
