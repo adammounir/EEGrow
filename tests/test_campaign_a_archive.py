@@ -139,7 +139,7 @@ def test_cache_readonly_never_saves():
 
 @pytest.mark.parametrize("scoring,y,want", [
     ("roc_auc", ["a", "b", "b", "a"], 0.5),
-    ("accuracy", ["l", "r", "f", "f", "t", "l", "l", "r"], 3 / 8),   # share of "f"
+    ("accuracy", ["l", "r", "f", "f", "t", "l", "l", "r"], 2 / 8),   # share of "f", first sorted
 ])
 def test_logit_scorer_scores_a_diverged_net_as_constant(tmp_path, scoring, y, want):
     """Dry-run 818169: a grown TIDNet turned NaN at epoch 160 and sklearn's ROC-AUC
