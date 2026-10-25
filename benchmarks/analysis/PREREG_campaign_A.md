@@ -327,3 +327,30 @@ Aucun contraste n'a été lu. Seul le contrôle d'intégrité a tourné sur le c
   pas 18 (§ 2.3, « Ordre »).
 - La vague principale (A03 à A17) est soumise depuis ce commit, et la vague canari
   compte dans la lecture comme prévu.
+
+### Avenant 2 — 25/10/2026 soir, vague principale en cours
+
+Aucun contraste n'a été lu.
+
+- **Deux cartes de plus entrent sous `bench126`.** L'avenant 1 de
+  PREREG_env_equivalence.md (235c8a6, gelé avant lancement) a testé la GTX 1080 Ti
+  (margpu024-027) et la V100-SXM2-32GB (margpu032) sur les mêmes cellules, contre les
+  mêmes références et avec le même critère. Jobs 819128 et 819129, lus par
+  `env_equiv_read.py` (235c8a6) sur `/scratch/amounir/eegrow_equiv2` : **ÉQUIVALENT
+  sur les deux bras pour les deux cartes** (bd : dev 0,0000 ; tiny : dev 0,0164 et
+  0,0205, sous l'étalon graine 0 → 1 de 0,0271, IC95 du Δ signé contenant 0 ; largeur
+  tiny 40,0). La condition `b126_turing` qu'exige la règle d'entrée a été copiée en
+  lecture seule depuis `eegrow_v2` (lue ÉQUIVALENTE le 25/10).
+- **Ce qui change** : seules les tâches **en attente** des jobs 818892 à 818906 sont
+  resoumises (`campaignA_migrate.sh`). Elles passent avec `campaignA_b.sbatch`, qui ne
+  diffère de `campaignA.sbatch` que par la porte de cartes et la liste d'exclusion.
+  Une tâche garde son numéro, donc ses cellules. Les tâches déjà lancées ne bougent
+  pas. Une cellule dont le CSV existe est sautée, donc aucune ne tourne deux fois.
+- **Exclusions** : margpu004 (V100S, injoignable le 25/10) et margpu028 (RTX 2080 8 Go :
+  OOM GPU sur les cellules à 128 canaux, cause de 49 tâches en échec). margpu020
+  revient, puisque la sonde CUDA refuse sa carte morte. Les tâches des tableaux à 80 Go
+  reçoivent `--cpus-per-task=9` et excluent margpu032 (191 Go de RAM). Le cluster ne
+  réserve pas la mémoire (CR_CORE) : ce sont les cœurs qui bornent le nombre de tâches
+  par nœud.
+- **Lecture** : la carte et l'env sont écrits dans chaque fit (`gpu_name`, `v_torch`).
+  Le § 3 est inchangé. Les 49 tâches en échec seront relancées sous cette même porte.
