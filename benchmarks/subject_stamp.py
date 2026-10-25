@@ -253,7 +253,10 @@ class _SubjectStampMixin:
                 else:
                     groups = [test_idx]
                 cols = [c for c in ("subject", "session", "run") if c in metadata]
-                groups = [(g, {c: metadata.iloc[g][c].astype(str).to_numpy() for c in cols})
+                # Fixed-width unicode, not object: np.load refuses object arrays
+                # without allow_pickle.
+                groups = [(g, {c: np.asarray(metadata.iloc[g][c].astype(str).tolist(), dtype=str)
+                               for c in cols})
                           for g in groups]
                 folder = Path(rec.path).with_name(Path(rec.path).stem + "__logits")
                 task["config"] = dict(task["config"])
