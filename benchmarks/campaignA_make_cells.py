@@ -165,13 +165,13 @@ def arm_spec(model, arm):
     return grow, ov
 
 
-def cells(man, out_root, subset=None):
+def cells(man, out_root, subset=None, models=None):
     xsess = cross_session_datasets(man)
     for prot in PROTOCOLS:
         for ds in man:
             if prot == "cross_session" and ds not in xsess:
                 continue
-            for model in MODELS:
+            for model in (models or MODELS):
                 for arm in ARMS:
                     cfg, ov = arm_spec(model, arm)
                     for seed in SEEDS[ds]:
@@ -205,6 +205,10 @@ def main():
     ap.add_argument("--subset", choices=["all", "dryrun", "ram", "b126"], default="all")
     ap.add_argument("--datasets", default=None,
                     help="restrict to these datasets (test subsets only, never the grid)")
+    # 25/10: TIDNet's recipe diverges on long runs in all three arms (weight norm,
+    # PREREG § 3.1); the grid is frozen on the other five, TIDNet joins by amendment.
+    ap.add_argument("--models", default=",".join(MODELS),
+                    help="models of the grid, written to the plan (default: all six)")
     a = ap.parse_args()
     if a.datasets and a.subset == "all":
         raise SystemExit("REFUSED: --datasets is for the test subsets, the grid takes all 12")
@@ -231,7 +235,11 @@ def main():
                                                  and p == "within_session"
                                                  and (m, arm) in {("shallow", "tiny"), ("shallow", "random"),
                                                                   ("ctnet", "random"), ("conformer", "bd")})
-    L = list(cells(man, a.out_root, subset))
+    models = a.models.split(",")
+    unknown = [m for m in models if m not in MODELS]
+    if unknown:
+        raise SystemExit(f"REFUSED: unknown models {unknown}")
+    L = list(cells(man, a.out_root, subset, models))
     # Refuse two cells writing the same file (the 25/10 smoke: tiny and random shared a stem).
     dup = [k for k, n in collections.Counter(c["csv"] for c in L).items() if n > 1]
     if dup:
@@ -306,7 +314,7 @@ def main():
     print("longest cell:", max(L, key=lambda c: c["h"])["csv"], f"{max(c['h'] for c in L):.1f} h")
     for o in order:
         print("  array %s: %d tasks, mem %dG, time %dh, %.0f GPU-h" % o)
-    json.dump({"n_cells": len(L), "n_tasks": len(rows), "arrays": order,
+    json.dump({"models": models, "n_cells": len(L), "n_tasks": len(rows), "arrays": order,
                "cross_session_datasets": xs, "gpu_h": tot,
                "calibration": cost.cal}, open(dest / f"campaignA_plan{tag}.json", "w"), indent=1)
 

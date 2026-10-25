@@ -19,7 +19,8 @@ Pooled, per (model, protocol), 18 per question: D = mean over the readable and c
 datasets (equal weights) of their per-dataset mean delta; CI by a bootstrap stratified
 by dataset (subjects resampled within each dataset). One-sided bootstrap p = share of
 resamples <= threshold (0 for superiority, -0.02 for non-inferiority). Holm at
-alpha = 0.025 one-sided (the 95 % two-sided CI's tail), one family of 18 per test kind
+alpha = 0.025 one-sided (the 95 % two-sided CI's tail), one family per test kind: the
+endpoints with >= 1 readable complete dataset (18 at most; 15 while TIDNet is out)
 and per question.
 
 Refuses (exit 2) on a JSONL whose growth rows mix directions or carry another direction
@@ -227,7 +228,7 @@ def main():
                 sf = c.get("Q1_same_family") or {}
                 extra = f" {sf.get('n', 0)} : {sf.get('verdict') or '—'} |"
             L.append(f"| {p_} | {m_} | {ds} | {0 if not x else x['n']} | {ct} | {mde} | {c[q]['verdict']} |{extra}")
-        L += ["", f"### {q} groupé (Holm, 18 tests, α = {ALPHA} unilatéral)", "",
+        L += ["", f"### {q} groupé (Holm sur les {sum(1 for r in out['pooled'][q] if r['n_datasets'])} endpoints lisibles, α = {ALPHA} unilatéral)", "",
               "| protocole | modèle | datasets | Δ̄ [IC95] | p sup | p NI | MDE | verdict |",
               "|---|---|---|---|---|---|---|---|"]
         for r in out["pooled"][q]:
