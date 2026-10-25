@@ -299,3 +299,31 @@ Verdicts :
   fois sur la même erreur déterministe reste absente, et sa case est INCOMPLÈTE.
 - Aucune recette, aucun seuil et aucune liste de datasets ne sera changé après lecture.
 - On n'annoncera pas de gain de la croissance sur un endpoint qui n'est pas listé ici.
+
+## 6. Avenants
+
+### Avenant 1 — 25/10/2026, après la vague canari, avant la vague principale
+
+Aucun contraste n'a été lu. Seul le contrôle d'intégrité a tourné sur le canari.
+
+- **Le contrôle d'intégrité était faux, pas la campagne.** Les jobs 818624 à 818626 (90
+  tâches, 585 cellules, 5 325 fits) sont tous COMPLETED, mais `campaignA_check` en
+  refusait 69. Il recalculait l'AUC sur l1 − l0, alors que le scorer de MOABB, qui écrit
+  le CSV, la calcule sur la softmax float32 de `predict_proba`. Pour de grands logits,
+  cette softmax sature à 1,0 et crée des ex-aequo (jusqu'à 43 sur 160 essais), ce qui
+  donne jusqu'à −0,05 d'AUC. Le score stocké est égal, à 1e-6 près, à l'AUC recalculée
+  sur la softmax float32 (vérifié sur les cellules 23098, 23101 et 23128).
+  - **Correction** : `score_of` reproduit maintenant la softmax float32, pour l'AUC
+    comme pour l'argmax. Le score de la campagne reste celui de MOABB, le § 3 est
+    inchangé.
+  - Une fois corrigé, le contrôle passe sur les 585 cellules : 0 fit non fini, 0 pic de
+    gradient, 0 fit divergé.
+  - Le code exécuté par les cellules ne change pas. Seul le contrôle change.
+- **Archive** : le canari pèse 22,6 GiB. Une borne haute de toute la grille, calculée
+  avec la plus grande taille mesurée par (modèle, bras, type de fichier) sur 4 datasets
+  dont schirrmeister2017, donne **0,87 To**. C'est au-dessus de l'estimation du § 2.3
+  (0,6-0,7 To) mais sous le budget d'1 To. Iceberg a 3,7 To libres.
+- **Correction de rédaction** : sans TIDNet, le canari couvre 15 bras (5 modèles × 3),
+  pas 18 (§ 2.3, « Ordre »).
+- La vague principale (A03 à A17) est soumise depuis ce commit, et la vague canari
+  compte dans la lecture comme prévu.

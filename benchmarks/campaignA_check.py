@@ -15,8 +15,11 @@ checked), against what the cell line and the manifest say it must contain:
   growth   bd: no growth event; tiny / random: every growth row carries the arm's
            direction, growth file events == applied epochs, init width != final width
            when grown
-  score    logits reproduce the scorer: accuracy = argmax, ROC-AUC (2 classes) on
-           l1 - l0 (monotone in the softmax the scorer uses), and non-finite logits
+  score    logits reproduce the scorer on the float32 softmax that skorch's
+           predict_proba returns: accuracy = its argmax, ROC-AUC (2 classes) on p[:, 1].
+           Not l1 - l0: the float32 softmax saturates at 1.0 for large logits and the
+           scorer ranks those trials as ties (up to 43/160 in the canary, AUC -0.05).
+           Non-finite logits
            (a diverged net) the constant predictor, flagged ``diverged``; per-session
            mean of the logit-file scores == CSV row within 1e-6 (CSV is float32)
 
@@ -62,11 +65,14 @@ def score_of(z, n_classes):
     if not np.isfinite(lg).all():
         # a diverged net is scored as the constant predictor (subject_stamp.constant_score)
         return 0.5 if n_classes == 2 else float((y == classes[0]).mean())
+    import torch
+    # what the scorer saw: skorch predict_proba = float32 softmax of the forward
+    p = torch.softmax(torch.as_tensor(lg, dtype=torch.float32), dim=1).numpy()
     if n_classes == 2:
         from sklearn.metrics import roc_auc_score
-        return float(roc_auc_score(y == classes[1], lg[:, 1] - lg[:, 0]))
+        return float(roc_auc_score(y == classes[1], p[:, 1]))
     idx = {c: i for i, c in enumerate(classes)}
-    return float((lg.argmax(1) == np.array([idx[c] for c in y])).mean())
+    return float((p.argmax(1) == np.array([idx[c] for c in y])).mean())
 
 
 def check_cell(c, man, sizes, counters, ckpt_epochs=CKPT):
