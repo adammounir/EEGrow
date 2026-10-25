@@ -102,6 +102,21 @@ train:
   # Save the LAST epoch's weights per fit (`<cell>__fits__final/<fit_uid>.pt`): the
   # scored network under restore_selected=false, for the offline weight analyses.
   save_final: false
+  # Campaign A growth archive (decided 25/10/2026), all off by default (historical):
+  #   save_init         weights at on_train_begin        <cell>__fits__init/<fit_uid>.pt
+  #   save_growth       every tensor a growth event resized, right after the event,
+  #                     i.e. the new neurons at birth     <cell>__fits__growth/<fit_uid>.pt
+  #   save_checkpoints  full weights at these epochs      <cell>__fits__ckpt/<fit_uid>.pt
+  #   save_test_logits  raw logits of every test trial + the fold's test identity
+  #                                                       <cell>__fits__logits/<fit_uid>.npz
+  save_init: false
+  save_growth: false
+  save_checkpoints: null
+  save_test_logits: false
+  # Direction of the new neurons: "tiny" (computed, every historical arm) or "random"
+  # (campaign A control: same junction, count and amplitude, Gaussian directions;
+  # needs growth_normalization=tiny_paper). See loop._randomize_candidates.
+  growth_direction: tiny
   # Fraction of each fold set aside for the growth line search, carved from the
   # TRAINING side for every arm (fixed ones just never read it), so all arms train on
   # the same trials; the validation split is unchanged. 0.0 = historical: the line

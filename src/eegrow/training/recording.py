@@ -141,6 +141,14 @@ def _fingerprint(X, y) -> str | None:
         return None
 
 
+def _cpu_state(module) -> dict:
+    return {k: v.detach().cpu().clone() for k, v in module.state_dict().items()}
+
+
+def _shapes(module) -> dict:
+    return {k: tuple(v.shape) for k, v in module.state_dict().items()}
+
+
 def _split_stamp(net) -> dict:
     split = getattr(net, "train_split", None)
     return {"n_fit_train": getattr(split, "n_train_", None),
@@ -171,6 +179,24 @@ class FitRecorder(Callback):
         same layout as ``save_selected``. The offline weight analyses (subject/session
         fingerprint, campaign A) need the scored network, not the selected one: the
         selected epoch varies per fit, and with it the width. Default ``False``.
+    save_init : bool
+        Save the weights as they enter training (``on_train_begin``) in
+        ``<stem>__init/<fit_uid>.pt``: the origin of every trajectory, and what a
+        "distance travelled" or a lottery-ticket style reading is measured from.
+    save_growth : bool
+        At every APPLIED growth event, keep a copy of each tensor whose shape the event
+        changed, as it is right after the event -- the new neurons at birth, next to
+        the old ones they join -- with the event's epoch, junction and widths. One file
+        per fit, ``<stem>__growth/<fit_uid>.pt`` (a list, in event order). Only the
+        resized tensors: a full state per event would cost ~40 conformer states per fit.
+    save_checkpoints : sequence of int, optional
+        Epochs (1-based, as in ``net.history``) at which the full weights are kept;
+        written together at the end in ``<stem>__ckpt/<fit_uid>.pt`` as
+        ``{epoch: state_dict}``. Campaign A: ``[10, 25, 50, 100]``.
+    save_test_logits : bool
+        A flag for the evaluation, not for this callback: the fold's test set is not
+        in scope inside a skorch fit. ``benchmarks/subject_stamp.py`` reads it and, if
+        set, writes the raw test logits under ``<stem>__logits/<last_fit_uid_>.npz``.
 
     Notes
     -----
@@ -183,7 +209,9 @@ class FitRecorder(Callback):
     """
 
     def __init__(self, path, meta: dict | None = None, save_selected: bool = False,
-                 save_final: bool = False):
+                 save_final: bool = False, save_init: bool = False,
+                 save_growth: bool = False, save_checkpoints=None,
+                 save_test_logits: bool = False):
         # Stored VERBATIM, not normalised. Two separate sklearn/skorch contracts bite
         # here, and MOABB clones the pipeline for every fold so both are exercised:
         #
@@ -200,6 +228,10 @@ class FitRecorder(Callback):
         self.meta = meta
         self.save_selected = save_selected
         self.save_final = save_final
+        self.save_init = save_init
+        self.save_growth = save_growth
+        self.save_checkpoints = save_checkpoints
+        self.save_test_logits = save_test_logits
         # Note this counter restarts at 0 on every clone, and MOABB clones per fold --
         # so it does NOT identify a fold across a cell's records. The reader
         # (analysis/growth_io.py) numbers folds by line order instead, which is exact
@@ -213,6 +245,17 @@ class FitRecorder(Callback):
         self.width0_ = getattr(net.module_, "growable_width", None)
         self.n_train_ = int(len(X)) if X is not None and hasattr(X, "__len__") else None
         self.fingerprint_ = _fingerprint(X, y) if X is not None else None
+        # Drawn here, not at the end, so every file of this fit (init, growth, ckpt,
+        # logits) carries the same id as its JSONL record.
+        self.fit_uid_ = uuid.uuid4().hex
+        self.init_path_ = None
+        if self.save_init:
+            self.init_path_ = self._save("init", {"state_dict": _cpu_state(net.module_),
+                                                  "growable_width": getattr(net.module_, "growable_width", None),
+                                                  "junction_widths": getattr(net.module_, "junction_widths", None)})
+        self.shapes_ = _shapes(net.module_)
+        self.growth_ = []
+        self.ckpts_ = {}
 
     def on_epoch_end(self, net, **kwargs):
         # Recorded into skorch's own history so the values sit next to train_loss and
@@ -221,6 +264,30 @@ class FitRecorder(Callback):
         width = getattr(net.module_, "growable_width", None)
         if width is not None:
             net.history.record("width", int(width))
+        row = net.history[-1]
+        if self.save_growth and row.get("grow_applied"):
+            shapes = _shapes(net.module_)
+            state = net.module_.state_dict()
+            changed = [k for k, v in shapes.items() if self.shapes_.get(k) != v]
+            self.growth_.append({
+                "epoch": row["epoch"], "junction": row.get("grow_junction"),
+                "width_after": row.get("grow_width_after"),
+                "junction_widths_after": row.get("grow_junction_widths_after"),
+                "direction": row.get("grow_direction"),
+                "shapes_before": {k: self.shapes_.get(k) for k in changed},
+                "tensors": {k: state[k].detach().cpu().clone() for k in changed}})
+            self.shapes_ = shapes
+        if self.save_checkpoints and row["epoch"] in {int(e) for e in self.save_checkpoints}:
+            self.ckpts_[int(row["epoch"])] = _cpu_state(net.module_)
+
+    def _save(self, kind: str, payload: dict):
+        """``torch.save`` one side file of this fit; returns its name for the record."""
+        import torch
+        folder = Path(self.path).with_name(Path(self.path).stem + f"__{kind}")
+        folder.mkdir(parents=True, exist_ok=True)
+        out = folder / f"{self.fit_uid_}.pt"
+        torch.save({**payload, "train_fingerprint": self.fingerprint_, "meta": self.meta}, out)
+        return out.name
 
     #: Per-epoch fields lifted out of ``net.history``. The ``grow_*`` ones exist only
     #: on epochs where a growth step actually ran, and ``grad_norm`` only when
@@ -232,7 +299,7 @@ class FitRecorder(Callback):
                   "grow_first_order_improvement", "grow_eig_sum",
                   "grow_select_loss", "grow_losses", "grow_param_update_decrease",
                   "grow_eig_proposed", "grow_eig_kept", "grow_holdout", "grow_n_select",
-                  "grow_normalization", "grow_ls_s", "grow_rescale", "grow_rescale_fallbacks",
+                  "grow_normalization", "grow_direction", "grow_ls_s", "grow_rescale", "grow_rescale_fallbacks",
                   "grow_junction", "grow_junction_argmax", "grow_junction_foi", "grow_junction_ids",
                   "grow_junction_n_proposed", "grow_junction_n_kept",
                   "grow_junction_widths_after", "grow_split_a", "grow_split_b",
@@ -255,7 +322,11 @@ class FitRecorder(Callback):
             first_batch_loss = float(net.history[0]["batches"][0]["train_loss"])
         except (IndexError, KeyError, TypeError):
             first_batch_loss = None
-        fit_uid = uuid.uuid4().hex
+        fit_uid = self.fit_uid_
+        growth_path = self._save("growth", {"events": self.growth_}) if self.save_growth else None
+        ckpt_path = self._save("ckpt", {"checkpoints": self.ckpts_}) if self.save_checkpoints else None
+        n_growth, ckpt_epochs = len(self.growth_), sorted(self.ckpts_)
+        self.growth_, self.ckpts_ = [], {}
         selected_path = None
         state = getattr(net, "selected_state_", None)
         if self.save_selected and state is not None:
@@ -310,6 +381,11 @@ class FitRecorder(Callback):
             "selected_epoch": getattr(net, "selected_epoch_", None),
             "selected_path": None if selected_path is None else selected_path.name,
             "final_path": None if final_path is None else final_path.name,
+            "init_path": self.init_path_,
+            "growth_path": growth_path,
+            "n_growth_snapshots": n_growth if self.save_growth else None,
+            "ckpt_path": ckpt_path,
+            "ckpt_epochs": ckpt_epochs if self.save_checkpoints else None,
             "first_batch_loss": first_batch_loss,
             "grad_norm_max_fit": gmax_fit,
             "grad_norm_max_epoch": gmax_epoch,
@@ -319,6 +395,9 @@ class FitRecorder(Callback):
             "history": curve,
         }
         self.fit_idx_ += 1
+        # Read by the evaluation's logit scorer (benchmarks/subject_stamp.py), which runs
+        # after the fit and must name its file after this record.
+        self.last_fit_uid_ = fit_uid
         path = Path(self.path)
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a") as fh:

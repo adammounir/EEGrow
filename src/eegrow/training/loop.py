@@ -132,8 +132,13 @@ def grow_step(model, train_loader, device, *, val_loader=None,
               min_singular_ratio: float = MIN_SINGULAR_RATIO,
               scaling_grid=SCALING_GRID, normalization: str | None = None,
               select: str = "first", split_half: bool = False,
-              fixed_s: float | None = None, rescale: bool = False) -> dict:
+              fixed_s: float | None = None, rescale: bool = False,
+              direction: str = "tiny") -> dict:
     """One gromo growth: stats -> optimal update -> line search -> apply_change.
+
+    ``direction="random"`` (campaign A control, needs ``normalization="tiny_paper"``)
+    keeps every decision of the step and draws the new neurons' directions at random;
+    see :func:`_randomize_candidates`.
 
     Two controls for the 20/10 attribution campaign, both off by default (historical):
     ``fixed_s`` applies that amplitude on every step, whatever the line search says
@@ -249,6 +254,12 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         # The paper's amplitude is the normalisation itself; a line search on top would
         # be a different method (see TINY_PAPER_SQ_NORM). fixed_s=1 is the paper.
         raise ValueError("normalization='tiny_paper' needs fixed_s (1.0 = the paper)")
+    if direction not in DIRECTIONS:
+        raise ValueError(f"direction must be one of {DIRECTIONS}, got {direction!r}")
+    if direction == "random" and (normalization != "tiny_paper" or rescale):
+        # The norm of a random draw is arbitrary: only the paper's normalisation, applied
+        # after the draw, makes the two arms differ by the direction alone.
+        raise ValueError("direction='random' needs normalization='tiny_paper' and no rescale")
     if select in ("best", "sequential"):
         if rescale:
             raise ValueError("rescale is a single-junction control (select='first')")
@@ -257,7 +268,8 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         return _grow_step_best(model, train_loader, device, val_loader=val_loader,
                                min_singular_ratio=min_singular_ratio, grid=grid,
                                normalization=normalization, split_half=split_half,
-                               sequential=select == "sequential", fixed_s=fixed_s)
+                               sequential=select == "sequential", fixed_s=fixed_s,
+                               direction=direction)
     if select != "first":
         raise ValueError(f"select must be 'first', 'best' or 'sequential', got {select!r}")
     if split_half:
@@ -291,6 +303,8 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         # keeping the first `keep` is keeping the best `keep`. This also trims the
         # previous layer's matching outputs (sub_select_previous=True) -> hard cap.
         layer.sub_select_optimal_added_parameters(keep_neurons=keep)
+    if direction == "random":
+        _randomize_candidates(layer)
     if normalization is not None:
         # gromo bakes sqrt(singular value) into the extension weights, so new neurons
         # arrive at ~1e-2 amplitude and the line search never leaves the linear regime
@@ -341,6 +355,7 @@ def grow_step(model, train_loader, device, *, val_loader=None,
         "rescale_fallbacks": (getattr(model, "_rescale_fallbacks", 0) if rescale else None),
         "s": best_s,
         "applied": best_s != 0.0,
+        "direction": direction,
         "select_loss": float(best_loss),
         "losses": losses,
         "width_before": width_before,
@@ -399,6 +414,34 @@ def _normalize(layer, normalization: str) -> None:
         _tiny_paper_normalize(layer)
     else:
         layer.normalize_optimal_updates(normalization_type=normalization)
+
+
+#: ``direction`` values of :func:`grow_step`. ``"tiny"`` = the directions gromo computes
+#: (every historical arm). ``"random"`` = campaign A's direction control, see
+#: :func:`_randomize_candidates`.
+DIRECTIONS = ("tiny", "random")
+
+
+@torch.no_grad()
+def _randomize_candidates(layer) -> None:
+    """Replace the pending candidates' directions of ``layer`` by i.i.d. Gaussian ones.
+
+    Campaign A's direction control (decided 25/10/2026): everything the growth rule
+    decides is kept -- WHEN (the schedule), WHERE (the junction, ranked on the TINY
+    gains), HOW MANY (the relative floor on the TINY spectrum and the width cap) and HOW
+    LARGE (``_tiny_paper_normalize`` runs after this, so the mean squared norm per new
+    neuron is the paper's 1e-3 on both sides) -- and only the direction of the new
+    neurons' incoming (alpha, bias included) and outgoing (omega) weights is drawn at
+    random. ``tiny - random`` therefore measures what the computed directions buy.
+
+    Drawn on the CPU from torch's global generator (seeded per fit by ``seed_all``/
+    skorch), then moved, so a seed gives the same directions on every card."""
+    omega = layer.extended_input_layer
+    alpha = layer.previous_module.extended_output_layer
+    if omega is None or alpha is None:
+        raise ValueError("direction='random' needs pending candidate neurons")
+    for t in [omega.weight, alpha.weight] + ([alpha.bias] if alpha.bias is not None else []):
+        t.copy_(torch.randn(t.shape, dtype=t.dtype).to(t.device))
 
 
 @torch.no_grad()
@@ -569,7 +612,7 @@ def _argmax_junction(per: list) -> int:
 
 def _grow_step_best(model, train_loader, device, *, val_loader, min_singular_ratio,
                     grid, normalization, split_half, sequential=False,
-                    fixed_s: float | None = None) -> dict:
+                    fixed_s: float | None = None, direction: str = "tiny") -> dict:
     """``grow_step`` for several junctions: gromo's ``select_best_update``.
 
     1. candidates on every junction still under its target (:func:`_junction_candidates`);
@@ -626,6 +669,9 @@ def _grow_step_best(model, train_loader, device, *, val_loader, min_singular_rat
         if idx != expected:   # same quantity, same order: a mismatch is a bug, not noise
             raise RuntimeError(f"select_best_update chose {idx}, argmax is {expected}")
     layer = model.currently_updated_layer
+    if direction == "random":
+        # AFTER the junction is chosen on the TINY gains: only the direction changes.
+        _randomize_candidates(layer)
     if normalization is not None:
         _normalize(layer, normalization)
     diag = _update_diagnostics(layer)
@@ -662,6 +708,7 @@ def _grow_step_best(model, train_loader, device, *, val_loader, min_singular_rat
         "line_search_s": ls_s,
         "s": best_s,
         "applied": best_s != 0.0,
+        "direction": direction,
         "select_loss": float(best_loss),
         "losses": losses,
         "width_before": width_before,

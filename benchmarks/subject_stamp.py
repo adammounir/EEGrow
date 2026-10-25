@@ -50,8 +50,11 @@ stamp files and no error.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+from pathlib import Path
 
+import numpy as np
 from sklearn.base import clone
 
 logger = logging.getLogger(__name__)
@@ -105,6 +108,76 @@ def with_stamp(pipeline, stamp: dict):
             step.set_params(callbacks=rebuilt)
             return p
     return p
+
+
+def _find_recorder(pipeline):
+    """The (unfitted) FitRecorder in ``pipeline``'s callbacks, or None."""
+    steps = [s for _, s in pipeline.steps] if hasattr(pipeline, "steps") else [pipeline]
+    for step in steps:
+        for item in getattr(step, "callbacks", None) or []:
+            cb = item[1] if isinstance(item, tuple) and len(item) == 2 else item
+            if _is_recorder(cb):
+                return cb
+    return None
+
+
+class LogitScorer:
+    """MOABB's scorer, unchanged, plus the raw test logits of the fold on disk.
+
+    WHY HERE: the test set never enters the skorch fit, so ``FitRecorder`` cannot see
+    it; the only code that holds both the fitted net and the test trials is MOABB's
+    ``_evaluate_fold``, through ``scorer(cvclf, X[group_idx], group_y)``. Wrapping the
+    scorer is therefore the one hook that needs no copy of the data and no re-run of
+    the forward pass outside the fold that produced the score.
+
+    The returned score is ``check_scoring(est, scoring)(est, X, y)`` -- the exact call
+    ``_create_scorer`` makes for a string -- so the CSV is unchanged by construction.
+    The logits are then ``net.forward`` (no softmax) on what the net receives, i.e. after
+    the pipeline's own transforms. Calls are matched to MOABB's score groups by order
+    (one group, or ``np.unique`` of the test sessions under ``score_per_session``) and
+    refused on a length mismatch rather than mislabelled.
+
+    Writes ``<stem>__logits/<fit_uid>[__g<i>].npz``: ``logits``, ``y`` (as scored),
+    ``test_idx`` (rows of MOABB's metadata), ``subject``/``session``/``run`` per trial,
+    ``test_fingerprint`` (SHA-1 of the net's input and ``y``, the train_fingerprint
+    convention) and the ``score`` itself, so a reader checks argmax == CSV.
+    """
+
+    def __init__(self, scoring, groups, folder):
+        if not isinstance(scoring, str):
+            raise ValueError(f"LogitScorer wraps a single named scorer, got {scoring!r}")
+        self.scoring = scoring
+        # [(test_idx, {"subject": .., "session": .., "run": ..}), ...] in MOABB's group
+        # order. Only the test rows are kept: sklearn's get_scorer deep-copies a
+        # callable scorer once per fold, and the full metadata would go with it.
+        self.groups = groups
+        self.folder = Path(folder)
+        self.calls = 0
+
+    def __call__(self, est, X, y):
+        from sklearn.metrics import check_scoring
+        score = check_scoring(est, scoring=self.scoring)(est, X, y)
+        i = self.calls
+        self.calls += 1
+        idx, cols = self.groups[i]
+        if len(idx) != len(X):
+            raise RuntimeError(f"logit scorer call {i}: {len(X)} trials, group has {len(idx)}")
+        net = est.steps[-1][1] if hasattr(est, "steps") else est
+        Xt = est[:-1].transform(X) if hasattr(est, "steps") and len(est.steps) > 1 else X
+        logits = net.forward(Xt, training=False, device="cpu").numpy().astype("float32")
+        rec = next((cb for _, cb in getattr(net, "callbacks_", []) if _is_recorder(cb)), None)
+        uid = getattr(rec, "last_fit_uid_", None)
+        if uid is None:
+            raise RuntimeError("logit scorer: the fitted net carries no FitRecorder fit_uid")
+        h = hashlib.sha1(np.ascontiguousarray(np.asarray(Xt)).tobytes())
+        h.update(np.ascontiguousarray(np.asarray(y)).tobytes())
+        self.folder.mkdir(parents=True, exist_ok=True)
+        name = uid if len(self.groups) == 1 else f"{uid}__g{i}"
+        np.savez_compressed(
+            self.folder / f"{name}.npz", logits=logits, y=np.asarray(y), test_idx=np.asarray(idx),
+            **cols,
+            test_fingerprint=np.array(h.hexdigest()), score=np.array(float(score)))
+        return score
 
 
 class _SubjectStampMixin:
@@ -163,9 +236,29 @@ class _SubjectStampMixin:
                 tr = metadata.iloc[task["train_idx"]]
                 stamp["train_subjects"] = sorted({str(s) for s in tr["subject"]})
                 stamp["train_sessions"] = sorted({f"{s}:{se}" for s, se in zip(tr["subject"], tr["session"])})
+                te = metadata.iloc[task["test_idx"]]
+                stamp["n_test"] = int(len(te))
+                stamp["test_sessions"] = sorted({f"{s}:{se}" for s, se in zip(te["subject"], te["session"])})
                 task["pipeline"] = with_stamp(task["pipeline"], stamp)
             except Exception:  # pragma: no cover - never break a fit to label it
                 logger.warning("subject stamp: task left unstamped", exc_info=True)
+            # NOT inside the guard above: a campaign that asked for logits and cannot
+            # write them must stop, not run 200 epochs for a missing file.
+            rec = _find_recorder(task["pipeline"])
+            if rec is not None and getattr(rec, "save_test_logits", False):
+                test_idx = np.asarray(task["test_idx"])
+                if task["config"]["score_per_session"]:
+                    sess = metadata.iloc[test_idx]["session"].values
+                    groups = [test_idx[sess == s] for s in np.unique(sess)]
+                else:
+                    groups = [test_idx]
+                cols = [c for c in ("subject", "session", "run") if c in metadata]
+                groups = [(g, {c: metadata.iloc[g][c].astype(str).to_numpy() for c in cols})
+                          for g in groups]
+                folder = Path(rec.path).with_name(Path(rec.path).stem + "__logits")
+                task["config"] = dict(task["config"])
+                task["config"]["scoring"] = LogitScorer(task["config"]["scoring"], groups,
+                                                        folder)
         return tasks
 
 

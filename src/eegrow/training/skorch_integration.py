@@ -39,7 +39,7 @@ from types import SimpleNamespace
 import torch
 from skorch.callbacks import Callback
 
-from eegrow.training.loop import MIN_SINGULAR_RATIO, SCALING_GRID, grow_step
+from eegrow.training.loop import DIRECTIONS, MIN_SINGULAR_RATIO, SCALING_GRID, grow_step
 
 
 def _debug_params(net, epoch, tag) -> None:
@@ -162,7 +162,7 @@ class GromoGrowth(Callback):
                  scaling_grid=None, normalization: str | None = None,
                  select: str = "first", split_half: bool = False,
                  fixed_s: float | None = None, rescale: bool = False,
-                 verbose: bool = True):
+                 direction: str = "tiny", verbose: bool = True):
         self.grow_every = grow_every
         self.growth_device = growth_device
         self.holdout_frac = holdout_frac
@@ -187,6 +187,10 @@ class GromoGrowth(Callback):
         # 20/10 attribution controls (loop.grow_step); None/False = historical.
         self.fixed_s = fixed_s
         self.rescale = rescale
+        # Campaign A direction control (loop._randomize_candidates); "tiny" = historical.
+        if direction not in DIRECTIONS:
+            raise ValueError(f"direction must be one of {DIRECTIONS}, got {direction!r}")
+        self.direction = direction
         self.verbose = verbose
         self.done_ = False
 
@@ -273,7 +277,8 @@ class GromoGrowth(Callback):
                                          else self.scaling_grid),
                            normalization=self.normalization,
                            select=self.select, split_half=self.split_half,
-                           fixed_s=self.fixed_s, rescale=self.rescale)
+                           fixed_s=self.fixed_s, rescale=self.rescale,
+                           direction=self.direction)
         result["holdout_kind"] = holdout_kind
         result["n_select"] = sum(len(b[1]) for b in (val_loader or stats_loader))
         if moved:
@@ -339,6 +344,7 @@ class GromoGrowth(Callback):
             record("grow_rescale", result["rescale_factors"])
             record("grow_rescale_fallbacks", result["rescale_fallbacks"])
         record("grow_applied", bool(result["applied"]))
+        record("grow_direction", result.get("direction", "tiny"))
         record("grow_width_after", result["width_after"])
         record("grow_n_proposed", result["n_proposed"])
         record("grow_n_kept", result["n_candidates"])

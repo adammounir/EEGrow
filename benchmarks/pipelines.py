@@ -131,6 +131,9 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
             # 20/10 attribution controls (loop.grow_step); null/false = historical.
             fixed_s=train_cfg.get("growth_fixed_s"),
             rescale=bool(train_cfg.get("growth_rescale") or False),
+            # Campaign A direction control: "random" keeps every TINY decision and
+            # draws the new neurons' directions (loop._randomize_candidates).
+            direction=str(train_cfg.get("growth_direction") or "tiny"),
             verbose=False)))
     # ORDER IS THE CONTRACT HERE, and each position is load-bearing:
     #
@@ -220,7 +223,12 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
         callbacks.append(("record", FitRecorder(
             record_path, meta={"model": model_cfg.get("label"), "seed": seed},
             save_selected=bool(train_cfg.get("save_selected", False)),
-            save_final=bool(train_cfg.get("save_final", False)))))
+            save_final=bool(train_cfg.get("save_final", False)),
+            save_init=bool(train_cfg.get("save_init", False)),
+            save_growth=bool(train_cfg.get("save_growth", False)),
+            save_checkpoints=(None if not train_cfg.get("save_checkpoints") else
+                              [int(e) for e in train_cfg["save_checkpoints"]]),
+            save_test_logits=bool(train_cfg.get("save_test_logits", False)))))
     # LR schedule, AFTER every instrumentation callback and before EarlyStopping.
     # The position is the same argument as `eps` above: `grad` and `eps` must describe
     # the optimizer that trained the epoch just finished, and stepping the scheduler
