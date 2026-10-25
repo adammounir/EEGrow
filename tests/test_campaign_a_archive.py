@@ -135,3 +135,38 @@ def test_cache_readonly_never_saves():
     assert not any(ro[k] for k in ("overwrite_raw", "overwrite_epochs", "overwrite_array"))
     assert {k: v for k, v in ro.items() if not k.startswith("save")} == \
         {k: v for k, v in rw.items() if not k.startswith("save")}
+
+
+@pytest.mark.parametrize("scoring,y,want", [
+    ("roc_auc", ["a", "b", "b", "a"], 0.5),
+    ("accuracy", ["l", "r", "f", "f", "t", "l", "l", "r"], 3 / 8),   # share of "f"
+])
+def test_logit_scorer_scores_a_diverged_net_as_constant(tmp_path, scoring, y, want):
+    """Dry-run 818169: a grown TIDNet turned NaN at epoch 160 and sklearn's ROC-AUC
+    refused its probabilities, so the cell died with no CSV, while accuracy would have
+    argmaxed the NaN to class 0 in silence. PREREG § 3.1 counts an unstable fit with its
+    score: both metrics give the constant predictor, and the file says it diverged."""
+    import sys
+    from pathlib import Path
+
+    import numpy as np
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmarks"))
+    from subject_stamp import LogitScorer
+
+    class Rec:
+        meta, path, last_fit_uid_ = {}, str(tmp_path / "x__fits.jsonl"), "uid0"
+
+    class Net:
+        callbacks_ = [("rec", Rec())]
+
+        def forward(self, X, training, device):
+            out = torch.zeros(len(X), 4)
+            out[0, 0] = float("nan")          # one non-finite logit is enough
+            return out
+
+    n = len(y)
+    cols = {k: np.array(["1"] * n) for k in ("subject", "session", "run")}
+    sc = LogitScorer(scoring, [(np.arange(n), cols)], tmp_path / "logits")
+    assert sc(Net(), np.zeros((n, 2, 3), dtype="float32"), np.array(y)) == pytest.approx(want)
+    z = np.load(tmp_path / "logits" / "uid0.npz")
+    assert bool(z["diverged"]) and float(z["score"]) == pytest.approx(want)

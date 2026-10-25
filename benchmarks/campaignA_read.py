@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import glob
 import json
 import math
 import os
@@ -117,6 +118,9 @@ def load(cells_path):
                                       for h in r["history"] for k in ("train_loss", "valid_loss"))
             g = r.get("grad_norm_max_fit")
             f["spikes"] += not (isinstance(g, (int, float)) and math.isfinite(g) and g <= SPIKE)
+            # scored as the constant predictor (subject_stamp.constant_score, PREREG § 3.1)
+            lg = glob.glob(f"{c['csv'][:-4]}__fits__logits/{r['fit_uid']}*.npz")
+            f["diverged"] += any(bool(np.load(p)["diverged"]) for p in lg)
             if c["arm"] != "bd":
                 f["grew"] += bool(r.get("width_end") and r.get("width_start")
                                   and r["width_end"] > r["width_start"])
@@ -234,12 +238,12 @@ def main():
                      f"{r['hi']:+.3f}] | {r['p_sup']:.4f} | {r['p_ni']:.4f} | {r['mde']:.3f} | {r['verdict']} |")
         L.append("")
     L += ["## Stabilité et croissance (comptes, par bras)", "",
-          "| protocole | modèle | dataset | bras | fits | non finis | pics > 1e6 | ont grandi |",
-          "|---|---|---|---|---|---|---|---|"]
+          "| protocole | modèle | dataset | bras | fits | divergés (score constant) | non finis | pics > 1e6 | ont grandi |",
+          "|---|---|---|---|---|---|---|---|---|"]
     for k_, c in out["cases"].items():
         p_, m_, ds = k_.split("/")
         for arm, f in c["fits"].items():
-            L.append(f"| {p_} | {m_} | {ds} | {arm} | {f.get('fits', 0)} | {f.get('nonfinite', 0)} | "
+            L.append(f"| {p_} | {m_} | {ds} | {arm} | {f.get('fits', 0)} | {f.get('diverged', 0)} | {f.get('nonfinite', 0)} | "
                      f"{f.get('spikes', 0)} | {'—' if arm == 'bd' else f.get('grew', 0)} |")
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     json.dump(out, open(a.out + ".json", "w"), indent=1, default=str)

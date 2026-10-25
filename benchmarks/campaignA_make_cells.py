@@ -64,9 +64,10 @@ COMMON = ("train.max_epochs=200 train.patience=200 train.selection_monitor=valid
           "train.save_growth=true train.save_test_logits=true "
           "cache.enabled=true cache.readonly=true")
 # Host RAM per cross_subject cell (the whole dataset is loaded): 1.5 x the probe's MaxRSS
-# (816443, sacct), floor 16 G. schirrmeister2017 hit the 64 G limit in the probe: its
-# value is the preflight's measurement (PREREG § 2), not a guess.
-XS_MEM = {"schirrmeister2017": 128, "lee2019_mi": 40, "cho2017": 32, "physionetmi": 16}
+# (816443, sacct), floor 16 G. schirrmeister2017 hit the 64 G limit in the probe (which
+# also derived and wrote the cache): 1.5 x 51.1 GiB, the largest MaxRSS of its 12
+# cross_subject cells under the read-only cache (818344, 25/10, all 6 models x bd/tiny).
+XS_MEM = {"schirrmeister2017": 80, "lee2019_mi": 40, "cho2017": 32, "physionetmi": 16}
 MEM_FLOOR = 16
 P100_SLOWDOWN = 2.05
 TIME_MARGIN = 2.0
@@ -122,7 +123,7 @@ def cross_session_datasets(man):
 class Cost:
     """GPU-h (2080 Ti) of one cell, from the timing probe; packing and time limits only."""
 
-    def __init__(self, probe_dir, man):
+    def __init__(self, probe_dir, man, cal_man):
         rows = {}
         for f in glob.glob(f"{probe_dir}/*.json"):
             r = json.load(open(f))
@@ -135,12 +136,12 @@ class Cost:
                 rows.setdefault((ds, a), rows[("lee2019_mi", a)] * fac)
         self.spte = rows
         self.man = man
+        # calibrated on the measured datasets' manifests whatever the cells are, so a
+        # --datasets test subset is costed exactly as the grid
         cal = collections.defaultdict(list)
         for m, (grow, bd, *_rest) in MODELS.items():
             for ds, (h_bd, h_tiny) in MEASURED[m].items():
-                if ds not in man:  # a --datasets test subset: calibrate on what it has
-                    continue
-                N = sum(s["n"] for s in man[ds]["subjects"].values())
+                N = sum(s["n"] for s in cal_man[ds]["subjects"].values())
                 for arm, h in ((bd, h_bd), (grow, h_tiny)):
                     cal[arm].append(h / (4 * N * 200 * rows[(ds, arm)] / 3600))
         self.cal = {a: st.median(v) for a, v in cal.items()}
@@ -209,7 +210,7 @@ def main():
         raise SystemExit("REFUSED: --datasets is for the test subsets, the grid takes all 12")
     man = load_manifest(a.manifest, a.datasets.split(",") if a.datasets else DATASETS)
     check_within_folds(man)
-    cost = Cost(a.probe, man)
+    cost = Cost(a.probe, man, load_manifest(a.manifest, sorted({d for v in MEASURED.values() for d in v})))
     subset = None
     first = {ds: next(iter(man[ds]["subjects"])) for ds in man}
     if a.subset == "dryrun":

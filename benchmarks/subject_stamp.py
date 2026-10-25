@@ -131,7 +131,9 @@ class LogitScorer:
     the forward pass outside the fold that produced the score.
 
     The returned score is ``check_scoring(est, scoring)(est, X, y)`` -- the exact call
-    ``_create_scorer`` makes for a string -- so the CSV is unchanged by construction.
+    ``_create_scorer`` makes for a string -- so the CSV is unchanged by construction --
+    except for a diverged net (non-finite logits), scored as the constant predictor
+    (:func:`constant_score`) and flagged ``diverged`` in the file.
     The logits are then ``net.forward`` (no softmax) on what the net receives, i.e. after
     the pipeline's own transforms. Calls are matched to MOABB's score groups by order
     (one group, or ``np.unique`` of the test sessions under ``score_per_session``) and
@@ -156,7 +158,6 @@ class LogitScorer:
 
     def __call__(self, est, X, y):
         from sklearn.metrics import check_scoring
-        score = check_scoring(est, scoring=self.scoring)(est, X, y)
         i = self.calls
         self.calls += 1
         idx, cols = self.groups[i]
@@ -165,6 +166,15 @@ class LogitScorer:
         net = est.steps[-1][1] if hasattr(est, "steps") else est
         Xt = est[:-1].transform(X) if hasattr(est, "steps") and len(est.steps) > 1 else X
         logits = net.forward(Xt, training=False, device="cpu").numpy().astype("float32")
+        diverged = not np.isfinite(logits).all()
+        # A diverged net (non-finite output, dry-run 818169: grown TIDNet turns NaN at
+        # epoch 160) still counts with a score (PREREG § 3.1). sklearn refuses NaN
+        # probabilities (ROC-AUC: the cell dies with no CSV) but argmaxes NaN logits to
+        # class 0 (accuracy: scored silently), so the two metrics would treat the same
+        # event differently. Both get the constant predictor instead: ROC-AUC 0.5,
+        # accuracy = share of the first class (what argmax-of-NaN already gave).
+        score = (constant_score(self.scoring, y) if diverged
+                 else check_scoring(est, scoring=self.scoring)(est, X, y))
         rec = next((cb for _, cb in getattr(net, "callbacks_", []) if _is_recorder(cb)), None)
         uid = getattr(rec, "last_fit_uid_", None)
         if uid is None:
@@ -176,8 +186,19 @@ class LogitScorer:
         np.savez_compressed(
             self.folder / f"{name}.npz", logits=logits, y=np.asarray(y), test_idx=np.asarray(idx),
             **cols,
-            test_fingerprint=np.array(h.hexdigest()), score=np.array(float(score)))
+            test_fingerprint=np.array(h.hexdigest()), score=np.array(float(score)),
+            diverged=np.array(diverged))
         return score
+
+
+def constant_score(scoring, y):
+    """Score of a net that predicts nothing (non-finite output): the constant predictor."""
+    if scoring == "roc_auc":
+        return 0.5
+    if scoring == "accuracy":
+        y = np.asarray(y)
+        return float((y == np.unique(y)[0]).mean())
+    raise ValueError(f"no constant-predictor score defined for {scoring!r}")
 
 
 class _SubjectStampMixin:

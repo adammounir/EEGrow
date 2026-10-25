@@ -16,8 +16,9 @@ checked), against what the cell line and the manifest say it must contain:
            direction, growth file events == applied epochs, init width != final width
            when grown
   score    logits reproduce the scorer: accuracy = argmax, ROC-AUC (2 classes) on
-           l1 - l0 (monotone in the softmax the scorer uses); per-session mean of the
-           logit-file scores == CSV row within 1e-6 (CSV is float32)
+           l1 - l0 (monotone in the softmax the scorer uses), and non-finite logits
+           (a diverged net) the constant predictor, flagged ``diverged``; per-session
+           mean of the logit-file scores == CSV row within 1e-6 (CSV is float32)
 
 Stability (non-finite loss, grad > 1e6) and growth (width_end > width_start) are
 COUNTED here, decided by the reader. Exit 1 on any integrity problem.
@@ -58,6 +59,9 @@ def parse_cells(path, only=None):
 def score_of(z, n_classes):
     lg, y = z["logits"], z["y"]
     classes = np.unique(y)
+    if not np.isfinite(lg).all():
+        # a diverged net is scored as the constant predictor (subject_stamp.constant_score)
+        return 0.5 if n_classes == 2 else float((y == classes[0]).mean())
     if n_classes == 2:
         from sklearn.metrics import roc_auc_score
         return float(roc_auc_score(y == classes[1], lg[:, 1] - lg[:, 0]))
@@ -156,6 +160,10 @@ def check_cell(c, man, sizes, counters, ckpt_epochs=CKPT):
             s = score_of(z, n_classes)
             if abs(s - float(z["score"])) > 1e-6:
                 bad.append(f"{uid[:8]} logits give {s:.6f}, scorer {float(z['score']):.6f}")
+            div = not np.isfinite(z["logits"]).all()
+            if "diverged" not in z or bool(z["diverged"]) != div:
+                bad.append(f"{uid[:8]} diverged flag {z.get('diverged')} != non-finite logits {div}")
+            counters["diverged_logit_files"] += div
             if len({len(z[k]) for k in ("logits", "y", "test_idx", "subject", "session")}) != 1:
                 bad.append(f"{uid[:8]} logits arrays of unequal length")
             if set(z["subject"]) != {c["subj"]}:
