@@ -8,7 +8,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-CONDS = ["ref_s0_rerun", "ref_s1", "b126_turing", "b126_volta", "b126_pascal"]
+# + avenant 1 (25/10 soir): GTX 1080 Ti (margpu024-027) and V100-SXM2 (margpu032), same references
+CONDS = ["ref_s0_rerun", "ref_s1", "b126_turing", "b126_volta", "b126_pascal", "b126_1080ti", "b126_v100sxm2"]
 ARMS = {"bd": ("bd_shallow", 0), "tiny": ("grow_shallow", 0)}
 
 
@@ -63,7 +64,7 @@ def main():
         lines.append(f"| {k} | (étalon : graine 0 → 1) | | | {dev_seed:.4f} | | | | |")
     lines.append("")
     env_ok = ok.get(("b126_turing", "bd")) and ok.get(("b126_turing", "tiny"))
-    for c in ("b126_volta", "b126_pascal"):
+    for c in ("b126_volta", "b126_pascal", "b126_1080ti", "b126_v100sxm2"):
         card_ok = env_ok and ok.get((c, "bd")) and ok.get((c, "tiny"))
         lines.append(f"- **{c.split('_')[1]}** : {'ENTRE dans la campagne A' if card_ok else 'N’ENTRE PAS'}")
     out = Path(a.out); out.parent.mkdir(parents=True, exist_ok=True)

@@ -49,3 +49,33 @@ comme les autres.
 
 Limite connue : 9 sujets, un seul modèle (le moins coûteux). Le test détecte une rupture
 (noyaux faux, croissance cassée), pas un biais de 0,5 point.
+
+## 5. Avenant 1 — 25/10/2026 soir, avant tout lancement des nouvelles conditions
+
+Pourquoi : la vague principale de la campagne A (818892-818906) tourne sur ~47 cartes et
+Adam demande le maximum de parallélisme. Deux modèles de carte de Margaret, présents et
+souvent libres, n'ont jamais été testés : la lecture du 25/10 a eu une **P100** pour
+« pascal » (margpu029) et une **V100-PCIE** pour « volta ». Sondés ce soir par `nvidia-smi` :
+
+| Nœuds | Carte | sm | Mémoire |
+|---|---|---|---|
+| margpu024-027 (16 cartes) | NVIDIA GeForce GTX 1080 Ti | 6.1 | 11 Go |
+| margpu032 (4 cartes) | Tesla V100-SXM2-32GB | 7.0 | 32 Go |
+
+(margpu004, V100S : nœud injoignable, allocation révoquée ; hors avenant.)
+
+Ajout de deux conditions, rien d'autre ne change :
+
+| Condition | Env | Carte | Graine |
+|---|---|---|---|
+| b126_1080ti | bench126 | GTX 1080 Ti (`EXPECT`) | 0 |
+| b126_v100sxm2 | bench126 | V100-SXM2-32GB (`EXPECT`) | 0 |
+
+- Mêmes cellules (`equiv_cells_1080ti.txt`, `equiv_cells_v100sxm2.txt` = les lignes de
+  `equiv_cells_pascal.txt`, label près), même `env_equiv.sbatch`, **même commit que les
+  références (50b56b8)** : seul l'env/la carte change entre la référence et le test.
+- Mêmes références : ref_s0 / ref_s1 de `/scratch/amounir/eegrow_v2/equiv/`, copiées
+  (lecture seule) dans le checkout de l'avenant. Elles ne sont pas refaites.
+- Même critère § 4, même lecteur (deux conditions ajoutées à `CONDS`).
+- Conséquence : une carte ÉQUIVALENT entre dans la campagne A par un avenant au PREREG de
+  la campagne (porte de carte du sbatch), pour les tâches encore en attente seulement.

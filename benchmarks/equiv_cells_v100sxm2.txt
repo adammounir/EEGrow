@@ -1,0 +1,2 @@
+b126_v100sxm2__bd bench126 bd_shallow 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64
+b126_v100sxm2__tiny bench126 grow_shallow 0 train.lr=6.25e-4 train.weight_decay=0.0 train.batch_size=64 train.scaling_grid=[0.0,0.25,0.5,1.0,2.0,4.0] train.growth_normalization=tiny_paper train.growth_fixed_s=1.0
