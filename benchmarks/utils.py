@@ -117,9 +117,17 @@ def cache_config(cfg) -> dict | None:
     cc = {"save_raw": False, "save_epochs": True, "save_array": True, "use": True,
           "overwrite_raw": False, "overwrite_epochs": False,
           "overwrite_array": False}
+    if cfg.get("readonly"):
+        # Campaign A (25/10/2026): read, never write. MOABB (base.py,
+        # _get_single_subject_data_using_cache) then loads every cached level and
+        # derives a missing one in memory without saving it, so concurrent jobs can
+        # never collide on the shared directory. The cache is built and verified
+        # beforehand, serially (campaignA_manifest.py --build).
+        cc["save_epochs"] = cc["save_array"] = False
     if cfg.get("path"):
         cc["path"] = str(Path(str(cfg.path)).expanduser())
-    logger.info("epoch cache ON -> %s", cc.get("path", "MNE_DATA default"))
+    logger.info("epoch cache ON%s -> %s", " (read-only)" if cfg.get("readonly") else "",
+                cc.get("path", "MNE_DATA default"))
     return cc
 
 

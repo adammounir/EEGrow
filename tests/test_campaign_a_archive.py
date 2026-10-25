@@ -115,3 +115,23 @@ def test_recorder_new_flags_survive_clone(tmp_path):
     c = clone(rec)
     for k in ("save_init", "save_growth", "save_checkpoints", "save_test_logits"):
         assert getattr(c, k) == getattr(rec, k)
+
+
+def test_cache_readonly_never_saves():
+    """Campaign A reads a cache built and verified beforehand: with readonly, MOABB
+    loads every cached level and never writes (base.py
+    _get_single_subject_data_using_cache saves only under save_epochs / save_array)."""
+    import sys
+    from pathlib import Path
+
+    from omegaconf import OmegaConf
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmarks"))
+    from utils import cache_config
+
+    rw = cache_config(OmegaConf.create({"enabled": True, "path": "/x"}))
+    ro = cache_config(OmegaConf.create({"enabled": True, "path": "/x", "readonly": True}))
+    assert rw["save_epochs"] and rw["save_array"] and rw["use"]
+    assert not ro["save_epochs"] and not ro["save_array"] and not ro["save_raw"] and ro["use"]
+    assert not any(ro[k] for k in ("overwrite_raw", "overwrite_epochs", "overwrite_array"))
+    assert {k: v for k, v in ro.items() if not k.startswith("save")} == \
+        {k: v for k, v in rw.items() if not k.startswith("save")}

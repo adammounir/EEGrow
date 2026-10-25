@@ -202,6 +202,9 @@ cache:
   enabled: false
   # null => MNE_DATA. Point it at a shared path so the whole fleet hits one cache.
   path: null
+  # true = read the cache, never write it (utils.cache_config): a miss is derived in
+  # memory and not saved. Campaign A runs read-only on a cache built and verified first.
+  readonly: false
 
 # `profile_cell.py` only. Kept here so the profiler reuses the production config
 # tree verbatim rather than a parallel copy that could drift from it.

@@ -40,6 +40,12 @@ def main(argv: list[str]) -> int:
     print(f"\n[run_cell] {len(res)} rows in {dt:.1f}s "
           f"({dt / max(len(res), 1):.1f}s per fold-row), "
           f"mean score {res['score'].mean():.4f}", flush=True)
+    import torch
+    if torch.cuda.is_available():
+        # the widest network of the run sets it: a campaign sizes its cards on this
+        print(f"[run_cell] peak GPU memory {torch.cuda.max_memory_reserved() / 2**30:.2f} GiB "
+              f"reserved / {torch.cuda.get_device_properties(0).total_memory / 2**30:.1f} GiB "
+              f"on {torch.cuda.get_device_name(0)}", flush=True)
     return 0
 
 
