@@ -83,9 +83,9 @@ MEASURED = {
 }
 
 
-def load_manifest(d):
+def load_manifest(d, datasets=DATASETS):
     man = {}
-    for ds in DATASETS:
+    for ds in datasets:
         f = Path(d) / f"{ds}.json"
         if not f.exists():
             raise SystemExit(f"REFUSED: no manifest for {ds} ({f})")
@@ -138,6 +138,8 @@ class Cost:
         cal = collections.defaultdict(list)
         for m, (grow, bd, *_rest) in MODELS.items():
             for ds, (h_bd, h_tiny) in MEASURED[m].items():
+                if ds not in man:  # a --datasets test subset: calibrate on what it has
+                    continue
                 N = sum(s["n"] for s in man[ds]["subjects"].values())
                 for arm, h in ((bd, h_bd), (grow, h_tiny)):
                     cal[arm].append(h / (4 * N * 200 * rows[(ds, arm)] / 3600))
@@ -165,7 +167,7 @@ def arm_spec(model, arm):
 def cells(man, out_root, subset=None):
     xsess = cross_session_datasets(man)
     for prot in PROTOCOLS:
-        for ds in DATASETS:
+        for ds in man:
             if prot == "cross_session" and ds not in xsess:
                 continue
             for model in MODELS:
@@ -200,12 +202,16 @@ def main():
     ap.add_argument("--out-root", required=True)
     ap.add_argument("--dest", default=".")
     ap.add_argument("--subset", choices=["all", "dryrun", "ram", "b126"], default="all")
+    ap.add_argument("--datasets", default=None,
+                    help="restrict to these datasets (test subsets only, never the grid)")
     a = ap.parse_args()
-    man = load_manifest(a.manifest)
+    if a.datasets and a.subset == "all":
+        raise SystemExit("REFUSED: --datasets is for the test subsets, the grid takes all 12")
+    man = load_manifest(a.manifest, a.datasets.split(",") if a.datasets else DATASETS)
     check_within_folds(man)
     cost = Cost(a.probe, man)
     subset = None
-    first = {ds: next(iter(man[ds]["subjects"])) for ds in DATASETS}
+    first = {ds: next(iter(man[ds]["subjects"])) for ds in man}
     if a.subset == "dryrun":
         # Full 200 epochs: every arm once on a 4-class dataset (within + cross_session),
         # the 2-class ROC-AUC path on cross_subject, and the GPU memory of the widest
