@@ -416,3 +416,24 @@ Aucun contraste n'a été lu.
     entrent dans la lecture comme le 6e modèle (§ 2.1 et § 3.2, famille de 18).
   - **Si le test échoue**, TIDNet est abandonné par écrit, et la famille compte 15
     endpoints.
+
+#### Addendum à l'avenant 3 — 26/10/2026 soir : le test n'a pas tourné, il est relancé
+
+Les 33 cellules du test (823535-823538) ont toutes échoué en environ 18 s, avant la
+première époque. MOABB copie le pipeline par `sklearn.clone` avant chaque fit, et le
+constructeur de `RequireParamGroups` modifiait son paramètre (`list(patterns)`), ce que
+`clone` refuse (`RuntimeError: Cannot clone object ... modifies parameter patterns`).
+Aucun fit n'a eu lieu et aucun fichier n'a été écrit sous `campaignA_tidtest`. Il n'y a
+donc rien à lire, et le critère PASSE / ÉCHOUE reste à évaluer.
+
+- **Correctif** : le constructeur garde `patterns` tel quel. La recette, les motifs
+  exemptés, les cellules et le critère sont inchangés.
+- **Test ajouté** : `test_no_decay_pipeline_survives_sklearn_clone` passe par
+  `sklearn.clone` puis par un fit, le chemin même de MOABB. Les tests précédents
+  appelaient `fit` directement, d'où le trou. Résultat : 276/276 sur Margaret.
+- **Relance** : depuis le checkout séparé `/scratch/amounir/eegrow_tid2` (ce commit).
+  `eegrow_tid` reste figé à 98fc4c8, avec les logs de l'échec. Si le test passe, la
+  grille TIDNet est générée depuis `eegrow_tid2`.
+- **Calcul** : depuis le 26/10 13h40, l'ensemble des jobs est plafonné à 24 GPU (demande
+  du responsable du cluster). Le test est soumis retenu, et le job `gpucap` le libère
+  avant les tâches de la campagne.

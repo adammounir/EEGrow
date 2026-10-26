@@ -98,3 +98,20 @@ def test_no_decay_pattern_matching_nothing_refuses_the_fit():
     y = np.arange(16) % 4
     with pytest.raises(ValueError, match="match no parameter"):
         clf.fit(X, y)
+
+
+def test_no_decay_pipeline_survives_sklearn_clone():
+    # MOABB clones the pipeline before each fit; the 26/10 TIDNet test died there.
+    import numpy as np
+    from sklearn.base import clone
+
+    from eegrow.training.recording import _optimizer_stamp
+
+    clf = clone(_clf(_train_cfg(max_epochs=1,
+                                no_decay_params=["*.parametrizations.weight.original1"]),
+                     model="bd_tidnet"))
+    X = np.random.default_rng(0).standard_normal((16, 4, 500)).astype("float32")
+    y = np.arange(16) % 4
+    clf.fit(X, y)
+    stamp = _optimizer_stamp(clf)
+    assert [grp["weight_decay"] for grp in stamp["param_groups"]] == [0.0, 0.01]

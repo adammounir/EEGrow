@@ -485,7 +485,9 @@ class RequireParamGroups(Callback):
     """
 
     def __init__(self, patterns):
-        self.patterns = list(patterns)
+        # Stored as given: sklearn.clone (MOABB clones the pipeline before each fit)
+        # refuses a constructor that modifies its parameters.
+        self.patterns = patterns
 
     def on_epoch_begin(self, net, **kwargs):
         import fnmatch
