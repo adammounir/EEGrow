@@ -1,0 +1,17 @@
+# `grow_shallow` with braindecode's initialisation (PREREG_shallow_init_control.md).
+#
+# GrowingShallowFBCSPNet keeps PyTorch's default init (conv_time std x2.6 that of
+# braindecode, non-zero biases), while bd_shallow is xavier_uniform + zero biases
+# (braindecode 1.5.2 shallow_fbcsp.py l. 205-218), so Shallow tiny - bd mixes growth and
+# init. This arm draws every starting weight from bd_shallow's law (Xavier bounds of
+# the 40/40 target geometry); everything else is grow_shallow's.
+kind: growing
+arch: GrowingShallowFBCSPNet
+label: grow_shallow_bdinit
+needs_sfreq: false
+grow_every: 5
+module_kwargs:
+  n_filters_time: 8
+  n_filters_spat: 40
+  target_n_filters_time: 40
+  init: braindecode

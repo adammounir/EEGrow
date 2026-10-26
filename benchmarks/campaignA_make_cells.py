@@ -55,6 +55,10 @@ for _ds in ("zhou2016", "alexmi", "bnci2014_001"):
     SEEDS[_ds] = [0, 1, 2, 3, 4]
 PROTOCOLS = ["within_session", "cross_session", "cross_subject"]
 ARMS = ["bd", "tiny", "random"]
+# Shallow init control (PREREG_shallow_init_control.md), Shallow only, cells of their own:
+# `tiny_bdinit` = tiny on grow_shallow_bdinit (bd_shallow's init law), `fix` =
+# fix_shallow (the growing class at 40/40, PyTorch init, no growth) on bd's recipe.
+CONTROL_ARMS = {"tiny_bdinit": ("shallow", "grow_shallow_bdinit"), "fix": ("shallow", "fix_shallow")}
 CKPT = "[10,25,50,100]"
 # The validation campaign's protocol (valid_battery.sbatch), plus the archive flags.
 COMMON = ("train.max_epochs=200 train.patience=200 train.selection_monitor=valid_acc "
@@ -147,6 +151,8 @@ class Cost:
         self.cal = {a: st.median(v) for a, v in cal.items()}
 
     def __call__(self, prot, ds, cfg, subj):
+        # control arms are costed as the arm they shadow (never probed themselves)
+        cfg = {"grow_shallow_bdinit": "grow_shallow", "fix_shallow": "bd_shallow"}.get(cfg, cfg)
         subs = self.man[ds]["subjects"]
         n_s = subs[subj]["n"]
         trials = {"within_session": 4 * n_s,
@@ -167,6 +173,12 @@ def arm_spec(model, arm):
     grow, bd, recipe, extra = MODELS[model]
     if model in RECIPE_AMEND:
         recipe = f"{recipe} {RECIPE_AMEND[model]}"
+    if arm in CONTROL_ARMS:
+        if CONTROL_ARMS[arm][0] != model:
+            raise SystemExit(f"REFUSED: control arm {arm} is for {CONTROL_ARMS[arm][0]}, not {model}")
+        if arm == "fix":
+            return CONTROL_ARMS[arm][1], recipe
+        grow, arm = CONTROL_ARMS[arm][1], "tiny"
     if arm == "bd":
         return bd, recipe
     ov = f"{recipe} {RULES['tiny']} {extra}".strip()
@@ -175,14 +187,14 @@ def arm_spec(model, arm):
     return grow, ov
 
 
-def cells(man, out_root, subset=None, models=None):
+def cells(man, out_root, subset=None, models=None, arms=ARMS):
     xsess = cross_session_datasets(man)
     for prot in PROTOCOLS:
         for ds in man:
             if prot == "cross_session" and ds not in xsess:
                 continue
             for model in (models or MODELS):
-                for arm in ARMS:
+                for arm in arms:
                     cfg, ov = arm_spec(model, arm)
                     for seed in SEEDS[ds]:
                         for subj in man[ds]["subjects"]:
@@ -219,6 +231,9 @@ def main():
     # PREREG § 3.1); the grid is frozen on the other five, TIDNet joins by amendment.
     ap.add_argument("--models", default=",".join(MODELS),
                     help="models of the grid, written to the plan (default: all six)")
+    ap.add_argument("--arms", default=",".join(ARMS),
+                    help="arms (default bd,tiny,random); the Shallow init control passes "
+                         "tiny_bdinit,fix with --models shallow")
     a = ap.parse_args()
     if a.datasets and a.subset == "all":
         raise SystemExit("REFUSED: --datasets is for the test subsets, the grid takes all 12")
@@ -256,13 +271,17 @@ def main():
     unknown = [m for m in models if m not in MODELS]
     if unknown:
         raise SystemExit(f"REFUSED: unknown models {unknown}")
-    L = list(cells(man, a.out_root, subset, models))
+    arms = a.arms.split(",")
+    bad = [x for x in arms if x not in ARMS and x not in CONTROL_ARMS]
+    if bad:
+        raise SystemExit(f"REFUSED: unknown arms {bad}")
+    L = list(cells(man, a.out_root, subset, models, arms))
     # Refuse two cells writing the same file (the 25/10 smoke: tiny and random shared a stem).
     dup = [k for k, n in collections.Counter(c["csv"] for c in L).items() if n > 1]
     if dup:
         raise SystemExit(f"REFUSED: {len(dup)} output paths shared by several cells, e.g. {dup[0]}")
     for c in L:
-        if c["arm"] != "bd" and not ("train.growth_normalization=tiny_paper" in c["ov"]
+        if c["arm"] not in ("bd", "fix") and not ("train.growth_normalization=tiny_paper" in c["ov"]
                                      and "train.growth_fixed_s=1.0" in c["ov"]):
             raise SystemExit(f"REFUSED: growing cell without the explicit tiny rule: {c}")
         c["h"] = cost(c["prot"], c["ds"], c["cfg"], c["subj"])
@@ -331,7 +350,7 @@ def main():
     print("longest cell:", max(L, key=lambda c: c["h"])["csv"], f"{max(c['h'] for c in L):.1f} h")
     for o in order:
         print("  array %s: %d tasks, mem %dG, time %dh, %.0f GPU-h" % o)
-    json.dump({"models": models, "n_cells": len(L), "n_tasks": len(rows), "arrays": order,
+    json.dump({"models": models, "arms": arms, "n_cells": len(L), "n_tasks": len(rows), "arrays": order,
                "cross_session_datasets": xs, "gpu_h": tot,
                "calibration": cost.cal}, open(dest / f"campaignA_plan{tag}.json", "w"), indent=1)
 

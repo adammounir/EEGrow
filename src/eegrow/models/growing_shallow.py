@@ -101,6 +101,7 @@ class GrowingShallowFBCSPNet(SequentialGrowingModel):
         drop_prob: float = 0.5,
         batch_norm_alpha: float = 0.1,
         readout: str = "power",
+        init: str = "pytorch",
         device: torch.device | str | None = None,
     ) -> None:
         super().__init__(in_features=n_chans, out_features=n_outputs, device=device)
@@ -202,6 +203,10 @@ class GrowingShallowFBCSPNet(SequentialGrowingModel):
         )
         self.squeeze = SqueezeFinalOutput()
         self.to(self.device)
+        if init == "braindecode":
+            self._braindecode_init(target, filter_time_length, n_chans)
+        elif init != "pytorch":
+            raise ValueError(f"init must be 'pytorch' or 'braindecode', got {init!r}")
 
         # --- register the growable layer with gromo --------------------------
         self._growable_layers = [self.conv_spat] if self._can_grow else []
@@ -220,6 +225,28 @@ class GrowingShallowFBCSPNet(SequentialGrowingModel):
         return self.bnorm
 
     # ------------------------------------------------------------------ utils
+    @torch.no_grad()
+    def _braindecode_init(self, target: int, filter_time_length: int, n_chans: int):
+        """braindecode 1.5.2's ShallowFBCSPNet init (shallow_fbcsp.py l. 205-218):
+        xavier_uniform (gain 1) on conv_time, conv_spat and the classifier, zero biases,
+        BatchNorm at (1, 0). The Xavier bounds are those of the TARGET geometry
+        (conv_time target x 1 x 25 x 1, conv_spat n_spat x target x 1 x n_chans): a
+        net starting narrower then draws each weight from exactly bd_shallow's law, as
+        if it were the first filters of a braindecode net. At target width it is
+        braindecode's own init."""
+        def xavier(w, fan_in, fan_out):
+            b = (6.0 / (fan_in + fan_out)) ** 0.5
+            w.uniform_(-b, b)
+
+        k = filter_time_length
+        xavier(self.conv_time.layer.weight, 1 * k, target * k)
+        self.conv_time.layer.bias.zero_()
+        xavier(self.conv_spat.layer.weight, target * n_chans, self.n_filters_spat * n_chans)
+        self.bnorm.weight.fill_(1.0)
+        self.bnorm.bias.zero_()
+        torch.nn.init.xavier_uniform_(self.conv_classifier.weight, gain=1)
+        self.conv_classifier.bias.zero_()
+
     @torch.no_grad()
     def _infer_final_conv_length(self, n_chans: int, n_times: int) -> int:
         """Run head + tail (minus classifier) to read the temporal dim."""
