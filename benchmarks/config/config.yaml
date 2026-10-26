@@ -187,6 +187,11 @@ train:
   # stamp shows 0.01). braindecode's recipe: 0 for ShallowFBCSPNet, 5e-4 for Deep4Net
   # (examples/model_building/plot_bcic_iv_2a_moabb_trial.py, lines 233-238).
   weight_decay: 0.01
+  # fnmatch patterns of parameters exempt from `weight_decay` (one skorch param group at
+  # 0, every arm alike); null = one group, every historical cell. Campaign A, TIDNet
+  # amendment: ["*.parametrizations.weight.original1"], the direction v of the
+  # weight-normed convs. A pattern matching no parameter refuses the fit.
+  no_decay_params: null
 
 # MOABB does its own per-fold parallelism off; the sweep parallelises across jobs.
 n_jobs: 1

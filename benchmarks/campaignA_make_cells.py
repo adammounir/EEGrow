@@ -155,8 +155,18 @@ class Cost:
         return trials * 200 * self.spte[(ds, cfg)] * self.cal[cfg] / 3600
 
 
+# Recipe amendments (PREREG_campaign_A.md § 6), appended to the validated recipe of
+# `valid_make_cells` (which stays as validated) for the three arms alike. Avenant 3:
+# TIDNet's weight-norm direction v is exempt from its L2 (the official repo decays
+# every parameter but over 100 cosine-annealed epochs; under 200 constant-lr epochs the
+# decay drives ||v|| to 0 and the g/||v|| gradient to inf, in all three arms).
+RECIPE_AMEND = {"tidnet": "train.no_decay_params=['*.parametrizations.weight.original1']"}
+
+
 def arm_spec(model, arm):
     grow, bd, recipe, extra = MODELS[model]
+    if model in RECIPE_AMEND:
+        recipe = f"{recipe} {RECIPE_AMEND[model]}"
     if arm == "bd":
         return bd, recipe
     ov = f"{recipe} {RULES['tiny']} {extra}".strip()
@@ -202,7 +212,7 @@ def main():
     ap.add_argument("--probe", required=True)
     ap.add_argument("--out-root", required=True)
     ap.add_argument("--dest", default=".")
-    ap.add_argument("--subset", choices=["all", "dryrun", "ram", "b126"], default="all")
+    ap.add_argument("--subset", choices=["all", "dryrun", "ram", "b126", "tidtest"], default="all")
     ap.add_argument("--datasets", default=None,
                     help="restrict to these datasets (test subsets only, never the grid)")
     # 25/10: TIDNet's recipe diverges on long runs in all three arms (weight norm,
@@ -235,6 +245,13 @@ def main():
                                                  and p == "within_session"
                                                  and (m, arm) in {("shallow", "tiny"), ("shallow", "random"),
                                                                   ("ctnet", "random"), ("conformer", "bd")})
+    elif a.subset == "tidtest":
+        # Avenant 3, the TIDNet recipe test (200 epochs): every held-out subject of
+        # bnci2014_004 cross_subject (subject 1 is the cell that diverged in all three
+        # arms, 818399), and the first held-out subject of the two cross_subject pools
+        # with the most optimizer steps per epoch (lee2019_mi, schirrmeister2017).
+        subset = lambda p, ds, m, arm, seed, s: seed == 0 and p == "cross_subject" and (
+            ds == "bnci2014_004" or s == first[ds])
     models = a.models.split(",")
     unknown = [m for m in models if m not in MODELS]
     if unknown:

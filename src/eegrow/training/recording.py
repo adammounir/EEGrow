@@ -58,13 +58,15 @@ def _optimizer_stamp(net) -> dict | None:
     explicitly, which is exactly the kind of thing a reader assumes was recorded.
 
     Read off the live optimizer rather than the config, so it reports what ran and not
-    what was requested. First param group only: nothing here uses per-group settings,
-    and a stamp that silently reports one of several would be worse than none.
+    what was requested. The scalar fields are the DEFAULT group's: the last one, where
+    skorch puts every parameter no ``param_groups`` pattern claimed (the only group
+    before ``train.no_decay_params``). With several groups, ``param_groups`` lists each
+    one's tensor/parameter count and weight decay, so no group is reported for another.
     """
     opt = getattr(net, "optimizer_", None)
     if opt is None or not getattr(opt, "param_groups", None):
         return None
-    group = opt.param_groups[0]
+    group = opt.param_groups[-1]
     stamp = {"class": type(opt).__name__,
              "n_param_groups": len(opt.param_groups),
              "batch_size": getattr(net, "batch_size", None),
@@ -73,6 +75,11 @@ def _optimizer_stamp(net) -> dict | None:
         if key in group:
             value = group[key]
             stamp[key] = list(value) if isinstance(value, tuple) else value
+    if len(opt.param_groups) > 1:
+        stamp["param_groups"] = [
+            {"n_tensors": len(g["params"]),
+             "n_params": int(sum(p.numel() for p in g["params"])),
+             "weight_decay": g.get("weight_decay")} for g in opt.param_groups]
     return stamp
 
 

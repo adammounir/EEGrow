@@ -475,6 +475,30 @@ class StopReason(Callback):
             else "early"
 
 
+class RequireParamGroups(Callback):
+    """Refuse a fit whose ``optimizer__param_groups`` patterns match no parameter.
+
+    skorch (1.4, ``NeuralNet._get_params_for_optimizer``) drops a pattern without a
+    match in silence: the parameters it meant to exempt stay in the default group and
+    the fit runs the old recipe under the new label. Checked on every optimizer the
+    fit trains with (``on_epoch_begin``), since growth rebuilds it.
+    """
+
+    def __init__(self, patterns):
+        self.patterns = list(patterns)
+
+    def on_epoch_begin(self, net, **kwargs):
+        import fnmatch
+        names = [n for n, _ in net.module_.named_parameters()]
+        dead = [p for p in self.patterns if not fnmatch.filter(names, p)]
+        if dead:
+            raise ValueError(f"optimizer param_groups patterns match no parameter: {dead}")
+        expected = len(self.patterns) + 1
+        if len(net.optimizer_.param_groups) != expected:
+            raise ValueError(f"{len(net.optimizer_.param_groups)} optimizer param groups, "
+                             f"expected {expected} (patterns {self.patterns} + default)")
+
+
 def global_grad_norm(module: torch.nn.Module) -> float:
     """L2 norm of the concatenated gradients of ``module``, for one-off checks."""
     total = 0.0

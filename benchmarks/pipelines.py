@@ -289,6 +289,16 @@ def _build_dl(model_cfg, train_cfg, *, n_chans, n_times, n_outputs, sfreq,
         opt_extra["optimizer__betas"] = tuple(b)
     if train_cfg.get("amsgrad"):
         opt_extra["optimizer__amsgrad"] = True
+    # Parameters exempt from weight decay (fnmatch on named_parameters), for every arm
+    # alike. TIDNet amendment of campaign A: the direction `v` of its weight-normed
+    # convs (`*.parametrizations.weight.original1`), whose norm the function does not
+    # see but the gradient does (g/||v||). Patterns that match nothing refuse the fit.
+    no_decay = list(train_cfg.get("no_decay_params") or [])
+    if no_decay:
+        from eegrow.training.callbacks import RequireParamGroups
+        opt_extra["optimizer__param_groups"] = [(p, {"weight_decay": 0.0})
+                                                for p in no_decay]
+        callbacks.insert(0, ("no_decay", RequireParamGroups(no_decay)))
     clf = EEGClassifier(
         module=module,
         **module_params,

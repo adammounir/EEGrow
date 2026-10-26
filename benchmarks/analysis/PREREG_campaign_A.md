@@ -354,3 +354,65 @@ Aucun contraste n'a été lu.
   par nœud.
 - **Lecture** : la carte et l'env sont écrits dans chaque fit (`gpu_name`, `v_torch`).
   Le § 3 est inchangé. Les 49 tâches en échec seront relancées sous cette même porte.
+
+### Avenant 3 — 26/10/2026 matin : relance des 49 tâches, et correctif de TIDNet
+
+Aucun contraste n'a été lu.
+
+- **Les 49 tâches en échec de A03 sont relancées** (job 823421, `campaignA_b.sbatch`,
+  80 Go, 32 h, `--cpus-per-task=9`, mêmes exclusions que l'avenant 2 ; ids 3-4, 22,
+  37-42, 44-56, 58-68, 70-75, 80-89 de `A03_main_mem80_t32.txt`). Il y a deux causes,
+  lues dans les logs, et la porte de l'avenant 2 couvre les deux : 48 sont des OOM GPU
+  sur margpu028 (exclu) et 1 est un rc=137 (RAM hôte) sur margpu023. Aucune de ces
+  tâches n'était encore en attente, donc aucune cellule ne tourne deux fois.
+- **TIDNet : le correctif de recette.**
+  - *Source.* Le dépôt officiel (`SPOClab-ca/ThinkerInvariance` `784a8b8`, `train.py`
+    l. 490-491, `main.py` l. 99-118, `layers.py` l. 3 et 210) applique
+    `torch.nn.utils.weight_norm` à ses convolutions temporelles. Il entraîne avec
+    `Adam(model.parameters(), weight_decay=0.01, amsgrad=True)`, donc L2 sur g **et** v,
+    mais sur **100 époques**, avec un lr en cosinus qui descend jusqu'à 0 après 20
+    époques de montée (`utils.CosineDecay`). La grille A tourne sur 200 époques à lr
+    constant, comme les 5 autres modèles, et les bras en croissance refusent un
+    planificateur de lr (`pipelines.py`). Le régime de la grille cumule donc environ
+    4× le lr intégré de l'original. C'est là que ‖v‖ s'éteint (§ 3.1).
+  - *Correctif.* Pas de décroissance sur la direction v des convolutions à weight norm,
+    c'est-à-dire `*.parametrizations.weight.original1` (braindecode 1.5.2 utilise
+    `torch.nn.utils.parametrizations.weight_norm`). Tout le reste garde la L2 de 0,01,
+    g compris. Raison : avec w = g·v/‖v‖, la fonction ne voit pas ‖v‖, et la norme de
+    chaque filtre vaut exactement |g|. La L2 sur g garde donc la régularisation de la
+    taille des poids. Celle sur v ne fait que pousser ‖v‖ vers 0, là où le gradient
+    en g/‖v‖ sature le float32.
+  - Le correctif est identique pour les trois bras (`campaignA_make_cells.RECIPE_AMEND`).
+    La recette validée de `valid_make_cells` n'est pas modifiée.
+  - *Code.* `train.no_decay_params` (null par défaut, soit un seul groupe, ce qui ne
+    change aucune cellule des 5 autres modèles) devient un groupe skorch à
+    weight_decay 0. `RequireParamGroups` refuse le fit si un motif ne correspond à
+    aucun paramètre (skorch l'ignore en silence) ou si le nombre de groupes est faux.
+    Le contrôle est refait à chaque époque, puisque la croissance reconstruit
+    l'optimiseur.
+  - Le tampon `optimizer` des fits donne le weight_decay du groupe par défaut et liste
+    chaque groupe (`param_groups`).
+  - Tests : 275/275 sur Margaret. Sur grow_tidnet, 16 époques et 4 optimiseurs
+    successifs (3 croissances), le groupe exempté est exactement l'ensemble des v à
+    chaque époque.
+- **Test, avant toute cellule de la grille** (`--subset tidtest --models tidnet`, 200
+  époques, protocole de la grille). Les cellules sont :
+  - bnci2014_004 cross_subject, graine 0, les 9 sujets tenus à part, 3 bras. Le sujet 1
+    est la cellule qui divergeait dans les trois bras (818399).
+  - le premier sujet tenu à part de lee2019_mi et de schirrmeister2017 cross_subject,
+    3 bras. Ce sont les deux pools qui font le plus de pas d'optimiseur par époque.
+
+  Résultats sous `.../eegrow/campaignA_tidtest`.
+  **PASSE** si les trois conditions tiennent :
+  - toutes les cellules ont leur CSV ;
+  - aucun fit n'a de logits de test ou de perte non finis ;
+  - le tampon de chaque fit montre `param_groups` = [0, 0,01].
+
+  Les scores ne sont pas lus pour décider. On rapporte seulement l'AUC par bras et le
+  `grad_norm_max_fit`.
+  - **Si le test passe**, les cellules TIDNet de la grille sont générées avec
+    `--models tidnet`, depuis le code de ce commit (checkout séparé
+    `/scratch/amounir/eegrow_tid` ; la vague en cours ne change pas de code). Elles
+    entrent dans la lecture comme le 6e modèle (§ 2.1 et § 3.2, famille de 18).
+  - **Si le test échoue**, TIDNet est abandonné par écrit, et la famille compte 15
+    endpoints.

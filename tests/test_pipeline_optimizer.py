@@ -51,3 +51,50 @@ def test_braindecode_deep4_recipe_reaches_the_live_optimizer():
     clf.initialize()
     group = clf.optimizer_.param_groups[0]
     assert (group["lr"], group["weight_decay"]) == (1e-2, 5e-4)
+
+
+WN_V = "*.parametrizations.weight.original1"
+
+
+def test_no_decay_params_default_is_one_group():
+    """null = every historical cell: a single group, no `param_groups` in the stamp."""
+    from eegrow.training.recording import _optimizer_stamp
+
+    assert _train_cfg()["no_decay_params"] is None
+    clf = _clf(_train_cfg(), model="bd_tidnet")
+    clf.initialize()
+    assert len(clf.optimizer_.param_groups) == 1
+    assert "param_groups" not in _optimizer_stamp(clf)
+
+
+def test_tidnet_weight_norm_direction_is_exempt_from_decay():
+    """v (original1) of every weight-normed conv at 0; g and the rest keep 0.01."""
+    from eegrow.training.recording import _optimizer_stamp
+
+    clf = _clf(_train_cfg(optimizer="adam", amsgrad=True, weight_decay=0.01,
+                          no_decay_params=[WN_V]), model="bd_tidnet")
+    clf.initialize()
+    v = [n for n, _ in clf.module_.named_parameters() if n.endswith("weight.original1")]
+    g = [n for n, _ in clf.module_.named_parameters() if n.endswith("weight.original0")]
+    assert v and len(v) == len(g)
+    exempt, default = clf.optimizer_.param_groups
+    assert exempt["weight_decay"] == 0.0 and len(exempt["params"]) == len(v)
+    assert default["weight_decay"] == 0.01
+    ids = {id(p) for p in exempt["params"]}
+    named = dict(clf.module_.named_parameters())
+    assert ids == {id(named[n]) for n in v}
+    stamp = _optimizer_stamp(clf)
+    assert stamp["weight_decay"] == 0.01 and stamp["amsgrad"] is True
+    assert [grp["weight_decay"] for grp in stamp["param_groups"]] == [0.0, 0.01]
+
+
+def test_no_decay_pattern_matching_nothing_refuses_the_fit():
+    import numpy as np
+    import pytest
+
+    clf = _clf(_train_cfg(max_epochs=1, no_decay_params=["*.no_such_param"]),
+               model="bd_tidnet")
+    X = np.random.default_rng(0).standard_normal((16, 4, 500)).astype("float32")
+    y = np.arange(16) % 4
+    with pytest.raises(ValueError, match="match no parameter"):
+        clf.fit(X, y)
