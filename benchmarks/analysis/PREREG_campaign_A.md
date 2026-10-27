@@ -437,3 +437,42 @@ donc rien à lire, et le critère PASSE / ÉCHOUE reste à évaluer.
 - **Calcul** : depuis le 26/10 13h40, l'ensemble des jobs est plafonné à 24 GPU (demande
   du responsable du cluster). Le test est soumis retenu, et le job `gpucap` le libère
   avant les tâches de la campagne.
+
+### Avenant 4 — 27/10/2026 matin : une seule graine en inter-sujet sur les trois grands datasets
+
+**Aucun score n'a été lu.** La décision s'appuie seulement sur le coût prévu de chaque
+cellule (sonde de temps du générateur), sur l'existence des CSV et sur la file Slurm.
+
+- **Pourquoi.** Le 26/10, le responsable du cluster a demandé de réduire l'usage des GPU
+  communs. Le plafond est désormais de 32 cartes en journée de semaine et de 70 la nuit
+  et le week-end. Il restait 11 275 GPU-h (A + TIDNet + contrôle Shallow), dont 86 % en
+  cross_subject. Chaque graine y refait un leave-one-subject-out complet, dont le coût
+  croît à peu près comme le carré du nombre de sujets. Les graines ≥ 1 de lee2019_mi,
+  physionetmi et cho2017 représentaient à elles seules 5 118 GPU-h, soit 45 % du reste.
+- **Règle.** En **cross_subject**, sur **lee2019_mi (54 sujets), physionetmi (109) et
+  cho2017 (52)**, seule la **graine 0** est prévue. Cela vaut pour tous les modèles et
+  tous les bras, TIDNet et bras du contrôle Shallow compris : les appariements tiny/bd,
+  tiny/random et C1/C2/C3 restent faits sur les mêmes cellules. Rien ne change ailleurs :
+  les graines 0-2 (0-4 sur zhou2016, alexmi et bnci2014_001) restent prévues sur les 9
+  autres datasets et sur les deux autres protocoles.
+- **Raison du choix de ces datasets.** L'unité statistique est le sujet (§ 3), et les
+  graines ne réduisent que le bruit de mesure de chaque sujet. Avec 52 à 109 sujets, le
+  nombre de sujets porte la puissance. Sur les petits datasets, où la puissance manque,
+  les graines restent, et elles y coûtent peu. Aucune MDE n'a été recalculée : il
+  faudrait pour cela lire des variances de scores.
+- **Ce qui est retiré.**
+  - 6 450 cellules de la grille A, 1 290 de la grille TIDNet et 860 du contrôle Shallow.
+  - 2 942 tâches en attente sont annulées. Les 3 tâches de ce type déjà en cours vont à
+    leur terme. Les 240 tâches de TIDNet A06/A07 encore à soumettre ne contiennent plus
+    ces cellules.
+  - Le coût évité est de 5 112 GPU-h.
+- **Graines prévues.** Les fichiers `campaignA_cells_planned_av4.txt` (dans
+  `campaignA_grid/`, `campaignT_grid/` et `campaignS_grid/`) sont les fichiers de
+  cellules d'origine, moins les lignes retirées, aux mêmes identifiants. Ils remplacent
+  les fichiers d'origine en argument `--cells` de `campaignA_check.py` et de
+  `campaignA_read.py`. Le lecteur tire déjà de ce fichier les graines prévues, donc la
+  complétude (§ 3.1) et la moyenne sur les graines prévues en découlent sans changer de
+  code. Les fichiers d'origine restent ceux que lisent les tâches.
+- **Cellules déjà calculées hors du plan** (graines ≥ 1 de ces trois datasets, en
+  particulier 289 sur physionetmi) : elles restent sur disque, ne sont lues pour aucun
+  critère, et ne sont pas rapportées.
