@@ -476,3 +476,46 @@ cellule (sonde de temps du générateur), sur l'existence des CSV et sur la file
 - **Cellules déjà calculées hors du plan** (graines ≥ 1 de ces trois datasets, en
   particulier 289 sur physionetmi) : elles restent sur disque, ne sont lues pour aucun
   critère, et ne sont pas rapportées.
+
+### Avenant 5 — 27/10/2026 fin d'après-midi : graine 0 partout, TIDNet abandonné
+
+**Aucun score n'a été lu.** Comme pour l'avenant 4, la décision repose seulement sur le
+coût prévu des cellules, sur l'existence des CSV et sur la file.
+
+- **Pourquoi.** Après une seconde demande, cette fois des administrateurs de Margaret,
+  le plafond passe à **10 GPU**, en permanence. Le débit mesuré est de 0,97 GPU-h
+  prévu par heure-carte, sur 25 h et environ 24 cartes. Avec ce débit, les 5 961 GPU-h
+  qui restaient au plan de l'avenant 4 auraient pris 25,6 jours, soit une fin vers le
+  22/11, trop tard pour la lecture avant la fin du stage.
+- **Règle 1 : seule la graine 0 est prévue, partout.** Cela vaut pour tous les
+  protocoles, tous les datasets, tous les modèles et tous les bras, contrôle Shallow
+  compris. L'unité reste le sujet (§ 3). Le score d'un sujet devient celui de sa graine
+  0, moyenné sur ses lignes CSV (sessions), donc en intra-session sur 5 plis. Le prix
+  est plus de bruit de mesure par sujet, surtout en cross_subject sur les petits
+  datasets (9 à 14 sujets), où chaque sujet n'a qu'un modèle. Les IC y seront plus
+  larges. Aucune MDE n'est recalculée, puisqu'il faudrait lire des variances.
+- **Règle 2 : TIDNet est abandonné.** Ce cas est déjà prévu par l'avenant 3 : la
+  famille compte **15 endpoints** (§ 3.2). Raisons :
+  - c'est le seul modèle hors du gel initial, avec une recette amendée ;
+  - il n'a encore produit que les 33 cellules de son test (dont aucun score n'a été
+    lu) ;
+  - son abandon fait gagner 4 jours de plus.
+
+  Ses cellules déjà calculées, dont celles du test, ne sont lues pour aucun critère et ne
+  sont pas rapportées comme résultat.
+- **Ce qui est gardé.** Les 5 modèles gelés, les 3 protocoles, les 12 datasets, les 3
+  bras, et donc Q1 et Q2 entières, plus le contrôle d'init de Shallow (C1, C2, C3) aux
+  mêmes cellules que bd et tiny. La recette (200 époques) ne change pas, sinon les
+  cellules déjà faites ne seraient plus comparables.
+- **Graines prévues.** Il s'agit de `campaignA_cells_planned_av5.txt`, dans
+  `campaignA_grid/` (11 475 cellules) et `campaignS_grid/` (1 530 cellules). Ce sont les
+  fichiers de l'avenant 4 moins les graines ≥ 1, aux mêmes identifiants. Ils remplacent
+  ceux de l'avenant 4 comme argument `--cells` de `campaignA_check.py` et de
+  `campaignA_read.py`.
+- **File.** Toutes les tâches TIDNet et toutes les tâches de graine ≥ 1 sont annulées,
+  en attente **et en cours**. À 10 cartes, une tâche en cours dont la cellule ne sera
+  jamais lue prendrait la place d'une cellule prévue. Les cellules de graine ≥ 1 déjà
+  calculées restent sur disque. Elles ne sont lues pour aucun critère et ne sont pas
+  rapportées.
+- **Coût.** Il reste 2 708 GPU-h prévus, soit environ 11,6 jours à 10 cartes, pour une
+  fin vers le 8/11.
