@@ -237,3 +237,19 @@ passes avant et un autre PREREG.
   covariance pondérée autrement) peut améliorer un classifieur au plus proche voisin sans
   rien contenir de plus. Ce test n'est donc pas faisable avec 54 sujets, et il n'est pas
   fait. cov+ajoutés − cov est seulement décrit.
+
+## 10. Avenant 1 (07/11, avant toute lecture) — cache des covariances
+
+Le § 2 disait les covariances lues dans `/scratch/amounir/moabb_cache_A`. C'est faux pour
+lee2019_mi : ses 2 754 cellules de campagne lisaient `/scratch/amounir/moabb_cache`
+(`cache.path=` de chaque ligne de cellule, et `cache` du manifest `manifest_A/lee2019_mi.json`) ;
+`moabb_cache_A` n'en contient que les sujets 1 et 2. Le premier lancement (job 911992, commit
+b419ba2) a donc manqué le cache et reconstruit lee2019 depuis les fichiers bruts retéléchargés.
+Il a été annulé au sujet 12/54, avant d'avoir écrit la moindre sortie : aucun poids, aucune
+identification, aucun contraste n'a été lu.
+
+Correctif, sans changer ni bras, ni mesure, ni critère, ni seuil :
+- le cache de chaque dataset est celui de ses lignes de cellule (`cache_of`), un seul par
+  dataset, sinon refus avant tout chargement ;
+- un défaut de cache refuse (`REFUSED: cache miss`) au lieu de reconstruire depuis le brut ;
+  les covariances sont donc exactement les données que le runner a lues.

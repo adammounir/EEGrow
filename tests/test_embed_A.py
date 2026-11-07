@@ -94,3 +94,22 @@ def test_width_gate_excludes_wrong_geometry():
     assert list(emb) == [("1", "0")] and excl == 2
     emb, excl = embed_A.shallow_sets(fits, "bd", list(range(40)))
     assert list(emb) == [("2", "0")] and excl == 2
+
+
+def test_cache_of_reads_the_cell_lines(tmp_path):
+    """Amendment 1: the covariance cache is the one the dataset's cells read, never a
+    hard-coded path; two caches for one dataset, or none, refuse."""
+    import pytest
+    head = "{} cross_session {} shallow bd 0 1 /r /r/x.csv model=bd_shallow cache.enabled=true"
+    lines = [head.format(0, "lee2019_mi") + " cache.path=/c/old",
+             head.format(1, "cho2017") + " cache.path=/c/A",
+             head.format(2, "cho2017") + " cache.path=/c/A",
+             head.format(3, "zhou2016") + " cache.path=/c/A",
+             head.format(4, "zhou2016") + " cache.path=/c/B"]
+    p = tmp_path / "cells.txt"
+    p.write_text("\n".join(lines) + "\n")
+    assert embed_A.cache_of([p], "lee2019_mi") == "/c/old"
+    assert embed_A.cache_of([p], "cho2017") == "/c/A"
+    for ds in ("zhou2016", "weibo2014"):
+        with pytest.raises(SystemExit, match="REFUSED"):
+            embed_A.cache_of([p], ds)

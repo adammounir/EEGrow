@@ -168,16 +168,37 @@ def load_fits(cells, prot, ds, model, arm, kind="final"):
     return out
 
 
-def covariances(ds, items):
+def cache_of(paths, ds):
+    """The MOABB cache the campaign's cells of ``ds`` read (their ``cache.path=`` override).
+    Amendment 1 (PREREG § 10): not every dataset reads moabb_cache_A -- lee2019_mi's cells
+    read /scratch/amounir/moabb_cache -- so the path comes from the cell lines, and more
+    than one path, or none, refuses."""
+    found = set()
+    for path in paths:
+        for line in open(path):
+            f = line.split()
+            if f[2] == ds:
+                found |= {o.split("=", 1)[1] for o in f[9:] if o.startswith("cache.path=")}
+    if len(found) != 1:
+        raise SystemExit(f"REFUSED: {ds} cells read {len(found)} caches: {sorted(found)}")
+    return found.pop()
+
+
+def covariances(ds, items, cache):
     """{item: upper triangle of the log-Euclidean mean trace-normalised covariance} of the
-    training session, from the campaign's own dataset/paradigm and read-only cache."""
+    training session, from the campaign's own dataset/paradigm and the read-only cache its
+    cells read. A cache miss refuses: MOABB would otherwise rebuild from raw (and download
+    it), i.e. not the data the runner read."""
     from omegaconf import OmegaConf
 
     from check_cache import build_campaign
     from utils import cache_config
     dataset, par, _ = build_campaign(ds)
-    cc = cache_config(OmegaConf.create({"enabled": True, "path": "/scratch/amounir/moabb_cache_A",
-                                        "readonly": True}))
+    cc = cache_config(OmegaConf.create({"enabled": True, "path": cache, "readonly": True}))
+
+    def miss(subject, *a, **k):
+        raise SystemExit(f"REFUSED: cache miss for {ds} subject {subject} in {cache}")
+    dataset._get_single_subject_data = miss
     out = {}
     for subj in sorted({s for s, _ in items}, key=int):
         X, _, meta = par.get_data(dataset=dataset, subjects=[int(subj)], cache_config=cc)
@@ -207,7 +228,7 @@ def shallow_sets(fits, arm, idx, model="shallow", describe=shallow_describe):
     return emb, excl
 
 
-def run_dataset(cells, ds, L, out):
+def run_dataset(cells, ds, L, out, cache):
     sets = {}
     fits = {arm: load_fits(cells, "cross_session", ds, "shallow", arm)
             for arm in ("tiny", "bd", "random", "tiny_bdinit")}
@@ -221,7 +242,7 @@ def run_dataset(cells, ds, L, out):
     items = sorted(set.intersection(*[set(v) for v in sets.values()]))
     subj, _, _ = pairs({k: 0 for k in items})
     items = [k for k in items if k[0] in subj]
-    cov = covariances(ds, items)
+    cov = covariances(ds, items, cache)
     vec = {n: zblocks({k: e[k] for k in items}) for n, e in sets.items()}
     hits, aucs = {}, {}
     for n, v in vec.items():
@@ -318,9 +339,11 @@ def main():
     a = ap.parse_args()
     cells = cells_of([a.cells_a, a.cells_s])
     out, L = {}, ["# Empreinte du sujet dans les neurones ajoutés — campagne A (PREREG_growth_embedding_A.md)", ""]
+    caches = {ds: cache_of([a.cells_a, a.cells_s], ds) for ds in DATASETS}  # refuses before any load
+    print("caches:", caches, flush=True)
     keep = {}
     for ds in DATASETS:
-        keep[ds] = run_dataset(cells, ds, L, out)
+        keep[ds] = run_dataset(cells, ds, L, out, caches[ds])
     c = out[PRIMARY]["contrasts"]
     p1, p2 = c["P1 added - bd32"], c["P2 added - added_random"]
     v1 = ("EMPREINTE PROPRE À LA CROISSANCE" if p1["lo"] > 0 else
