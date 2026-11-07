@@ -32,8 +32,7 @@ d'abord un gradient ∝ E[x·δᵀ], ce que TINY calcule en une fois.
     l'événement qui l'a créé ;
   - **0** : `__fits__init` ; **10, 25, 50, 100** : `__fits__ckpt` ; **200** : `__fits__final`.
 - Ensembles de neurones :
-  - **ajoutés** (8-39) aux instants ins, 50, 100, 200 (tous existent à partir de
-    l'époque 40) ;
+  - **ajoutés** (8-39) aux instants ins, 100, 200 (avenant 1, § 6) ;
   - **G1** (les neurones créés au 1er événement, époque 5 : indices 8 à w₁−1, soit 8-14
     sur le fit inspecté) aux instants ins, 10, 25, 50, 100, 200 : la trajectoire la plus
     longue ;
@@ -83,3 +82,16 @@ Lecture :
 - Pas d'autre dataset, pas d'autre embedding, pas de sélection d'instants après lecture.
 - L'hypothèse de gradient (§ 1) n'est pas testée ici.
 - La confusion sujet / montage du casque (PREREG lecture 1, § 9) reste entière.
+
+## 6. Avenant 1 (07/11, avant toute sortie) — le nombre d'événements varie
+
+Le § 2 supposait 8 événements de croissance finis à l'époque 40, d'après **un seul fit**
+inspecté : c'était une déduction. Le premier lancement (job 912290, commit 6ac1612) a
+planté avant d'écrire la moindre sortie, sur un fit dont la jonction n'avait que 37
+neurones à l'époque 50. Contrôle des formes seulement (aucune identification calculée) :
+le nombre d'événements varie d'un fit à l'autre (jusqu'à 11, le dernier jusqu'à l'époque
+55), et 5 fits tiny et 8 fits random n'ont pas encore 40 neurones à l'époque 50.
+
+Correctif : l'ensemble « ajoutés » est lu à ins, 100 et 200 (plus à 50) ; un fit dont la
+croissance finit après l'époque 100 est exclu et compté. G1, départ8, bd40, les
+attendus T1 à T6 et leur lecture ne changent pas ; T5 est rapporté à ins, 100 et 200.

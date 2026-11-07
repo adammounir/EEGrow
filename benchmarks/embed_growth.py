@@ -27,6 +27,10 @@ DS = "lee2019_mi"
 ARMS = ("tiny", "random", "bd")
 CKPT = (10, 25, 50, 100)
 TOL = 1e-9
+# amendment 1: the number of growth events varies by fit (up to 11, last one up to epoch
+# 55 on the fits read), so all 40 neurons exist only from the end of growth; the added set
+# is read at insertion, 100 and 200, and a fit still growing after epoch 100 is excluded
+ADDED_FROM = 100
 
 
 def describe(sd, idx):
@@ -117,6 +121,8 @@ def check(d, arm):
         return "growth events"
     if any(b != a for (_, _, a, _), (_, b, _, _) in zip(ev, ev[1:])):
         return "non-contiguous events"
+    if ev[-1][0] > ADDED_FROM:
+        return "growth ends after epoch 100"
     w_at = {t: max([8] + [a for e, _, a, _ in ev if e <= t]) for t in (0, *CKPT)}
     if any(t in d and width(d[t]) != w_at[t] for t in (0, *CKPT)):
         return "checkpoint width"
@@ -140,7 +146,7 @@ def sets_at(d, arm):
             continue
         if t != 0:
             out[("init8", t)] = [(d[t], list(range(8)))]
-        if t >= 50:
+        if t >= ADDED_FROM:
             out[("added", t)] = [(d[t], list(range(8, 40)))]
         if t >= 10:
             out[("G1", t)] = [(d[t], g1)]
@@ -199,7 +205,7 @@ def main():
          "T2 random added 200 - ins": diff(("random", "added", 200), ("random", "added", "ins")),
          "T4 tiny added ins - chance": vs_chance(("tiny", "added", "ins")),
          "tiny added 200 - ins": diff(("tiny", "added", 200), ("tiny", "added", "ins"))}
-    for t in ("ins", 50, 100, 200):
+    for t in ("ins", 100, 200):
         T[f"T5 tiny - random, added, {t}"] = diff(("tiny", "added", t), ("random", "added", t))
     for t in ("ins", 10, 25, 50, 100, 200):
         T[f"T3 random G1 {t} - chance"] = vs_chance(("random", "G1", t))
