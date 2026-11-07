@@ -12,9 +12,9 @@ checked), against what the cell line and the manifest say it must contain:
            sessions disjoint
   files    init / growth / final / selected weights and >= 1 logits file per fit;
            ckpt with epochs [10, 25, 50, 100] on cross_session / cross_subject
-  growth   bd: no growth event; tiny / random: every growth row carries the arm's
-           direction, growth file events == applied epochs, init width != final width
-           when grown
+  growth   bd / fix: no growth event; tiny / random / tiny_bdinit: every growth row
+           carries the arm's direction (``GROWS``: tiny_bdinit grows with the tiny rule),
+           growth file events == applied epochs, init width != final width when grown
   score    logits reproduce the scorer on the float32 softmax that skorch's
            predict_proba returns: accuracy = its argmax, ROC-AUC (2 classes) on p[:, 1].
            Not l1 - l0: the float32 softmax saturates at 1.0 for large logits and the
@@ -45,6 +45,10 @@ import pandas as pd
 
 KINDS = ("init", "growth", "final", "selected")
 CKPT = [10, 25, 50, 100]
+# growth direction each arm must record, None = no growth row. The Shallow init control
+# (PREREG_shallow_init_control.md § 2.1): tiny_bdinit grows with the tiny rule from
+# braindecode's init; fix is the growing class built at 40/40, which never grows.
+GROWS = {"bd": None, "fix": None, "tiny": "tiny", "random": "random", "tiny_bdinit": "tiny"}
 
 
 def parse_cells(path, only=None):
@@ -135,12 +139,13 @@ def check_cell(c, man, sizes, counters, ckpt_epochs=CKPT):
             bad.append(f"{uid[:8]} ckpt written on a within_session cell (option B)")
         applied = [h["epoch"] for h in r["history"] if h.get("grow_applied")]
         dirs = {h.get("grow_direction") for h in r["history"] if "grow_s" in h}
-        if c["arm"] == "bd":
+        want = GROWS[c["arm"]]
+        if want is None:
             if applied or dirs:
-                bad.append(f"{uid[:8]} bd arm with growth rows {applied}")
+                bad.append(f"{uid[:8]} {c['arm']} arm with growth rows {applied}")
         else:
-            if dirs != {c["arm"]}:
-                bad.append(f"{uid[:8]} directions {dirs} != {{{c['arm']}}}")
+            if dirs != {want}:
+                bad.append(f"{uid[:8]} directions {dirs} != {{{want}}}")
             g = torch.load(f"{stem}__fits__growth/{uid}.pt", weights_only=False)["events"]
             if [e["epoch"] for e in g] != applied or r.get("n_growth_snapshots") != len(applied):
                 bad.append(f"{uid[:8]} growth events {[e['epoch'] for e in g]} != applied {applied}")
