@@ -155,3 +155,33 @@ Lecture :
   (22 électrodes, 4 classes) peut mal se transposer à lee2019_mi (62 électrodes, 2
   classes). C'est le prix d'un réglage qui ne touche pas aux données de test.
 - Sujet et session sont confondus avec le montage du casque (lecture 1, § 9).
+
+## 10. Avenant 1 (08/11/2026) — G0 tolérant au TF32, avant tout critère
+
+**Ce qui s'est passé.** La lecture (job 912307) a refusé de produire les critères : G0
+échoue sur les sujets 46 à 54 (max |Δ logit| de 2,5e-3 à 7,1e-3), et passe sur 1 à 45
+(~1e-5). Aucun critère, aucun score d'adaptation n'a été produit ni regardé : le rapport
+ne contient que la liste des échecs de G0.
+
+**Cause, établie indépendamment des résultats d'adaptation.** Selon les logs de la
+campagne A, les fits partagés des sujets 46 à 54 ont été entraînés et ont sauvé leurs
+logits sur des A40. Sur ampere/hopper, cuDNN calcule les convolutions en TF32 par défaut ;
+le modèle reconstruit ici sur CPU, en float32 complet, en diffère de ~5e-3. Le même
+mécanisme a été trouvé et mesuré pendant la préparation de la lecture 3, avant ce refus,
+et la règle de G0 de la lecture 3 a été gelée pour cette raison en 8f4adbf. La
+vérification d'avant gel de ce PREREG (§ 3) ne portait que sur deux sujets dont les fits
+venaient de cartes sans TF32 : c'est une erreur de ma part.
+
+**Changement.** G0 est recalculé pour les 54 sujets avec la règle de la lecture 3
+(`adapt_B.g0`, PREREG_growth_adaptation_B.md § 3, inchangée) : par session,
+|Δ logit| ≤ 1e-2 · max(1, max |logit|), argmax identique sauf sur les essais dont l'écart
+entre les deux premières classes est ≤ 2 · max |Δ|, et |Δ score| ≤ 5e-3. Il est calculé
+sur CPU (`adapt_A.py g0av1`, `out/g0_av1/<sujet>.json`), sur les mêmes données et le même
+modèle reconstruit. La lecture refuse si ce G0 manque pour un sujet ; un sujet qui échoue
+est exclu ; plus de 2 échecs → refus, comme avant. Le rapport donne aussi les échecs sous
+la règle d'origine.
+
+**Inchangé.** Les scores d'adaptation ne sont pas recalculés (`out/runs/` et `tune.json`
+sont copiés tels quels) ; bras, taux, k, critères E1-E3, Holm, marge NI, G1 et contrastes
+rapportés restent ceux des §§ 4-7. Le G0 du réglage sur bnci2014_001 avait passé sous la
+règle d'origine.

@@ -84,3 +84,29 @@ def test_holm_and_verdict():
     assert adapt_A.verdict({"lo": -0.05, "hi": -0.01}, False) == "INFÉRIEUR"
     assert adapt_A.verdict({"lo": -0.05, "hi": 0.02}, False) == "NON CONCLUANT"
     assert adapt_A.verdict({"lo": 0.01, "hi": 0.05}, True) == "SUPÉRIEUR"
+
+
+def test_read_uses_amendment1_g0(tmp_path):
+    """Amendment 1: the reading refuses without the recomputed G0 for every subject, and
+    once it is there, decides on it (not on the original 1e-3 gate)."""
+    import json
+    rng = np.random.default_rng(0)
+    (tmp_path / "runs").mkdir()
+    (tmp_path / "g0_av1").mkdir()
+    json.dump({"lr": {a: 1e-3 for a in adapt_A.TRAINED}}, open(tmp_path / "tune.json", "w"))
+    for s in range(1, 11):
+        sc = {a: {"0.001": {str(k): float(0.6 + 0.05 * (a == "full") + 0.01 * rng.standard_normal())
+                            for k in adapt_A.KS}} for a in adapt_A.ARMS}
+        bad = {"0": {"ok": False, "max_abs": 5e-3, "n": 100}}
+        json.dump({"subject": str(s), "g0": bad, "scores": sc, "n_params": {}, "n_classes": 2},
+                  open(tmp_path / "runs" / f"{s}.json", "w"))
+    with pytest.raises(SystemExit, match="amendment 1 G0 missing"):
+        adapt_A.read(str(tmp_path))
+    for s in range(1, 11):
+        json.dump({"subject": str(s), "g0": {"0": {"ok": True}}}, open(tmp_path / "g0_av1" / f"{s}.json", "w"))
+    adapt_A.read(str(tmp_path))
+    r = json.load(open(tmp_path / "adapt_A.json"))
+    assert r["g0_failed"] == [] and len(r["g0_failed_original_rule"]) == 10 and r["n"] == 10
+    json.dump({"subject": "3", "g0": {"0": {"ok": False}}}, open(tmp_path / "g0_av1" / "3.json", "w"))
+    adapt_A.read(str(tmp_path))
+    assert json.load(open(tmp_path / "adapt_A.json"))["g0_failed"] == ["3"]

@@ -10,6 +10,12 @@ both directions, 3 draws.
     python adapt_A.py merge --out DIR                              # -> DIR/tune.json
     python adapt_A.py run   --cells CELLS --subject S --out DIR   # lee2019_mi, reads tune.json
     python adapt_A.py read  --out DIR                              # gates, criteria, report
+
+Amendment 1 (PREREG § 10), after G0 refused reading 2 and before any criterion: G0 is
+recomputed with reading 3's rule (adapt_B.g0, PREREG_growth_adaptation_B.md § 3), on CPU,
+and the reading uses it; the adaptation scores are not recomputed.
+
+    python adapt_A.py g0av1 --cells CELLS --subject S --out DIR    # -> DIR/g0_av1/S.json
 """
 
 from __future__ import annotations
@@ -222,6 +228,20 @@ def g0(sd, saved, X, y, sess, shape):
     return out
 
 
+def g0_av1(ds, cells_path, subj):
+    """Amendment 1: G0 under reading 3's rule (relative 1e-2, argmax outside near-ties,
+    |delta score| <= 5e-3), same data, same rebuilt model, CPU."""
+    import torch
+    import adapt_B
+    adapt_B._fastpath_off()
+    torch.set_num_threads(int(os.environ.get("SLURM_CPUS_PER_TASK", "4")))
+    X, y, sess = subject_data(ds, subj, cells_path)
+    sd, saved = shared_fit(cells_path, ds, subj)
+    shape = (X.shape[1], int(sd["final_layer.conv_classifier.bias"].shape[0]), X.shape[2])
+    gate = adapt_B.g0(base_model(sd, *shape), saved, X, y, sess, torch.device("cpu"), shape[1])
+    return {"subject": str(subj), "g0": gate, "rule": "adapt_B.g0 (amendment 1)"}
+
+
 def draws(y, sess_cal, k, subj, d):
     """Calibration indices (within the calibration session) for the 3 draws."""
     out = []
@@ -297,7 +317,7 @@ def verdict(c, sup):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["tune", "merge", "run", "read"])
+    ap.add_argument("mode", choices=["tune", "merge", "run", "g0av1", "read"])
     ap.add_argument("--cells")
     ap.add_argument("--subject")
     ap.add_argument("--out", required=True)
@@ -326,6 +346,10 @@ def main():
         r = run_subject(MAIN_DS, a.cells, a.subject, KS, arms_lrs)
         os.makedirs(f"{a.out}/runs", exist_ok=True)
         json.dump(r, open(f"{a.out}/runs/{a.subject}.json", "w"), indent=1)
+    elif a.mode == "g0av1":
+        r = g0_av1(MAIN_DS, a.cells, a.subject)
+        os.makedirs(f"{a.out}/g0_av1", exist_ok=True)
+        json.dump(r, open(f"{a.out}/g0_av1/{a.subject}.json", "w"), indent=1)
     else:
         read(a.out)
 
@@ -333,13 +357,21 @@ def main():
 def read(out):
     tune = json.load(open(f"{out}/tune.json"))
     rs = [json.load(open(f)) for f in sorted(glob.glob(f"{out}/runs/*.json"), key=lambda f: int(os.path.basename(f)[:-5]))]
-    failed = [r["subject"] for r in rs if not all(g["ok"] for g in r["g0"].values())]
+    failed0 = [r["subject"] for r in rs if not all(g["ok"] for g in r["g0"].values())]
+    # amendment 1: G0 is the one recomputed under reading 3's rule, for every subject read
+    av1 = {r["subject"]: json.load(open(f"{out}/g0_av1/{r['subject']}.json"))["g0"]
+           for r in rs if os.path.exists(f"{out}/g0_av1/{r['subject']}.json")}
+    if len(av1) != len(rs):
+        raise SystemExit(f"REFUSED: amendment 1 G0 missing for {sorted(set(r['subject'] for r in rs) - set(av1), key=int)}")
+    failed = [s_ for s_, g in av1.items() if not all(x["ok"] for x in g.values())]
     L = ["# Adapter un modèle partagé en lui ajoutant des neurones — lee2019_mi "
          "(PREREG_growth_adaptation_A.md)", "",
          f"- sujets lus : {len(rs)} ; G0 (reconstruction = logits de la campagne) échoue sur "
-         f"{len(failed)} : {failed}",
+         f"{len(failed)} : {failed} (règle de l'avenant 1 = PREREG B § 3 ; règle d'origine à 1e-3 : "
+         f"{len(failed0)} échecs {failed0})",
          f"- taux d'apprentissage choisis sur {TUNE_DS} : {tune['lr']}", ""]
-    out_json = {"g0_failed": failed, "lr": tune["lr"]}
+    out_json = {"g0_failed": failed, "g0_failed_original_rule": failed0, "g0_av1": av1,
+                "lr": tune["lr"]}
     if len(failed) > G0_MAX_FAIL:
         L.append(f"**REFUSÉ : G0 échoue sur plus de {G0_MAX_FAIL} sujets, aucun critère produit.**")
         open(f"{out}/adapt_A.md", "w").write("\n".join(L) + "\n")
