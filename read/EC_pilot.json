@@ -1,0 +1,2516 @@
+{
+ "gates": {
+  "G1_npz_primary": 5400
+ },
+ "datasets": {
+  "cho2017": {
+   "n_g0": 32,
+   "excluded": {
+    "jsonl_absent": [
+     [
+      "32",
+      "msvtnet s1: "
+     ],
+     [
+      "33",
+      "msvtnet s1: "
+     ],
+     [
+      "34",
+      "msvtnet s1: "
+     ],
+     [
+      "35",
+      "eegnex s1: "
+     ],
+     [
+      "36",
+      "eegnex s1: "
+     ],
+     [
+      "37",
+      "eegnex s1: "
+     ],
+     [
+      "38",
+      "eegnex s1: "
+     ],
+     [
+      "39",
+      "eegnex s1: "
+     ],
+     [
+      "40",
+      "eegnex s1: "
+     ],
+     [
+      "41",
+      "eegnex s1: "
+     ],
+     [
+      "42",
+      "eegnex s1: "
+     ],
+     [
+      "43",
+      "eegnex s1: "
+     ],
+     [
+      "44",
+      "eegnex s1: "
+     ],
+     [
+      "45",
+      "eegnex s1: "
+     ],
+     [
+      "47",
+      "eegnex s1: "
+     ],
+     [
+      "48",
+      "eegnex s1: "
+     ],
+     [
+      "49",
+      "eegnex s1: "
+     ],
+     [
+      "50",
+      "eegnex s1: "
+     ],
+     [
+      "51",
+      "eegnex s1: "
+     ],
+     [
+      "52",
+      "eegnex s1: "
+     ]
+    ]
+   },
+   "no_valid_stratum_subjects": [],
+   "strata": {
+    "n_strata": 64,
+    "n_dropped": 1,
+    "trials_lost_share": 0.015337423312883436,
+    "by_model": {
+     "conformer": {
+      "strata": 1,
+      "trials_share": 0.015337423312883436
+     },
+     "ctnet": {
+      "strata": 1,
+      "trials_share": 0.015337423312883436
+     },
+     "eegnex": {
+      "strata": 1,
+      "trials_share": 0.015337423312883436
+     }
+    }
+   },
+   "R": 0.6840369105850341,
+   "lo": 0.6368105606350379,
+   "hi": 0.7276565726245084,
+   "K_x": 0.1808610674130235,
+   "K_seed": 0.26440249731310406,
+   "med_x": 0.18870634794723878,
+   "n": 32,
+   "AUC_art": 0.5939729846337658,
+   "art": {
+    "n_all_wrong": 58,
+    "n_all_right": 1039,
+    "log_ptp_max": 0.40602701536623415,
+    "log_var_mean": 0.4537851382297302,
+    "kurt_max": 0.4954282964388835
+   },
+   "art_nan_reason": "",
+   "verdict": "NON CONCLUANT",
+   "subjects": [
+    {
+     "subj": "1",
+     "n": 200,
+     "acc": 0.8000000000000002,
+     "kx": 0.2690644839534794,
+     "ks": 0.4131484328868618,
+     "ksame": 0.31595506997056483,
+     "seed": {
+      "eegnex": 0.4737050586348938,
+      "msvtnet": 0.535552563500666,
+      "ctnet": 0.2531371709941465,
+      "conformer": 0.39019893841774095
+     },
+     "x": {
+      "eegnex|msvtnet": 0.34878954218560315,
+      "eegnex|ctnet": 0.21296208679871342,
+      "eegnex|conformer": 0.2542990900073755,
+      "msvtnet|ctnet": 0.21200354243557473,
+      "msvtnet|conformer": 0.39901880721020094,
+      "ctnet|conformer": 0.1873138350834086
+     },
+     "same": {
+      "eegnex|msvtnet": 0.4250965452990367,
+      "eegnex|ctnet": 0.23530927321690923,
+      "eegnex|conformer": 0.3025147445490055,
+      "msvtnet|ctnet": 0.27153996182712475,
+      "msvtnet|conformer": 0.4015461265219733,
+      "ctnet|conformer": 0.2597237684093396
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "2",
+     "n": 200,
+     "acc": 0.5295833333333332,
+     "kx": 0.05594716318592554,
+     "ks": 0.1381797983155018,
+     "ksame": 0.17808672975732967,
+     "seed": {
+      "eegnex": 0.13351793556646305,
+      "msvtnet": 0.15617815116598086,
+      "ctnet": 0.005073808651270432,
+      "conformer": 0.25794929787829296
+     },
+     "x": {
+      "eegnex|msvtnet": 0.06671753858969347,
+      "eegnex|ctnet": -0.0206140385470215,
+      "eegnex|conformer": 0.11320037528788644,
+      "msvtnet|ctnet": -0.026670674250360533,
+      "msvtnet|conformer": 0.17240392078651556,
+      "ctnet|conformer": 0.030645857248839836
+     },
+     "same": {
+      "eegnex|msvtnet": 0.19059700082438735,
+      "eegnex|ctnet": 0.1091229333178501,
+      "eegnex|conformer": 0.21565287982920425,
+      "msvtnet|ctnet": 0.15154821804161564,
+      "msvtnet|conformer": 0.319116723246291,
+      "ctnet|conformer": 0.08248262328462956
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "3",
+     "n": 200,
+     "acc": 0.9179166666666667,
+     "kx": 0.24074659131859164,
+     "ks": 0.37769438933271926,
+     "ksame": 0.2811831470792006,
+     "seed": {
+      "eegnex": 0.2673003244993375,
+      "msvtnet": 0.29760615404760904,
+      "ctnet": 0.34151209637221497,
+      "conformer": 0.6043589824117155
+     },
+     "x": {
+      "eegnex|msvtnet": 0.2602490651265306,
+      "eegnex|ctnet": 0.18564428152562074,
+      "eegnex|conformer": 0.2846922172893371,
+      "msvtnet|ctnet": 0.22650633201876405,
+      "msvtnet|conformer": 0.2441895412696401,
+      "ctnet|conformer": 0.2431981106816573
+     },
+     "same": {
+      "eegnex|msvtnet": 0.2514037130696302,
+      "eegnex|ctnet": 0.26686919152476424,
+      "eegnex|conformer": 0.2762298392850447,
+      "msvtnet|ctnet": 0.2836934013725514,
+      "msvtnet|conformer": 0.3122825467183777,
+      "ctnet|conformer": 0.29662019050483535
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "4",
+     "n": 200,
+     "acc": 0.7833333333333332,
+     "kx": 0.19563329065201582,
+     "ks": 0.30883906368038605,
+     "ksame": 0.2048331147091725,
+     "seed": {
+      "eegnex": 0.3121686001095935,
+      "msvtnet": 0.4567804550744068,
+      "ctnet": 0.20019314676546462,
+      "conformer": 0.26621405277207927
+     },
+     "x": {
+      "eegnex|msvtnet": 0.28149007552591243,
+      "eegnex|ctnet": 0.18763758633853808,
+      "eegnex|conformer": 0.20634591786292186,
+      "msvtnet|ctnet": 0.14226966224291682,
+      "msvtnet|conformer": 0.1811922058068013,
+      "ctnet|conformer": 0.17486429613500443
+     },
+     "same": {
+      "eegnex|msvtnet": 0.36338399281770006,
+      "eegnex|ctnet": 0.1575776999351163,
+      "eegnex|conformer": 0.19258211962142038,
+      "msvtnet|ctnet": 0.11958889279708614,
+      "msvtnet|conformer": 0.17691401306487411,
+      "ctnet|conformer": 0.21895197001883807
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "5",
+     "n": 200,
+     "acc": 0.7758333333333334,
+     "kx": 0.28609446585772796,
+     "ks": 0.31849192473923704,
+     "ksame": 0.34181968251835126,
+     "seed": {
+      "eegnex": 0.2587663716361559,
+      "msvtnet": 0.3444577011170557,
+      "ctnet": 0.2842504414248527,
+      "conformer": 0.3864931847788838
+     },
+     "x": {
+      "eegnex|msvtnet": 0.28388429874554266,
+      "eegnex|ctnet": 0.2960575215921812,
+      "eegnex|conformer": 0.271370641151446,
+      "msvtnet|ctnet": 0.29448434277353536,
+      "msvtnet|conformer": 0.3367432867063496,
+      "ctnet|conformer": 0.2340267041773131
+     },
+     "same": {
+      "eegnex|msvtnet": 0.4527772520604369,
+      "eegnex|ctnet": 0.29243964934285294,
+      "eegnex|conformer": 0.27894027742627897,
+      "msvtnet|ctnet": 0.34601072254155607,
+      "msvtnet|conformer": 0.389511829878165,
+      "ctnet|conformer": 0.29123836386081764
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "6",
+     "n": 200,
+     "acc": 0.7454166666666667,
+     "kx": 0.31112645032416625,
+     "ks": 0.3910809237395657,
+     "ksame": 0.3609451945877711,
+     "seed": {
+      "eegnex": 0.34381670931103914,
+      "msvtnet": 0.4981327378265385,
+      "ctnet": 0.31825726021497275,
+      "conformer": 0.40411698760571246
+     },
+     "x": {
+      "eegnex|msvtnet": 0.3809834946419381,
+      "eegnex|ctnet": 0.24976929299001968,
+      "eegnex|conformer": 0.31866181041085234,
+      "msvtnet|ctnet": 0.27761281566965984,
+      "msvtnet|conformer": 0.3834352919361867,
+      "ctnet|conformer": 0.2562959962963407
+     },
+     "same": {
+      "eegnex|msvtnet": 0.4133329825450806,
+      "eegnex|ctnet": 0.2403811044617777,
+      "eegnex|conformer": 0.3081061997403352,
+      "msvtnet|ctnet": 0.3520711578390166,
+      "msvtnet|conformer": 0.5299856351945614,
+      "ctnet|conformer": 0.321794087745855
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "7",
+     "n": 240,
+     "acc": 0.5638888888888889,
+     "kx": 0.06352533338568814,
+     "ks": 0.1893876473288107,
+     "ksame": 0.15170951406927083,
+     "seed": {
+      "eegnex": 0.14205610802959281,
+      "msvtnet": 0.16930439844432085,
+      "ctnet": 0.17229666158250714,
+      "conformer": 0.27389342125882205
+     },
+     "x": {
+      "eegnex|msvtnet": 0.03564336205259403,
+      "eegnex|ctnet": 0.08176285310277358,
+      "eegnex|conformer": 0.061114287096663555,
+      "msvtnet|ctnet": 0.06758913008599439,
+      "msvtnet|conformer": 0.11791052604030673,
+      "ctnet|conformer": 0.017131841935796557
+     },
+     "same": {
+      "eegnex|msvtnet": 0.16051360446980079,
+      "eegnex|ctnet": 0.18337533093519934,
+      "eegnex|conformer": 0.10639919719736113,
+      "msvtnet|ctnet": 0.13797421824768155,
+      "msvtnet|conformer": 0.23278019205367181,
+      "ctnet|conformer": 0.08921454151191044
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "8",
+     "n": 200,
+     "acc": 0.5520833333333333,
+     "kx": 0.08826468150821072,
+     "ks": 0.18730577616943717,
+     "ksame": 0.16907750023623327,
+     "seed": {
+      "eegnex": 0.16309958558114976,
+      "msvtnet": 0.2705067541379163,
+      "ctnet": 0.10312492423333826,
+      "conformer": 0.21249184072534436
+     },
+     "x": {
+      "eegnex|msvtnet": 0.11470572109229378,
+      "eegnex|ctnet": 0.04228282188243306,
+      "eegnex|conformer": 0.1311953397261619,
+      "msvtnet|ctnet": 0.06721919093871197,
+      "msvtnet|conformer": 0.1696342903785001,
+      "ctnet|conformer": 0.00455072503116354
+     },
+     "same": {
+      "eegnex|msvtnet": 0.17612747981727903,
+      "eegnex|ctnet": 0.1660348088515358,
+      "eegnex|conformer": 0.17850225035359213,
+      "msvtnet|ctnet": 0.11235277531455086,
+      "msvtnet|conformer": 0.2339664519877668,
+      "ctnet|conformer": 0.14748123509267505
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "9",
+     "n": 240,
+     "acc": 0.6482638888888889,
+     "kx": 0.18788534977203322,
+     "ks": 0.2555751871624428,
+     "ksame": 0.24511565672870236,
+     "seed": {
+      "eegnex": 0.18304303419924306,
+      "msvtnet": 0.36241866810412304,
+      "ctnet": 0.17582321482984983,
+      "conformer": 0.30101583151655537
+     },
+     "x": {
+      "eegnex|msvtnet": 0.2223789931333829,
+      "eegnex|ctnet": 0.1541235861830346,
+      "eegnex|conformer": 0.1585560723258015,
+      "msvtnet|ctnet": 0.16794399161754328,
+      "msvtnet|conformer": 0.26497526839379987,
+      "ctnet|conformer": 0.1593341869786373
+     },
+     "same": {
+      "eegnex|msvtnet": 0.2710117106972077,
+      "eegnex|ctnet": 0.21419657689483448,
+      "eegnex|conformer": 0.244493756508415,
+      "msvtnet|ctnet": 0.2142105865470508,
+      "msvtnet|conformer": 0.3434811413356116,
+      "ctnet|conformer": 0.18330016838909477
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "10",
+     "n": 200,
+     "acc": 0.7000000000000001,
+     "kx": 0.14737829566506833,
+     "ks": 0.26212766204443083,
+     "ksame": 0.22701435874397738,
+     "seed": {
+      "eegnex": 0.31318323876355453,
+      "msvtnet": 0.2402616641578602,
+      "ctnet": 0.23868984297182874,
+      "conformer": 0.2563759022844797
+     },
+     "x": {
+      "eegnex|msvtnet": 0.23385431418019698,
+      "eegnex|ctnet": 0.09094262920631546,
+      "eegnex|conformer": 0.18119047234610397,
+      "msvtnet|ctnet": 0.11702201834250368,
+      "msvtnet|conformer": 0.20587770398437796,
+      "ctnet|conformer": 0.05538263593091183
+     },
+     "same": {
+      "eegnex|msvtnet": 0.392051307678598,
+      "eegnex|ctnet": 0.14912367824542713,
+      "eegnex|conformer": 0.24510461558790234,
+      "msvtnet|ctnet": 0.20846358298484183,
+      "msvtnet|conformer": 0.2609948679342799,
+      "ctnet|conformer": 0.10634810003281535
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "11",
+     "n": 200,
+     "acc": 0.5583333333333335,
+     "kx": 0.07658343190130092,
+     "ks": 0.15655238971315116,
+     "ksame": 0.11527065002504988,
+     "seed": {
+      "eegnex": 0.1342959525721731,
+      "msvtnet": 0.11359779158704075,
+      "ctnet": 0.15968081678284782,
+      "conformer": 0.21863499791054294
+     },
+     "x": {
+      "eegnex|msvtnet": 0.11099166115691246,
+      "eegnex|ctnet": 0.03769916874581348,
+      "eegnex|conformer": 0.13268150365991396,
+      "msvtnet|ctnet": 0.009784749362076099,
+      "msvtnet|conformer": 0.11223799155732565,
+      "ctnet|conformer": 0.0561055169257638
+     },
+     "same": {
+      "eegnex|msvtnet": 0.06924103605670996,
+      "eegnex|ctnet": 0.10588122066708927,
+      "eegnex|conformer": 0.0837897439060689,
+      "msvtnet|ctnet": 0.05721046156540155,
+      "msvtnet|conformer": 0.2943773954081141,
+      "ctnet|conformer": 0.08112404254691552
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "12",
+     "n": 200,
+     "acc": 0.6820833333333334,
+     "kx": 0.2837199180004862,
+     "ks": 0.3591726406281734,
+     "ksame": 0.3274649321392007,
+     "seed": {
+      "eegnex": 0.3434234296167759,
+      "msvtnet": 0.3198771509405179,
+      "ctnet": 0.4702157741840625,
+      "conformer": 0.3031742077713373
+     },
+     "x": {
+      "eegnex|msvtnet": 0.3116531099736154,
+      "eegnex|ctnet": 0.37400467993786607,
+      "eegnex|conformer": 0.22447217883896556,
+      "msvtnet|ctnet": 0.31742209386198483,
+      "msvtnet|conformer": 0.2394632485394974,
+      "ctnet|conformer": 0.23530419685098794
+     },
+     "same": {
+      "eegnex|msvtnet": 0.3640631675724,
+      "eegnex|ctnet": 0.3941585755919241,
+      "eegnex|conformer": 0.2775599440300843,
+      "msvtnet|ctnet": 0.30109336037976414,
+      "msvtnet|conformer": 0.34531992442765075,
+      "ctnet|conformer": 0.28259462083338066
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "13",
+     "n": 200,
+     "acc": 0.7841666666666667,
+     "kx": 0.1967012380646298,
+     "ks": 0.31744255768654095,
+     "ksame": 0.22739815219426363,
+     "seed": {
+      "eegnex": 0.29181546297796496,
+      "msvtnet": 0.30530567911025114,
+      "ctnet": 0.3856377089314049,
+      "conformer": 0.28701137972654284
+     },
+     "x": {
+      "eegnex|msvtnet": 0.1895901155511537,
+      "eegnex|ctnet": 0.2568670752859593,
+      "eegnex|conformer": 0.15716196211360514,
+      "msvtnet|ctnet": 0.17359130900150113,
+      "msvtnet|conformer": 0.27871092901537986,
+      "ctnet|conformer": 0.12428603742017964
+     },
+     "same": {
+      "eegnex|msvtnet": 0.1713193112481033,
+      "eegnex|ctnet": 0.2873766960030209,
+      "eegnex|conformer": 0.15542097106956274,
+      "msvtnet|ctnet": 0.21511842876184784,
+      "msvtnet|conformer": 0.33550905208687715,
+      "ctnet|conformer": 0.1996444539961698
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "14",
+     "n": 200,
+     "acc": 0.9604166666666666,
+     "kx": 0.4341937960812006,
+     "ks": 0.5067347206524311,
+     "ksame": 0.4754189543284503,
+     "seed": {
+      "eegnex": 0.6303873431533005,
+      "msvtnet": 0.41046748912598435,
+      "ctnet": 0.6860417790650347,
+      "conformer": 0.3000422712654049
+     },
+     "x": {
+      "eegnex|msvtnet": 0.5408456226118468,
+      "eegnex|ctnet": 0.5451359634368323,
+      "eegnex|conformer": 0.41594168273523885,
+      "msvtnet|ctnet": 0.48204871370457036,
+      "msvtnet|conformer": 0.3548516884149308,
+      "ctnet|conformer": 0.26633910558378465
+     },
+     "same": {
+      "eegnex|msvtnet": 0.5478707728843576,
+      "eegnex|ctnet": 0.5924613083733904,
+      "eegnex|conformer": 0.42402809080786225,
+      "msvtnet|ctnet": 0.5404575363650951,
+      "msvtnet|conformer": 0.4292536954851636,
+      "ctnet|conformer": 0.3184423220548327
+     },
+     "dropped_strata": [
+      [
+       "0|0",
+       100,
+       [
+        "conformer",
+        "ctnet",
+        "eegnex"
+       ]
+      ]
+     ]
+    },
+    {
+     "subj": "15",
+     "n": 200,
+     "acc": 0.64125,
+     "kx": 0.12070997862226589,
+     "ks": 0.21287498909748548,
+     "ksame": 0.18461524323729359,
+     "seed": {
+      "eegnex": 0.1649679014356896,
+      "msvtnet": 0.34306498319207757,
+      "ctnet": 0.052554262161590044,
+      "conformer": 0.2909128096005847
+     },
+     "x": {
+      "eegnex|msvtnet": 0.14009119689771007,
+      "eegnex|ctnet": 0.0949295679794545,
+      "eegnex|conformer": 0.11650184693557976,
+      "msvtnet|ctnet": 0.08410222804527197,
+      "msvtnet|conformer": 0.23455742831457785,
+      "ctnet|conformer": 0.05407760356100125
+     },
+     "same": {
+      "eegnex|msvtnet": 0.21591695534285557,
+      "eegnex|ctnet": 0.14451348317474544,
+      "eegnex|conformer": 0.17870925169979449,
+      "msvtnet|ctnet": 0.120099780579761,
+      "msvtnet|conformer": 0.3779315655500995,
+      "ctnet|conformer": 0.07052042307650545
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "16",
+     "n": 200,
+     "acc": 0.5491666666666667,
+     "kx": 0.1194041741737501,
+     "ks": 0.1852053795455043,
+     "ksame": 0.16714337723301811,
+     "seed": {
+      "eegnex": 0.09281423254786138,
+      "msvtnet": 0.19705144680529119,
+      "ctnet": 0.23446725077314165,
+      "conformer": 0.21648858805572302
+     },
+     "x": {
+      "eegnex|msvtnet": 0.10480226971362173,
+      "eegnex|ctnet": 0.11724201932770355,
+      "eegnex|conformer": 0.08150101035802503,
+      "msvtnet|ctnet": 0.16562735000786513,
+      "msvtnet|conformer": 0.15524474896781168,
+      "ctnet|conformer": 0.09200764666747345
+     },
+     "same": {
+      "eegnex|msvtnet": 0.16620355693216032,
+      "eegnex|ctnet": 0.18785306651945902,
+      "eegnex|conformer": 0.11066363697623494,
+      "msvtnet|ctnet": 0.19816097103869723,
+      "msvtnet|conformer": 0.2190302852124295,
+      "ctnet|conformer": 0.12094874671912774
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "17",
+     "n": 200,
+     "acc": 0.5245833333333333,
+     "kx": 0.0826097481008627,
+     "ks": 0.18425990361942574,
+     "ksame": 0.12873673179802542,
+     "seed": {
+      "eegnex": 0.16271308057800593,
+      "msvtnet": 0.20062916711578116,
+      "ctnet": 0.17370005385876408,
+      "conformer": 0.1999973129251518
+     },
+     "x": {
+      "eegnex|msvtnet": 0.11642826166356805,
+      "eegnex|ctnet": -0.005136690500332,
+      "eegnex|conformer": 0.11093446091120708,
+      "msvtnet|ctnet": 0.0644022210682083,
+      "msvtnet|conformer": 0.1553306219884398,
+      "ctnet|conformer": 0.05369961347408495
+     },
+     "same": {
+      "eegnex|msvtnet": 0.2515582170305271,
+      "eegnex|ctnet": 0.10913029498030595,
+      "eegnex|conformer": 0.12755546540219012,
+      "msvtnet|ctnet": 0.02527361832706339,
+      "msvtnet|conformer": 0.19394412320918,
+      "ctnet|conformer": 0.06495867183888593
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "18",
+     "n": 200,
+     "acc": 0.6820833333333334,
+     "kx": 0.1837417707044681,
+     "ks": 0.28957914040059085,
+     "ksame": 0.22009207419707785,
+     "seed": {
+      "eegnex": 0.2560345731466996,
+      "msvtnet": 0.34165085709699144,
+      "ctnet": 0.22458554298595645,
+      "conformer": 0.33604558837271603
+     },
+     "x": {
+      "eegnex|msvtnet": 0.24381501204390946,
+      "eegnex|ctnet": 0.149083231362677,
+      "eegnex|conformer": 0.17574069212435803,
+      "msvtnet|ctnet": 0.1609447654416968,
+      "msvtnet|conformer": 0.23383057094100568,
+      "ctnet|conformer": 0.1390363523131616
+     },
+     "same": {
+      "eegnex|msvtnet": 0.3061508836064744,
+      "eegnex|ctnet": 0.19123827800224566,
+      "eegnex|conformer": 0.229627496202794,
+      "msvtnet|ctnet": 0.22327612959392218,
+      "msvtnet|conformer": 0.20674876021089403,
+      "ctnet|conformer": 0.16351089756613688
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "19",
+     "n": 200,
+     "acc": 0.5908333333333334,
+     "kx": 0.11028337929844086,
+     "ks": 0.17238849855797161,
+     "ksame": 0.20028474153057096,
+     "seed": {
+      "eegnex": 0.10287750287850606,
+      "msvtnet": 0.1827968483407515,
+      "ctnet": 0.14910054803286368,
+      "conformer": 0.2547790949797652
+     },
+     "x": {
+      "eegnex|msvtnet": 0.12483844391895356,
+      "eegnex|ctnet": 0.07663121018956347,
+      "eegnex|conformer": 0.12616766588389883,
+      "msvtnet|ctnet": 0.07589390894296345,
+      "msvtnet|conformer": 0.18291504834363034,
+      "ctnet|conformer": 0.07525399851163546
+     },
+     "same": {
+      "eegnex|msvtnet": 0.24945986621707764,
+      "eegnex|ctnet": 0.14155290826706912,
+      "eegnex|conformer": 0.16689171813048273,
+      "msvtnet|ctnet": 0.15618565068019002,
+      "msvtnet|conformer": 0.3103738927033315,
+      "ctnet|conformer": 0.17724441318527487
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "20",
+     "n": 200,
+     "acc": 0.6766666666666667,
+     "kx": 0.25524085206615205,
+     "ks": 0.3176460442629423,
+     "ksame": 0.29931686718298645,
+     "seed": {
+      "eegnex": 0.2757647942106737,
+      "msvtnet": 0.34801759820446065,
+      "ctnet": 0.320968006054976,
+      "conformer": 0.3258337785816588
+     },
+     "x": {
+      "eegnex|msvtnet": 0.26331187707152265,
+      "eegnex|ctnet": 0.23268320631343645,
+      "eegnex|conformer": 0.24197178489564755,
+      "msvtnet|ctnet": 0.28423963252562806,
+      "msvtnet|conformer": 0.26396912018859237,
+      "ctnet|conformer": 0.24526949140208534
+     },
+     "same": {
+      "eegnex|msvtnet": 0.3152430419633184,
+      "eegnex|ctnet": 0.210047236783269,
+      "eegnex|conformer": 0.3062885898565454,
+      "msvtnet|ctnet": 0.33643501197138037,
+      "msvtnet|conformer": 0.37879640049339997,
+      "ctnet|conformer": 0.2490909220300058
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "21",
+     "n": 200,
+     "acc": 0.6924999999999999,
+     "kx": 0.1781970505893201,
+     "ks": 0.2737813908198999,
+     "ksame": 0.21506302526497711,
+     "seed": {
+      "eegnex": 0.2992241007641799,
+      "msvtnet": 0.29826715035565715,
+      "ctnet": 0.2293310927483023,
+      "conformer": 0.26830321941146024
+     },
+     "x": {
+      "eegnex|msvtnet": 0.2575293864652959,
+      "eegnex|ctnet": 0.16418689272204615,
+      "eegnex|conformer": 0.17740704539433802,
+      "msvtnet|ctnet": 0.1470614332343214,
+      "msvtnet|conformer": 0.20751751978683944,
+      "ctnet|conformer": 0.11548002593307953
+     },
+     "same": {
+      "eegnex|msvtnet": 0.3828149257490953,
+      "eegnex|ctnet": 0.22083891981464301,
+      "eegnex|conformer": 0.20196088856604386,
+      "msvtnet|ctnet": 0.17865239535594749,
+      "msvtnet|conformer": 0.18515259175214496,
+      "ctnet|conformer": 0.12095843035198785
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "22",
+     "n": 200,
+     "acc": 0.6262500000000001,
+     "kx": 0.21929971624044228,
+     "ks": 0.2910673538639442,
+     "ksame": 0.26247672253280285,
+     "seed": {
+      "eegnex": 0.22411030916042085,
+      "msvtnet": 0.40971175179657005,
+      "ctnet": 0.2396470990757864,
+      "conformer": 0.2908002554229995
+     },
+     "x": {
+      "eegnex|msvtnet": 0.2984259523757348,
+      "eegnex|ctnet": 0.15538720342003245,
+      "eegnex|conformer": 0.218725725319065,
+      "msvtnet|ctnet": 0.1994007592817452,
+      "msvtnet|conformer": 0.29674537391438593,
+      "ctnet|conformer": 0.14711328313169025
+     },
+     "same": {
+      "eegnex|msvtnet": 0.3324188234057615,
+      "eegnex|ctnet": 0.21533277046457508,
+      "eegnex|conformer": 0.2519946094391209,
+      "msvtnet|ctnet": 0.23076028117910885,
+      "msvtnet|conformer": 0.3396041906872617,
+      "ctnet|conformer": 0.20474966002098913
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "23",
+     "n": 200,
+     "acc": 0.7858333333333333,
+     "kx": 0.19860495008491275,
+     "ks": 0.30431398689547684,
+     "ksame": 0.23773614946523225,
+     "seed": {
+      "eegnex": 0.2136308662882862,
+      "msvtnet": 0.3536621209448101,
+      "ctnet": 0.21983216853656218,
+      "conformer": 0.430130791812249
+     },
+     "x": {
+      "eegnex|msvtnet": 0.2334816443261198,
+      "eegnex|ctnet": 0.1129461855476378,
+      "eegnex|conformer": 0.19122554768617928,
+      "msvtnet|ctnet": 0.16895515475696465,
+      "msvtnet|conformer": 0.3037982580384854,
+      "ctnet|conformer": 0.1812229101540893
+     },
+     "same": {
+      "eegnex|msvtnet": 0.3099967603029549,
+      "eegnex|ctnet": 0.1657313975292705,
+      "eegnex|conformer": 0.17598333633345012,
+      "msvtnet|ctnet": 0.2163394097080478,
+      "msvtnet|conformer": 0.3446665838208849,
+      "ctnet|conformer": 0.2136994090967852
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "24",
+     "n": 200,
+     "acc": 0.6541666666666667,
+     "kx": 0.18952734612244437,
+     "ks": 0.25671571148952743,
+     "ksame": 0.29327740769053384,
+     "seed": {
+      "eegnex": 0.227961368759629,
+      "msvtnet": 0.32391230482248967,
+      "ctnet": 0.16954370406473054,
+      "conformer": 0.30544546831126046
+     },
+     "x": {
+      "eegnex|msvtnet": 0.22128391099347955,
+      "eegnex|ctnet": 0.18472566246921407,
+      "eegnex|conformer": 0.19868711091392446,
+      "msvtnet|ctnet": 0.1270263534313998,
+      "msvtnet|conformer": 0.2568144642346259,
+      "ctnet|conformer": 0.1486265746920225
+     },
+     "same": {
+      "eegnex|msvtnet": 0.37544722354449284,
+      "eegnex|ctnet": 0.21174186347930232,
+      "eegnex|conformer": 0.35678156340238293,
+      "msvtnet|ctnet": 0.20538494545729277,
+      "msvtnet|conformer": 0.41743773219196184,
+      "ctnet|conformer": 0.19287111806777038
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "25",
+     "n": 200,
+     "acc": 0.6425,
+     "kx": 0.2091500954671812,
+     "ks": 0.27131224628078343,
+     "ksame": 0.2603574655117474,
+     "seed": {
+      "eegnex": 0.3051490237245766,
+      "msvtnet": 0.2703163634538464,
+      "ctnet": 0.21969637811452766,
+      "conformer": 0.29008721983018304
+     },
+     "x": {
+      "eegnex|msvtnet": 0.30665930444969103,
+      "eegnex|ctnet": 0.15489036484473714,
+      "eegnex|conformer": 0.22776519511447754,
+      "msvtnet|ctnet": 0.13856376322794697,
+      "msvtnet|conformer": 0.27767661194180865,
+      "ctnet|conformer": 0.14934533322442559
+     },
+     "same": {
+      "eegnex|msvtnet": 0.3295703035433402,
+      "eegnex|ctnet": 0.1696339863410626,
+      "eegnex|conformer": 0.30419107734237333,
+      "msvtnet|ctnet": 0.19090785934523255,
+      "msvtnet|conformer": 0.332290353270956,
+      "ctnet|conformer": 0.2355512132275194
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "26",
+     "n": 200,
+     "acc": 0.7016666666666667,
+     "kx": 0.23032108580931168,
+     "ks": 0.3046721638619488,
+     "ksame": 0.3037732292491738,
+     "seed": {
+      "eegnex": 0.29741503224740373,
+      "msvtnet": 0.22143543265346574,
+      "ctnet": 0.2946665563819964,
+      "conformer": 0.4051716341649292
+     },
+     "x": {
+      "eegnex|msvtnet": 0.22108061494105233,
+      "eegnex|ctnet": 0.204254041897404,
+      "eegnex|conformer": 0.25921264941116545,
+      "msvtnet|ctnet": 0.17999218142918316,
+      "msvtnet|conformer": 0.2434189883076543,
+      "ctnet|conformer": 0.273968038869411
+     },
+     "same": {
+      "eegnex|msvtnet": 0.3215790280377242,
+      "eegnex|ctnet": 0.21489169476019368,
+      "eegnex|conformer": 0.38778505590125945,
+      "msvtnet|ctnet": 0.27685749233645673,
+      "msvtnet|conformer": 0.3626192528170968,
+      "ctnet|conformer": 0.25890685164231214
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "27",
+     "n": 200,
+     "acc": 0.5416666666666666,
+     "kx": 0.056258027805753535,
+     "ks": 0.13969578128148818,
+     "ksame": 0.1323007290812582,
+     "seed": {
+      "eegnex": 0.056054944994208766,
+      "msvtnet": 0.1746380354660535,
+      "ctnet": 0.08487088613280085,
+      "conformer": 0.24321925853288962
+     },
+     "x": {
+      "eegnex|msvtnet": 0.04938032977993287,
+      "eegnex|ctnet": 0.04200073284813919,
+      "eegnex|conformer": 0.06174689982233644,
+      "msvtnet|ctnet": 0.022395835572934102,
+      "msvtnet|conformer": 0.14789238593664109,
+      "ctnet|conformer": 0.014131982874537536
+     },
+     "same": {
+      "eegnex|msvtnet": 0.07159915342718222,
+      "eegnex|ctnet": 0.08426357242056058,
+      "eegnex|conformer": 0.10508264304688203,
+      "msvtnet|ctnet": 0.14246923101014952,
+      "msvtnet|conformer": 0.3084750326896319,
+      "ctnet|conformer": 0.08191474189314311
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "28",
+     "n": 200,
+     "acc": 0.6341666666666665,
+     "kx": 0.17069341783732087,
+     "ks": 0.22343668818705045,
+     "ksame": 0.2502281494204786,
+     "seed": {
+      "eegnex": 0.21790930258461394,
+      "msvtnet": 0.21142072778416462,
+      "ctnet": 0.18139305390166782,
+      "conformer": 0.2830236684777554
+     },
+     "x": {
+      "eegnex|msvtnet": 0.16234229667509611,
+      "eegnex|ctnet": 0.16634431537679284,
+      "eegnex|conformer": 0.18472325145748159,
+      "msvtnet|ctnet": 0.11921309484664433,
+      "msvtnet|conformer": 0.25909274591653353,
+      "ctnet|conformer": 0.13244480275137685
+     },
+     "same": {
+      "eegnex|msvtnet": 0.27981268609297444,
+      "eegnex|ctnet": 0.22700647623375145,
+      "eegnex|conformer": 0.20364400029957988,
+      "msvtnet|ctnet": 0.2194268340926798,
+      "msvtnet|conformer": 0.3479206841800145,
+      "ctnet|conformer": 0.2235582156238715
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "29",
+     "n": 200,
+     "acc": 0.5525,
+     "kx": 0.1026613825805176,
+     "ks": 0.16172816561372963,
+     "ksame": 0.16577892139186204,
+     "seed": {
+      "eegnex": 0.10071156264858612,
+      "msvtnet": 0.1830991584133244,
+      "ctnet": 0.16284833836595194,
+      "conformer": 0.2002536030270561
+     },
+     "x": {
+      "eegnex|msvtnet": 0.14173226850512685,
+      "eegnex|ctnet": 0.050085620728291314,
+      "eegnex|conformer": 0.1309414356550047,
+      "msvtnet|ctnet": 0.0765966590369184,
+      "msvtnet|conformer": 0.13099603656505746,
+      "ctnet|conformer": 0.08561627499270702
+     },
+     "same": {
+      "eegnex|msvtnet": 0.21039180418803016,
+      "eegnex|ctnet": 0.11078471294702097,
+      "eegnex|conformer": 0.19455401914368975,
+      "msvtnet|ctnet": 0.11188626271149986,
+      "msvtnet|conformer": 0.2238745232242738,
+      "ctnet|conformer": 0.14318220613665764
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "30",
+     "n": 200,
+     "acc": 0.5779166666666666,
+     "kx": 0.08635588733141229,
+     "ks": 0.15800302847538816,
+     "ksame": 0.12307322269351212,
+     "seed": {
+      "eegnex": 0.09002356322525264,
+      "msvtnet": 0.17981143056948087,
+      "ctnet": 0.10936887128744431,
+      "conformer": 0.25280824881937475
+     },
+     "x": {
+      "eegnex|msvtnet": 0.13147907568983,
+      "eegnex|ctnet": 0.050400107457368726,
+      "eegnex|conformer": 0.06988110017503689,
+      "msvtnet|ctnet": 0.05389095765379865,
+      "msvtnet|conformer": 0.18234193831637868,
+      "ctnet|conformer": 0.030142144696060802
+     },
+     "same": {
+      "eegnex|msvtnet": 0.14827309092381516,
+      "eegnex|ctnet": 0.053432277319152365,
+      "eegnex|conformer": 0.1339397313005805,
+      "msvtnet|ctnet": 0.08523301891688644,
+      "msvtnet|conformer": 0.24511340307342278,
+      "ctnet|conformer": 0.07244781462721551
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "31",
+     "n": 200,
+     "acc": 0.67625,
+     "kx": 0.21750577366030935,
+     "ks": 0.25388783884007204,
+     "ksame": 0.27247967916856597,
+     "seed": {
+      "eegnex": 0.3203255407527417,
+      "msvtnet": 0.20348071540512122,
+      "ctnet": 0.1495707833092869,
+      "conformer": 0.34217431589313835
+     },
+     "x": {
+      "eegnex|msvtnet": 0.25951048319873066,
+      "eegnex|ctnet": 0.1994741935820142,
+      "eegnex|conformer": 0.2982132891170462,
+      "msvtnet|ctnet": 0.16901432300157912,
+      "msvtnet|conformer": 0.23804376416412534,
+      "ctnet|conformer": 0.14077858889836056
+     },
+     "same": {
+      "eegnex|msvtnet": 0.32698081382669225,
+      "eegnex|ctnet": 0.27968431180435144,
+      "eegnex|conformer": 0.3300186006924422,
+      "msvtnet|ctnet": 0.17423094735964698,
+      "msvtnet|conformer": 0.31517559925448047,
+      "ctnet|conformer": 0.20878780207378222
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "46",
+     "n": 240,
+     "acc": 0.6899305555555557,
+     "kx": 0.22012503105136053,
+     "ks": 0.2785784888464109,
+     "ksame": 0.2485489610038417,
+     "seed": {
+      "eegnex": 0.2897698852945805,
+      "msvtnet": 0.3234064600382789,
+      "ctnet": 0.2730194752910731,
+      "conformer": 0.22811813476171108
+     },
+     "x": {
+      "eegnex|msvtnet": 0.2248245455538851,
+      "eegnex|ctnet": 0.22125806278349683,
+      "eegnex|conformer": 0.16078636838517524,
+      "msvtnet|ctnet": 0.24909386341131765,
+      "msvtnet|conformer": 0.24467672643196361,
+      "ctnet|conformer": 0.2201106197423249
+     },
+     "same": {
+      "eegnex|msvtnet": 0.2786240088883973,
+      "eegnex|ctnet": 0.2799813159258578,
+      "eegnex|conformer": 0.13668984929146213,
+      "msvtnet|ctnet": 0.29292947206008635,
+      "msvtnet|conformer": 0.28831058233097157,
+      "ctnet|conformer": 0.21475853752627497
+     },
+     "dropped_strata": []
+    }
+   ]
+  },
+  "lee2019_mi": {
+   "n_g0": 29,
+   "excluded": {
+    "compte": [
+     [
+      "21",
+      "eegnex s1: 12 npz, 10 lignes jsonl, 10 attendus"
+     ],
+     [
+      "31",
+      "eegnex s1: 6 npz, 6 lignes jsonl, 10 attendus"
+     ],
+     [
+      "38",
+      "eegnex s1: 17 npz, 10 lignes jsonl, 10 attendus"
+     ],
+     [
+      "39",
+      "eegnex s0: 12 npz, 10 lignes jsonl, 10 attendus"
+     ],
+     [
+      "46",
+      "eegnex s2: 4 npz, 4 lignes jsonl, 10 attendus"
+     ],
+     [
+      "50",
+      "eegnex s1: 12 npz, 10 lignes jsonl, 10 attendus"
+     ]
+    ],
+    "jsonl_absent": [
+     [
+      "32",
+      "eegnex s1: "
+     ],
+     [
+      "33",
+      "eegnex s1: "
+     ],
+     [
+      "34",
+      "eegnex s1: "
+     ],
+     [
+      "35",
+      "eegnex s1: "
+     ],
+     [
+      "36",
+      "eegnex s1: "
+     ],
+     [
+      "37",
+      "msvtnet s1: "
+     ],
+     [
+      "40",
+      "msvtnet s1: "
+     ],
+     [
+      "41",
+      "msvtnet s1: "
+     ],
+     [
+      "42",
+      "msvtnet s1: "
+     ],
+     [
+      "43",
+      "msvtnet s1: "
+     ],
+     [
+      "44",
+      "msvtnet s1: "
+     ],
+     [
+      "45",
+      "msvtnet s1: "
+     ],
+     [
+      "47",
+      "eegnex s2: "
+     ],
+     [
+      "48",
+      "eegnex s2: "
+     ],
+     [
+      "49",
+      "eegnex s2: "
+     ],
+     [
+      "51",
+      "eegnex s1: "
+     ],
+     [
+      "52",
+      "eegnex s1: "
+     ],
+     [
+      "53",
+      "eegnex s1: "
+     ],
+     [
+      "54",
+      "eegnex s1: "
+     ]
+    ]
+   },
+   "no_valid_stratum_subjects": [],
+   "strata": {
+    "n_strata": 116,
+    "n_dropped": 2,
+    "trials_lost_share": 0.017241379310344827,
+    "by_model": {
+     "conformer": {
+      "strata": 1,
+      "trials_share": 0.008620689655172414
+     },
+     "ctnet": {
+      "strata": 1,
+      "trials_share": 0.008620689655172414
+     },
+     "eegnex": {
+      "strata": 2,
+      "trials_share": 0.017241379310344827
+     },
+     "msvtnet": {
+      "strata": 1,
+      "trials_share": 0.008620689655172414
+     }
+    }
+   },
+   "R": 0.6848198109841797,
+   "lo": 0.6443862492926327,
+   "hi": 0.7227109312789347,
+   "K_x": 0.19062908358212474,
+   "K_seed": 0.27836385648388984,
+   "med_x": 0.17230766363035468,
+   "n": 29,
+   "AUC_art": 0.586605249204666,
+   "art": {
+    "n_all_wrong": 82,
+    "n_all_right": 920,
+    "log_ptp_max": 0.42888388123011667,
+    "log_var_mean": 0.41339475079533405,
+    "kurt_max": 0.46852465535524923
+   },
+   "art_nan_reason": "",
+   "verdict": "NON CONCLUANT",
+   "subjects": [
+    {
+     "subj": "1",
+     "n": 200,
+     "acc": 0.6204166666666667,
+     "kx": 0.11307244663868493,
+     "ks": 0.20203455150312918,
+     "ksame": 0.22035913713858712,
+     "seed": {
+      "eegnex": 0.13364026695314682,
+      "msvtnet": 0.2547608613373223,
+      "ctnet": 0.173778281121891,
+      "conformer": 0.2459587966001566
+     },
+     "x": {
+      "eegnex|msvtnet": 0.165161490614854,
+      "eegnex|ctnet": 0.0192349436550066,
+      "eegnex|conformer": 0.13673468616896847,
+      "msvtnet|ctnet": 0.04327395539952005,
+      "msvtnet|conformer": 0.24213230964649982,
+      "ctnet|conformer": 0.0718972943472607
+     },
+     "same": {
+      "eegnex|msvtnet": 0.3084795561404696,
+      "eegnex|ctnet": 0.17079199083440003,
+      "eegnex|conformer": 0.21468018755799537,
+      "msvtnet|ctnet": 0.14737297699449545,
+      "msvtnet|conformer": 0.3417651192596549,
+      "ctnet|conformer": 0.13906499204450717
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "2",
+     "n": 200,
+     "acc": 0.725,
+     "kx": 0.10665579713750091,
+     "ks": 0.22992214241402326,
+     "ksame": 0.13087485137621616,
+     "seed": {
+      "eegnex": 0.14173904181503705,
+      "msvtnet": 0.20802880993034553,
+      "ctnet": 0.23565107744722993,
+      "conformer": 0.33426964046348046
+     },
+     "x": {
+      "eegnex|msvtnet": 0.12830989691433742,
+      "eegnex|ctnet": 0.08686315662421085,
+      "eegnex|conformer": 0.12768788289580046,
+      "msvtnet|ctnet": 0.06490917787241247,
+      "msvtnet|conformer": 0.1718741409953475,
+      "ctnet|conformer": 0.060290527522896785
+     },
+     "same": {
+      "eegnex|msvtnet": 0.17473539143977382,
+      "eegnex|ctnet": 0.11142575367304892,
+      "eegnex|conformer": 0.1878093906313467,
+      "msvtnet|ctnet": 0.06849449888765405,
+      "msvtnet|conformer": 0.18854033803464657,
+      "ctnet|conformer": 0.054243735590826965
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "3",
+     "n": 200,
+     "acc": 0.7620833333333334,
+     "kx": 0.1932925549294886,
+     "ks": 0.2826918188317187,
+     "ksame": 0.3119064973388822,
+     "seed": {
+      "eegnex": 0.26933980168135463,
+      "msvtnet": 0.3341042448572605,
+      "ctnet": 0.15620681310012363,
+      "conformer": 0.37111641568813614
+     },
+     "x": {
+      "eegnex|msvtnet": 0.26196906672681786,
+      "eegnex|ctnet": 0.09081558616197234,
+      "eegnex|conformer": 0.299472191255063,
+      "msvtnet|ctnet": 0.09746041354264516,
+      "msvtnet|conformer": 0.3160718864119892,
+      "ctnet|conformer": 0.09396618547844404
+     },
+     "same": {
+      "eegnex|msvtnet": 0.43530900112267695,
+      "eegnex|ctnet": 0.22615092939399642,
+      "eegnex|conformer": 0.4324183725590991,
+      "msvtnet|ctnet": 0.13636898720749055,
+      "msvtnet|conformer": 0.46318743743554425,
+      "ctnet|conformer": 0.178004256314486
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "4",
+     "n": 200,
+     "acc": 0.7025,
+     "kx": 0.24374473219583967,
+     "ks": 0.2983399638809043,
+     "ksame": 0.3013626980427607,
+     "seed": {
+      "eegnex": 0.28719194893769157,
+      "msvtnet": 0.37985478831029046,
+      "ctnet": 0.25589250209871256,
+      "conformer": 0.27042061617692253
+     },
+     "x": {
+      "eegnex|msvtnet": 0.275354550442035,
+      "eegnex|ctnet": 0.20121472541883723,
+      "eegnex|conformer": 0.2230913634918852,
+      "msvtnet|ctnet": 0.24379913475730255,
+      "msvtnet|conformer": 0.30312493153599945,
+      "ctnet|conformer": 0.21588368752897868
+     },
+     "same": {
+      "eegnex|msvtnet": 0.32638031630740044,
+      "eegnex|ctnet": 0.3139059933679853,
+      "eegnex|conformer": 0.2932790756673353,
+      "msvtnet|ctnet": 0.33362358674729053,
+      "msvtnet|conformer": 0.33534270475097944,
+      "ctnet|conformer": 0.20564451141557347
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "5",
+     "n": 200,
+     "acc": 0.7287500000000001,
+     "kx": 0.1761701495640969,
+     "ks": 0.24778146969280807,
+     "ksame": 0.21468753648855565,
+     "seed": {
+      "eegnex": 0.19873351998561709,
+      "msvtnet": 0.26092993666727776,
+      "ctnet": 0.18244323005686972,
+      "conformer": 0.34901919206146775
+     },
+     "x": {
+      "eegnex|msvtnet": 0.19128555271463762,
+      "eegnex|ctnet": 0.16384322660377182,
+      "eegnex|conformer": 0.1977100940139109,
+      "msvtnet|ctnet": 0.13967191892010847,
+      "msvtnet|conformer": 0.212549237360358,
+      "ctnet|conformer": 0.15196086777179457
+     },
+     "same": {
+      "eegnex|msvtnet": 0.24735022548606544,
+      "eegnex|ctnet": 0.21251534909588488,
+      "eegnex|conformer": 0.22259128039083334,
+      "msvtnet|ctnet": 0.17046945776989672,
+      "msvtnet|conformer": 0.23161980012910566,
+      "ctnet|conformer": 0.20357910605954768
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "6",
+     "n": 200,
+     "acc": 0.7483333333333334,
+     "kx": 0.17560079974575057,
+     "ks": 0.250704110911877,
+     "ksame": 0.24603126613692994,
+     "seed": {
+      "eegnex": 0.20116106524806962,
+      "msvtnet": 0.3475165290934592,
+      "ctnet": 0.1648244906194901,
+      "conformer": 0.289314358686489
+     },
+     "x": {
+      "eegnex|msvtnet": 0.22827505708058513,
+      "eegnex|ctnet": 0.12497736093232152,
+      "eegnex|conformer": 0.17972298445190235,
+      "msvtnet|ctnet": 0.11031635795751486,
+      "msvtnet|conformer": 0.31006908994678195,
+      "ctnet|conformer": 0.10024394810539759
+     },
+     "same": {
+      "eegnex|msvtnet": 0.3545566215337015,
+      "eegnex|ctnet": 0.15088711663943358,
+      "eegnex|conformer": 0.2627787306286006,
+      "msvtnet|ctnet": 0.15987291879513174,
+      "msvtnet|conformer": 0.40133824580878324,
+      "ctnet|conformer": 0.14675396341592906
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "7",
+     "n": 200,
+     "acc": 0.6258333333333334,
+     "kx": 0.23421063811804263,
+     "ks": 0.3243346474415527,
+     "ksame": 0.3647494086504522,
+     "seed": {
+      "eegnex": 0.2636782121715884,
+      "msvtnet": 0.28114321715210805,
+      "ctnet": 0.37831275450180685,
+      "conformer": 0.37420440594070764
+     },
+     "x": {
+      "eegnex|msvtnet": 0.23053760355599326,
+      "eegnex|ctnet": 0.21925690533855594,
+      "eegnex|conformer": 0.22557086685061492,
+      "msvtnet|ctnet": 0.2224567853125912,
+      "msvtnet|conformer": 0.27966958733294583,
+      "ctnet|conformer": 0.2277720803175547
+     },
+     "same": {
+      "eegnex|msvtnet": 0.3644586064988565,
+      "eegnex|ctnet": 0.30425317640119526,
+      "eegnex|conformer": 0.3901308342762331,
+      "msvtnet|ctnet": 0.3366642187687073,
+      "msvtnet|conformer": 0.4111881201932235,
+      "ctnet|conformer": 0.38180149576449773
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "8",
+     "n": 200,
+     "acc": 0.5991666666666665,
+     "kx": 0.16443526473541858,
+     "ks": 0.27738603694556746,
+     "ksame": 0.26917538507258115,
+     "seed": {
+      "eegnex": 0.16795843292007281,
+      "msvtnet": 0.2843709205639497,
+      "ctnet": 0.26489604949134943,
+      "conformer": 0.3923187448068979
+     },
+     "x": {
+      "eegnex|msvtnet": 0.20876808886168904,
+      "eegnex|ctnet": 0.10525152543857995,
+      "eegnex|conformer": 0.19676036673107053,
+      "msvtnet|ctnet": 0.0929048920960311,
+      "msvtnet|conformer": 0.25455383093243183,
+      "ctnet|conformer": 0.12837288435270902
+     },
+     "same": {
+      "eegnex|msvtnet": 0.3222322656058179,
+      "eegnex|ctnet": 0.17231213935593326,
+      "eegnex|conformer": 0.2604147446904193,
+      "msvtnet|ctnet": 0.19814593257847224,
+      "msvtnet|conformer": 0.44176194323618617,
+      "ctnet|conformer": 0.22018528496865816
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "9",
+     "n": 200,
+     "acc": 0.7254166666666667,
+     "kx": 0.28150676785751755,
+     "ks": 0.37735914468468623,
+     "ksame": 0.3355665405853698,
+     "seed": {
+      "eegnex": 0.41494759457075964,
+      "msvtnet": 0.40773347488186173,
+      "ctnet": 0.2706890111558129,
+      "conformer": 0.4160664981303106
+     },
+     "x": {
+      "eegnex|msvtnet": 0.3478645428739653,
+      "eegnex|ctnet": 0.22899568010086827,
+      "eegnex|conformer": 0.3599746900665246,
+      "msvtnet|ctnet": 0.14610581420777793,
+      "msvtnet|conformer": 0.3856900856376477,
+      "ctnet|conformer": 0.22040979425832163
+     },
+     "same": {
+      "eegnex|msvtnet": 0.454768265367049,
+      "eegnex|ctnet": 0.28365620284523896,
+      "eegnex|conformer": 0.35458347449025096,
+      "msvtnet|ctnet": 0.26124230307577695,
+      "msvtnet|conformer": 0.41248989056602775,
+      "ctnet|conformer": 0.24665910716787495
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "10",
+     "n": 200,
+     "acc": 0.6754166666666667,
+     "kx": 0.3001133478196277,
+     "ks": 0.3583463716260118,
+     "ksame": 0.38643659301917327,
+     "seed": {
+      "eegnex": 0.35180592924614845,
+      "msvtnet": 0.31843678523977453,
+      "ctnet": 0.3408158992036916,
+      "conformer": 0.4223268728144327
+     },
+     "x": {
+      "eegnex|msvtnet": 0.333949904175247,
+      "eegnex|ctnet": 0.27594463660216645,
+      "eegnex|conformer": 0.2971591472796086,
+      "msvtnet|ctnet": 0.2752615569908689,
+      "msvtnet|conformer": 0.3107425106230428,
+      "ctnet|conformer": 0.30762233124683225
+     },
+     "same": {
+      "eegnex|msvtnet": 0.4492740045880783,
+      "eegnex|ctnet": 0.3429909392313923,
+      "eegnex|conformer": 0.3900144191067783,
+      "msvtnet|ctnet": 0.357543483570028,
+      "msvtnet|conformer": 0.43942053749652504,
+      "ctnet|conformer": 0.3393761741222374
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "11",
+     "n": 200,
+     "acc": 0.5733333333333334,
+     "kx": 0.14499143726190392,
+     "ks": 0.2145363315697393,
+     "ksame": 0.25152044959971936,
+     "seed": {
+      "eegnex": 0.14425092652312593,
+      "msvtnet": 0.2944254258838164,
+      "ctnet": 0.2015585058163392,
+      "conformer": 0.21791046805567574
+     },
+     "x": {
+      "eegnex|msvtnet": 0.16913901469154682,
+      "eegnex|ctnet": 0.11836194369111058,
+      "eegnex|conformer": 0.11547951770803921,
+      "msvtnet|ctnet": 0.18117835583525674,
+      "msvtnet|conformer": 0.1884007301251223,
+      "ctnet|conformer": 0.09738906152034789
+     },
+     "same": {
+      "eegnex|msvtnet": 0.29986110642569597,
+      "eegnex|ctnet": 0.2141697365748765,
+      "eegnex|conformer": 0.22437326073670696,
+      "msvtnet|ctnet": 0.2742791318274786,
+      "msvtnet|conformer": 0.285245709435625,
+      "ctnet|conformer": 0.21119375259793313
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "12",
+     "n": 200,
+     "acc": 0.6929166666666666,
+     "kx": 0.2372328697214647,
+     "ks": 0.28187355246006796,
+     "ksame": 0.32384808718872476,
+     "seed": {
+      "eegnex": 0.21297223311360838,
+      "msvtnet": 0.3243736925929635,
+      "ctnet": 0.22776883598672856,
+      "conformer": 0.3623794481469714
+     },
+     "x": {
+      "eegnex|msvtnet": 0.2497095486393467,
+      "eegnex|ctnet": 0.2517871630154565,
+      "eegnex|conformer": 0.2941016204216983,
+      "msvtnet|ctnet": 0.17908720013140958,
+      "msvtnet|conformer": 0.2887944709582915,
+      "ctnet|conformer": 0.15991721516258553
+     },
+     "same": {
+      "eegnex|msvtnet": 0.38333783285916684,
+      "eegnex|ctnet": 0.3954863696302022,
+      "eegnex|conformer": 0.2773404170597091,
+      "msvtnet|ctnet": 0.24917574866807382,
+      "msvtnet|conformer": 0.401097436926777,
+      "ctnet|conformer": 0.23665071798841972
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "13",
+     "n": 200,
+     "acc": 0.58,
+     "kx": 0.13204459694717194,
+     "ks": 0.23676956317118356,
+     "ksame": 0.24495732471398904,
+     "seed": {
+      "eegnex": 0.23579033200828983,
+      "msvtnet": 0.2860098978324231,
+      "ctnet": 0.23577555171824452,
+      "conformer": 0.1895024711257768
+     },
+     "x": {
+      "eegnex|msvtnet": 0.17385524111902495,
+      "eegnex|ctnet": 0.15042645750501613,
+      "eegnex|conformer": 0.11025081088801826,
+      "msvtnet|ctnet": 0.12235694697981307,
+      "msvtnet|conformer": 0.17363275775255396,
+      "ctnet|conformer": 0.06174536743860529
+     },
+     "same": {
+      "eegnex|msvtnet": 0.2879683969833358,
+      "eegnex|ctnet": 0.3279592801517079,
+      "eegnex|conformer": 0.1625313271682556,
+      "msvtnet|ctnet": 0.3107870492489136,
+      "msvtnet|conformer": 0.26613857483597725,
+      "ctnet|conformer": 0.11435931989574433
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "14",
+     "n": 200,
+     "acc": 0.57375,
+     "kx": 0.14832345530550092,
+     "ks": 0.22296516792030618,
+     "ksame": 0.2512721958357313,
+     "seed": {
+      "eegnex": 0.2159734476934642,
+      "msvtnet": 0.1935008356856048,
+      "ctnet": 0.16037517742812435,
+      "conformer": 0.3220112108740314
+     },
+     "x": {
+      "eegnex|msvtnet": 0.15415074837694268,
+      "eegnex|ctnet": 0.1031320365432296,
+      "eegnex|conformer": 0.1260526672902979,
+      "msvtnet|ctnet": 0.16905328560007318,
+      "msvtnet|conformer": 0.178184418327714,
+      "ctnet|conformer": 0.15936757569474808
+     },
+     "same": {
+      "eegnex|msvtnet": 0.278321595177987,
+      "eegnex|ctnet": 0.23345307422595776,
+      "eegnex|conformer": 0.22891577366602492,
+      "msvtnet|ctnet": 0.2672200603768757,
+      "msvtnet|conformer": 0.3147295352340383,
+      "ctnet|conformer": 0.18499313633350412
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "15",
+     "n": 200,
+     "acc": 0.80625,
+     "kx": 0.32027123794637885,
+     "ks": 0.4765292530850652,
+     "ksame": 0.3989823075394759,
+     "seed": {
+      "eegnex": 0.3753940192021517,
+      "msvtnet": 0.4698007162683308,
+      "ctnet": 0.5003180855045329,
+      "conformer": 0.5606041913652454
+     },
+     "x": {
+      "eegnex|msvtnet": 0.32423796660580584,
+      "eegnex|ctnet": 0.30203042157728577,
+      "eegnex|conformer": 0.2899511712894112,
+      "msvtnet|ctnet": 0.30473059810109365,
+      "msvtnet|conformer": 0.3708457768684094,
+      "ctnet|conformer": 0.3298314932362672
+     },
+     "same": {
+      "eegnex|msvtnet": 0.3891740606942487,
+      "eegnex|ctnet": 0.3719616801890701,
+      "eegnex|conformer": 0.3631092119750166,
+      "msvtnet|ctnet": 0.4112344156501915,
+      "msvtnet|conformer": 0.46122985960776614,
+      "ctnet|conformer": 0.3971846171205626
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "16",
+     "n": 200,
+     "acc": 0.6316666666666667,
+     "kx": 0.2169164331841691,
+     "ks": 0.30856669770091205,
+     "ksame": 0.2889819392692871,
+     "seed": {
+      "eegnex": 0.3511602388406416,
+      "msvtnet": 0.30515654129198766,
+      "ctnet": 0.2937535033076471,
+      "conformer": 0.28419650736337176
+     },
+     "x": {
+      "eegnex|msvtnet": 0.23524803640922412,
+      "eegnex|ctnet": 0.2611029733212969,
+      "eegnex|conformer": 0.24893988340712825,
+      "msvtnet|ctnet": 0.16963927933264908,
+      "msvtnet|conformer": 0.23459039203428475,
+      "ctnet|conformer": 0.15197803460043136
+     },
+     "same": {
+      "eegnex|msvtnet": 0.34476163087359984,
+      "eegnex|ctnet": 0.2850248824863802,
+      "eegnex|conformer": 0.2826078847556997,
+      "msvtnet|ctnet": 0.21988078274074294,
+      "msvtnet|conformer": 0.33513570416946054,
+      "ctnet|conformer": 0.2664807505898395
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "17",
+     "n": 200,
+     "acc": 0.54625,
+     "kx": 0.09961333065927343,
+     "ks": 0.14769844656115522,
+     "ksame": 0.21421619518244694,
+     "seed": {
+      "eegnex": 0.09774080616985585,
+      "msvtnet": 0.05788724634632225,
+      "ctnet": 0.17193976691002608,
+      "conformer": 0.26322596681841665
+     },
+     "x": {
+      "eegnex|msvtnet": 0.11393689452502691,
+      "eegnex|ctnet": 0.09303132543401672,
+      "eegnex|conformer": 0.10408067459518922,
+      "msvtnet|ctnet": 0.061725147432716065,
+      "msvtnet|conformer": 0.13644442912348706,
+      "ctnet|conformer": 0.08846151284520469
+     },
+     "same": {
+      "eegnex|msvtnet": 0.33292059081145836,
+      "eegnex|ctnet": 0.1704010329956557,
+      "eegnex|conformer": 0.21086798874428114,
+      "msvtnet|ctnet": 0.10922137373604553,
+      "msvtnet|conformer": 0.3229165842238973,
+      "ctnet|conformer": 0.1389696005833437
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "18",
+     "n": 200,
+     "acc": 0.8170833333333333,
+     "kx": 0.14785658124533677,
+     "ks": 0.23311012633841804,
+     "ksame": 0.22207248784642264,
+     "seed": {
+      "eegnex": 0.1483472380540565,
+      "msvtnet": 0.376978376104736,
+      "ctnet": 0.13621630907186102,
+      "conformer": 0.2708985821230187
+     },
+     "x": {
+      "eegnex|msvtnet": 0.2571567152537472,
+      "eegnex|ctnet": 0.06177422990080526,
+      "eegnex|conformer": 0.1449703949007357,
+      "msvtnet|ctnet": 0.0969435734721582,
+      "msvtnet|conformer": 0.24943624570633602,
+      "ctnet|conformer": 0.07685832823823797
+     },
+     "same": {
+      "eegnex|msvtnet": 0.33742950291610896,
+      "eegnex|ctnet": 0.07211478142340542,
+      "eegnex|conformer": 0.2145504279370699,
+      "msvtnet|ctnet": 0.1917348419255632,
+      "msvtnet|conformer": 0.34597115717650917,
+      "ctnet|conformer": 0.1706342156998791
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "19",
+     "n": 200,
+     "acc": 0.6795833333333333,
+     "kx": 0.2669905197886849,
+     "ks": 0.3500102933054256,
+     "ksame": 0.3749890862660323,
+     "seed": {
+      "eegnex": 0.34128694970698287,
+      "msvtnet": 0.3590348019900828,
+      "ctnet": 0.2871967595749219,
+      "conformer": 0.4125226619497149
+     },
+     "x": {
+      "eegnex|msvtnet": 0.2979006707240083,
+      "eegnex|ctnet": 0.23784857436870296,
+      "eegnex|conformer": 0.261956018855845,
+      "msvtnet|ctnet": 0.24551480854497768,
+      "msvtnet|conformer": 0.34155604311129156,
+      "ctnet|conformer": 0.21716700312728374
+     },
+     "same": {
+      "eegnex|msvtnet": 0.47914973605673583,
+      "eegnex|ctnet": 0.35598333940122706,
+      "eegnex|conformer": 0.3112378940445207,
+      "msvtnet|ctnet": 0.3600157852284626,
+      "msvtnet|conformer": 0.4914439435187313,
+      "ctnet|conformer": 0.2521038193465162
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "20",
+     "n": 200,
+     "acc": 0.6325,
+     "kx": 0.1400347980867986,
+     "ks": 0.2386475373862293,
+     "ksame": 0.23956055974892496,
+     "seed": {
+      "eegnex": 0.20152931293928603,
+      "msvtnet": 0.24566790979657527,
+      "ctnet": 0.2140355785356519,
+      "conformer": 0.29335734827340393
+     },
+     "x": {
+      "eegnex|msvtnet": 0.21430294956723014,
+      "eegnex|ctnet": 0.08786124983242448,
+      "eegnex|conformer": 0.15301659094953216,
+      "msvtnet|ctnet": 0.09975268294998123,
+      "msvtnet|conformer": 0.19043313769988557,
+      "ctnet|conformer": 0.09484217752173814
+     },
+     "same": {
+      "eegnex|msvtnet": 0.31875788719109366,
+      "eegnex|ctnet": 0.18450495924587637,
+      "eegnex|conformer": 0.2744524205368266,
+      "msvtnet|ctnet": 0.1884228378160401,
+      "msvtnet|conformer": 0.3083196276025459,
+      "ctnet|conformer": 0.16290562610116707
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "22",
+     "n": 200,
+     "acc": 0.5779166666666665,
+     "kx": 0.15327572606888148,
+     "ks": 0.2734923963028416,
+     "ksame": 0.22314855452250645,
+     "seed": {
+      "eegnex": 0.15277360533806594,
+      "msvtnet": 0.32599618595992097,
+      "ctnet": 0.2621476824532526,
+      "conformer": 0.3530521114601269
+     },
+     "x": {
+      "eegnex|msvtnet": 0.12174773607853405,
+      "eegnex|ctnet": 0.13145008825098484,
+      "eegnex|conformer": 0.16053512595943367,
+      "msvtnet|ctnet": 0.12542426128525141,
+      "msvtnet|conformer": 0.24089229448958538,
+      "ctnet|conformer": 0.13960485034949952
+     },
+     "same": {
+      "eegnex|msvtnet": 0.20388977750994275,
+      "eegnex|ctnet": 0.18541628490253528,
+      "eegnex|conformer": 0.23217841069059295,
+      "msvtnet|ctnet": 0.18541159019398956,
+      "msvtnet|conformer": 0.3415353504772218,
+      "ctnet|conformer": 0.1904599133607562
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "23",
+     "n": 200,
+     "acc": 0.6737500000000001,
+     "kx": 0.09178780299827828,
+     "ks": 0.19859230838425823,
+     "ksame": 0.16480078560522204,
+     "seed": {
+      "eegnex": 0.03991890824666308,
+      "msvtnet": 0.19299967125818326,
+      "ctnet": 0.207259833830891,
+      "conformer": 0.3541908202012956
+     },
+     "x": {
+      "eegnex|msvtnet": 0.09164864766040937,
+      "eegnex|ctnet": 0.08676294796747136,
+      "eegnex|conformer": 0.07492642066531245,
+      "msvtnet|ctnet": 0.05880312786385441,
+      "msvtnet|conformer": 0.20678951973860252,
+      "ctnet|conformer": 0.031796154094019626
+     },
+     "same": {
+      "eegnex|msvtnet": 0.17501587996867443,
+      "eegnex|ctnet": 0.20036834369417023,
+      "eegnex|conformer": 0.12053076213997639,
+      "msvtnet|ctnet": 0.13349880428816344,
+      "msvtnet|conformer": 0.2916075760238774,
+      "ctnet|conformer": 0.06778334751647042
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "24",
+     "n": 200,
+     "acc": 0.6233333333333334,
+     "kx": 0.16883215733942303,
+     "ks": 0.25299242856802695,
+     "ksame": 0.2470356657564929,
+     "seed": {
+      "eegnex": 0.16644573098590906,
+      "msvtnet": 0.30559881135726547,
+      "ctnet": 0.28533302359927326,
+      "conformer": 0.25459214832966015
+     },
+     "x": {
+      "eegnex|msvtnet": 0.17315881060808067,
+      "eegnex|ctnet": 0.16749197164282145,
+      "eegnex|conformer": 0.12297664500818102,
+      "msvtnet|ctnet": 0.22404028863495895,
+      "msvtnet|conformer": 0.16649165873628075,
+      "ctnet|conformer": 0.15883356940621532
+     },
+     "same": {
+      "eegnex|msvtnet": 0.2975831557368693,
+      "eegnex|ctnet": 0.19985788652463102,
+      "eegnex|conformer": 0.1907712010323559,
+      "msvtnet|ctnet": 0.2559004285435071,
+      "msvtnet|conformer": 0.3317028340975105,
+      "ctnet|conformer": 0.20639848860408358
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "25",
+     "n": 200,
+     "acc": 0.6629166666666667,
+     "kx": 0.1615050127065246,
+     "ks": 0.23434094030207941,
+     "ksame": 0.23900668929430627,
+     "seed": {
+      "eegnex": 0.26672669586931813,
+      "msvtnet": 0.19912504103625914,
+      "ctnet": 0.28827652474587045,
+      "conformer": 0.1832354995568699
+     },
+     "x": {
+      "eegnex|msvtnet": 0.13112095128340406,
+      "eegnex|ctnet": 0.165102488689971,
+      "eegnex|conformer": 0.16661557105491773,
+      "msvtnet|ctnet": 0.1370743926003092,
+      "msvtnet|conformer": 0.21611511003443104,
+      "ctnet|conformer": 0.1530015625761145
+     },
+     "same": {
+      "eegnex|msvtnet": 0.28176508578859943,
+      "eegnex|ctnet": 0.2381065352088657,
+      "eegnex|conformer": 0.18612665651982585,
+      "msvtnet|ctnet": 0.16535314424612396,
+      "msvtnet|conformer": 0.33972668467145556,
+      "ctnet|conformer": 0.222962029330967
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "26",
+     "n": 200,
+     "acc": 0.5766666666666665,
+     "kx": 0.17794415055515944,
+     "ks": 0.26214370380046725,
+     "ksame": 0.27294761906842874,
+     "seed": {
+      "eegnex": 0.219776287698955,
+      "msvtnet": 0.31674192926796113,
+      "ctnet": 0.2624200775475905,
+      "conformer": 0.2496365206873624
+     },
+     "x": {
+      "eegnex|msvtnet": 0.27494489824095336,
+      "eegnex|ctnet": 0.10655685172317157,
+      "eegnex|conformer": 0.2001367108959423,
+      "msvtnet|ctnet": 0.14459368180395224,
+      "msvtnet|conformer": 0.25467161580859626,
+      "ctnet|conformer": 0.08676114485834106
+     },
+     "same": {
+      "eegnex|msvtnet": 0.3430911302742811,
+      "eegnex|ctnet": 0.18054570229661826,
+      "eegnex|conformer": 0.367041149211566,
+      "msvtnet|ctnet": 0.22665067600044597,
+      "msvtnet|conformer": 0.36275403195659733,
+      "ctnet|conformer": 0.15760302467106382
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "27",
+     "n": 200,
+     "acc": 0.6224999999999999,
+     "kx": 0.17230766363035468,
+     "ks": 0.26099376538096625,
+     "ksame": 0.2607992485463167,
+     "seed": {
+      "eegnex": 0.19750864177470387,
+      "msvtnet": 0.2677256027245483,
+      "ctnet": 0.2896341784315925,
+      "conformer": 0.28910663859302027
+     },
+     "x": {
+      "eegnex|msvtnet": 0.19525000093335257,
+      "eegnex|ctnet": 0.14770693994734826,
+      "eegnex|conformer": 0.14834278413967003,
+      "msvtnet|ctnet": 0.12923861493434516,
+      "msvtnet|conformer": 0.25591757770078344,
+      "ctnet|conformer": 0.15739006412662862
+     },
+     "same": {
+      "eegnex|msvtnet": 0.2781585524249564,
+      "eegnex|ctnet": 0.20758442621879356,
+      "eegnex|conformer": 0.25252136687376475,
+      "msvtnet|ctnet": 0.24210411284565214,
+      "msvtnet|conformer": 0.3901138616143889,
+      "ctnet|conformer": 0.19431317130034453
+     },
+     "dropped_strata": []
+    },
+    {
+     "subj": "28",
+     "n": 200,
+     "acc": 0.8337500000000001,
+     "kx": 0.19944198429146856,
+     "ks": 0.33642275218780093,
+     "ksame": 0.27494336979137474,
+     "seed": {
+      "eegnex": 0.3237020295510857,
+      "msvtnet": 0.32353263399638676,
+      "ctnet": 0.2941847552142183,
+      "conformer": 0.4042715899895131
+     },
+     "x": {
+      "eegnex|msvtnet": 0.3098959287576723,
+      "eegnex|ctnet": 0.15369616282606802,
+      "eegnex|conformer": 0.17209969866575314,
+      "msvtnet|ctnet": 0.22158310225008807,
+      "msvtnet|conformer": 0.18382446453004722,
+      "ctnet|conformer": 0.15555254871918275
+     },
+     "same": {
+      "eegnex|msvtnet": 0.382401161242729,
+      "eegnex|ctnet": 0.20521649306525694,
+      "eegnex|conformer": 0.25979203386421384,
+      "msvtnet|ctnet": 0.23744440433240466,
+      "msvtnet|conformer": 0.2739193686134947,
+      "ctnet|conformer": 0.29088675763014943
+     },
+     "dropped_strata": [
+      [
+       "0|0",
+       50,
+       [
+        "eegnex"
+       ]
+      ]
+     ]
+    },
+    {
+     "subj": "29",
+     "n": 200,
+     "acc": 0.9175,
+     "kx": 0.44771341344808374,
+     "ks": 0.5109198158056402,
+     "ksame": 0.518163053019966,
+     "seed": {
+      "eegnex": 0.4934079313000895,
+      "msvtnet": 0.6331687397979634,
+      "ctnet": 0.3888778376090489,
+      "conformer": 0.5282247545154589
+     },
+     "x": {
+      "eegnex|msvtnet": 0.5084343718685367,
+      "eegnex|ctnet": 0.33874694529731975,
+      "eegnex|conformer": 0.468440548482282,
+      "msvtnet|ctnet": 0.413101941818041,
+      "msvtnet|conformer": 0.5273648792599915,
+      "ctnet|conformer": 0.43019179396233104
+     },
+     "same": {
+      "eegnex|msvtnet": 0.6560027213608493,
+      "eegnex|ctnet": 0.3850495450387712,
+      "eegnex|conformer": 0.5785843814535211,
+      "msvtnet|ctnet": 0.4348111298904999,
+      "msvtnet|conformer": 0.6010963930716874,
+      "ctnet|conformer": 0.45343414730446757
+     },
+     "dropped_strata": [
+      [
+       "1|1",
+       50,
+       [
+        "conformer",
+        "ctnet",
+        "eegnex",
+        "msvtnet"
+       ]
+      ]
+     ]
+    },
+    {
+     "subj": "30",
+     "n": 200,
+     "acc": 0.64,
+     "kx": 0.11235775395479203,
+     "ks": 0.18304649986994304,
+     "ksame": 0.21977183976185818,
+     "seed": {
+      "eegnex": 0.12712385728965928,
+      "msvtnet": 0.242512245310926,
+      "ctnet": 0.08589012628568143,
+      "conformer": 0.2766597705935055
+     },
+     "x": {
+      "eegnex|msvtnet": 0.14410646042075537,
+      "eegnex|ctnet": 0.056958090974468356,
+      "eegnex|conformer": 0.12367637034747277,
+      "msvtnet|ctnet": 0.07550348825830494,
+      "msvtnet|conformer": 0.2047007195481393,
+      "ctnet|conformer": 0.06920139417961148
+     },
+     "same": {
+      "eegnex|msvtnet": 0.2983471585430399,
+      "eegnex|ctnet": 0.13576270072069932,
+      "eegnex|conformer": 0.21409596471615308,
+      "msvtnet|ctnet": 0.1567693982690426,
+      "msvtnet|conformer": 0.35426459546626726,
+      "ctnet|conformer": 0.1593912208559469
+     },
+     "dropped_strata": []
+    }
+   ]
+  }
+ },
+ "secondary": {
+  "excluded": {},
+  "cho2017": {
+   "kappa_same": {
+    "mean": 0.2370804798356405,
+    "lo": 0.2106537139699827,
+    "hi": 0.26559598294988673,
+    "n": 32
+   },
+   "same_minus_x": {
+    "mean": 0.05621941242261706,
+    "lo": 0.04841164172138967,
+    "hi": 0.06473346442391338,
+    "n": 32
+   },
+   "R_pair": {
+    "eegnex|msvtnet": 0.8128552760497341,
+    "eegnex|ctnet": 0.6767237463115109,
+    "eegnex|conformer": 0.6865142174729084,
+    "msvtnet|ctnet": 0.6068077908089671,
+    "msvtnet|conformer": 0.7922164972764605,
+    "ctnet|conformer": 0.5137135125096611
+   },
+   "class_only": {
+    "R": 0.6840369105850341,
+    "lo": 0.6368105606350379,
+    "hi": 0.7276565726245084,
+    "K_x": 0.1808610674130235,
+    "K_seed": 0.26440249731310406,
+    "med_x": 0.18870634794723878,
+    "n": 32,
+    "no_valid_stratum_subjects": [],
+    "strata": {
+     "n_strata": 64,
+     "n_dropped": 1,
+     "trials_lost_share": 0.015337423312883436,
+     "by_model": {
+      "conformer": {
+       "strata": 1,
+       "trials_share": 0.015337423312883436
+      },
+      "ctnet": {
+       "strata": 1,
+       "trials_share": 0.015337423312883436
+      },
+      "eegnex": {
+       "strata": 1,
+       "trials_share": 0.015337423312883436
+      }
+     }
+    }
+   },
+   "unconditional": {
+    "R": 0.6872565747848307,
+    "lo": 0.6409525271876129,
+    "hi": 0.7299914922012349,
+    "K_x": 0.18607696628649362,
+    "K_seed": 0.2707532719417801,
+    "med_x": 0.19059827109835886,
+    "n": 32,
+    "no_valid_stratum_subjects": [],
+    "strata": {
+     "n_strata": 32,
+     "n_dropped": 0,
+     "trials_lost_share": 0.0,
+     "by_model": {}
+    }
+   },
+   "spearman_acc_kx": [
+    0.8090917456765542,
+    2.085157874569842e-08
+   ],
+   "spearman_acc_kseed": [
+    0.8959765412023103,
+    4.252569029275677e-12
+   ],
+   "near_chance_share": 0.21875,
+   "near_chance_kx": 0.0831040870366173,
+   "other_kx": 0.20823302191841722,
+   "near_chance_kseed": 0.164703884894034,
+   "other_kseed": 0.2923181087904437,
+   "argmax_logit_vs_softmax_diff": 0,
+   "softmax_argmax_not_unique": 0,
+   "shallow_s0": {
+    "n": 32,
+    "kappa_same_shallow": 0.2537893568236209,
+    "kappa_same_4": 0.23198616592205396,
+    "no_valid_stratum_subjects": [],
+    "strata": {
+     "n_strata": 64,
+     "n_dropped": 1,
+     "trials_lost_share": 0.015337423312883436,
+     "by_model": {
+      "conformer": {
+       "strata": 1,
+       "trials_share": 0.015337423312883436
+      },
+      "ctnet": {
+       "strata": 1,
+       "trials_share": 0.015337423312883436
+      }
+     }
+    }
+   }
+  },
+  "lee2019_mi": {
+   "kappa_same": {
+    "mean": 0.2762816335312667,
+    "lo": 0.24970066158043133,
+    "hi": 0.30454442651700026,
+    "n": 29
+   },
+   "same_minus_x": {
+    "mean": 0.08565254994914198,
+    "lo": 0.07664820402108842,
+    "hi": 0.09443674550289194,
+    "n": 29
+   },
+   "R_pair": {
+    "eegnex|msvtnet": 0.8380670973627523,
+    "eegnex|ctnet": 0.6502457299222064,
+    "eegnex|conformer": 0.7041306807230119,
+    "msvtnet|ctnet": 0.5739506671023121,
+    "msvtnet|conformer": 0.8068602222030408,
+    "ctnet|conformer": 0.5251379617503656
+   },
+   "class_only": {
+    "R": 0.6898906619617774,
+    "lo": 0.650571971943701,
+    "hi": 0.7259328447979058,
+    "K_x": 0.1951525495785296,
+    "K_seed": 0.2828746065696738,
+    "med_x": 0.1818924748469368,
+    "n": 29,
+    "no_valid_stratum_subjects": [],
+    "strata": {
+     "n_strata": 58,
+     "n_dropped": 0,
+     "trials_lost_share": 0.0,
+     "by_model": {}
+    }
+   },
+   "unconditional": {
+    "R": 0.6925042243648449,
+    "lo": 0.6474588474256177,
+    "hi": 0.7340595060028478,
+    "K_x": 0.2023257481011106,
+    "K_seed": 0.29216536301519447,
+    "med_x": 0.1928792506389628,
+    "n": 29,
+    "no_valid_stratum_subjects": [],
+    "strata": {
+     "n_strata": 29,
+     "n_dropped": 0,
+     "trials_lost_share": 0.0,
+     "by_model": {}
+    }
+   },
+   "spearman_acc_kx": [
+    0.4985221674876846,
+    0.005914307076586731
+   ],
+   "spearman_acc_kseed": [
+    0.48078817733990137,
+    0.008288113184402788
+   ],
+   "near_chance_share": 0.034482758620689655,
+   "near_chance_kx": 0.09961333065927343,
+   "other_kx": 0.19387964618651235,
+   "near_chance_kseed": 0.14769844656115522,
+   "other_kseed": 0.28303047826684463,
+   "argmax_logit_vs_softmax_diff": 0,
+   "softmax_argmax_not_unique": 0,
+   "shallow_s0": {
+    "n": 29,
+    "kappa_same_shallow": 0.24128774153692292,
+    "kappa_same_4": 0.25673172438849234,
+    "no_valid_stratum_subjects": [],
+    "strata": {
+     "n_strata": 116,
+     "n_dropped": 2,
+     "trials_lost_share": 0.017241379310344827,
+     "by_model": {
+      "conformer": {
+       "strata": 1,
+       "trials_share": 0.008620689655172414
+      },
+      "eegnex": {
+       "strata": 2,
+       "trials_share": 0.017241379310344827
+      },
+      "msvtnet": {
+       "strata": 1,
+       "trials_share": 0.008620689655172414
+      },
+      "shallow": {
+       "strata": 1,
+       "trials_share": 0.008620689655172414
+      }
+     }
+    }
+   }
+  },
+  "physionetmi_eegnex": {
+   "n": 101,
+   "excluded": {
+    "jsonl_absent": [
+     [
+      "100",
+      "eegnex s1: "
+     ],
+     [
+      "103",
+      "eegnex s1: "
+     ],
+     [
+      "104",
+      "eegnex s1: "
+     ],
+     [
+      "105",
+      "eegnex s1: "
+     ],
+     [
+      "106",
+      "eegnex s1: "
+     ],
+     [
+      "107",
+      "eegnex s1: "
+     ],
+     [
+      "108",
+      "eegnex s1: "
+     ],
+     [
+      "109",
+      "eegnex s1: "
+     ]
+    ]
+   },
+   "kappa_seed": {
+    "mean": 0.1304498243024382,
+    "lo": 0.106899846273116,
+    "hi": 0.15410734666617767,
+    "n": 101
+   },
+   "median": 0.11740890270946631,
+   "no_valid_stratum_subjects": [],
+   "strata": {
+    "n_strata": 202,
+    "n_dropped": 1,
+    "trials_lost_share": 0.004596191726854892,
+    "by_model": {
+     "eegnex": {
+      "strata": 1,
+      "trials_share": 0.004596191726854892
+     }
+    }
+   }
+  }
+ },
+ "verdict": "NON CONCLUANT",
+ "pooled": {
+  "R": 0.6844287985245175,
+  "lo": 0.6539874811522696,
+  "hi": 0.7137458487432412,
+  "K_x": 0.18562490422942488,
+  "K_seed": 0.2712114169210772,
+  "n_ds": 2,
+  "sboot_K_x": {
+   "mean": 0.18562490422942488,
+   "lo": 0.1665159220246645,
+   "hi": 0.2065969290659671,
+   "p_sup": 0.0,
+   "p_ni": 0.0,
+   "n": 61,
+   "n_ds": 2,
+   "mde": 0.02885559261255856,
+   "by_ds": {
+    "cho2017": [
+     0.1808610674130235,
+     32
+    ],
+    "lee2019_mi": [
+     0.19062908358212474,
+     29
+    ]
+   }
+  },
+  "sboot_K_seed": {
+   "mean": 0.2712114169210772,
+   "lo": 0.2509865559934668,
+   "hi": 0.2925433157201362,
+   "p_sup": 0.0,
+   "p_ni": 0.0,
+   "n": 61,
+   "n_ds": 2,
+   "mde": 0.029390876336180826,
+   "by_ds": {
+    "cho2017": [
+     0.26440249731310406,
+     32
+    ],
+    "lee2019_mi": [
+     0.27836385648388984,
+     29
+    ]
+   }
+  }
+ }
+}
